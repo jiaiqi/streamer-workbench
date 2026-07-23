@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>歌单海报生成器 · 工作台（验证版）</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+           background: #14101a; color: #f2eef7; display: flex; height: 100vh; }
+    .col { padding: 16px; overflow: auto; }
+    .left { width: 220px; background: #1d1726; border-right: 1px solid #2c2438; }
+    .center { flex: 1; display: flex; flex-direction: column; align-items: center; }
+    .right { width: 240px; background: #1d1726; border-left: 1px solid #2c2438; }
+    h3 { font-size: 13px; color: #b9a7d6; text-transform: uppercase; letter-spacing: .08em; }
+    .item { padding: 10px 12px; border-radius: 10px; cursor: pointer; margin-bottom: 6px;
+            background: #261f33; transition: .15s; }
+    .item:hover { background: #322847; }
+    .item.active { background: linear-gradient(135deg,#7b5cff,#c86bff); color: #fff; }
+    select, button { width: 100%; padding: 8px; border-radius: 8px; border: none;
+                     margin-bottom: 10px; background: #322847; color: #fff; }
+    button { background: linear-gradient(135deg,#7b5cff,#c86bff); cursor: pointer; font-weight: 600; }
+    #preview { max-height: 78vh; max-width: 100%; border-radius: 12px;
+               box-shadow: 0 12px 40px rgba(123,92,255,.35); }
+    .meta { font-size: 12px; color: #9b8cb8; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="col left">
+    <h3>排版</h3>
+    <div id="layouts"></div>
+    <h3>主题</h3>
+    <div id="themes"></div>
+  </div>
+
+  <div class="col center">
+    <div style="display:flex;gap:8px;width:100%;max-width:520px;margin-bottom:12px;">
+      <select id="canvas">
+        <option>标准 9:16</option>
+        <option>抖音全屏 9:20</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+        <input type="checkbox" id="avoid" /> 抖音避让
+      </label>
+      <select id="page" style="width:80px;">
+        <option value="1">第1页</option>
+        <option value="2">第2页</option>
+      </select>
+    </div>
+    <button id="render">生成预览</button>
+    <img id="preview" alt="预览" />
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="col right">
+    <h3>参数</h3>
+    <div id="params" style="font-size:13px;color:#9b8cb8;line-height:1.8;"></div>
+  </div>
+
+  <script>
+    const API = "http://localhost:8000";
+    let curTheme = null;
+
+    async function loadThemes() {
+      const r = await fetch(API + "/api/themes");
+      const list = await r.json();
+      const box = document.getElementById("themes");
+      list.forEach((t, i) => {
+        const d = document.createElement("div");
+        d.className = "item" + (i === 0 ? " active" : "");
+        d.textContent = t.name;
+        d.onclick = () => { document.querySelectorAll("#themes .item").forEach(e=>e.classList.remove("active")); d.classList.add("active"); curTheme = t.name; render(); };
+        box.appendChild(d);
+        if (i === 0) curTheme = t.name;
+      });
+      document.getElementById("layouts").innerHTML =
+        '<div class="item active">全行网格绕排</div>';
+    }
+
+    async function render() {
+      if (!curTheme) return;
+      const canvas = document.getElementById("canvas").value;
+      const avoid = document.getElementById("avoid").checked;
+      const page = document.getElementById("page").value;
+      const url = `${API}/api/render?theme=${encodeURIComponent(curTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}`;
+      document.getElementById("preview").src = url + "#" + Date.now();
+      document.getElementById("meta").textContent = `${curTheme} · ${canvas} · 第${page}页 · 避让=${avoid}`;
+    }
+
+    document.getElementById("render").onclick = render;
+    document.getElementById("page").onchange = render;
+    loadThemes().then(render);
+  </script>
+</body>
+</html>

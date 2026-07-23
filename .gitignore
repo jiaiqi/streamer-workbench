@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# 输出与原数据备份（可重新生成）
+output/
+data/backups/
+*.tmp
+
+# 编辑器
+.vscode/
+.idea/

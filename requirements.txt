@@ -1,0 +1,7 @@
+# 歌单海报生成器 · 依赖（开发期）
+# 注意：不要加 numpy——旧脚本 import 了但从未使用，是死依赖。
+# PySide6 已从方案移除（改用 Tauri + Web 前端，见 设计结论/项目结构设计）。
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pillow==12.2.0
+pypinyin==0.53.0
