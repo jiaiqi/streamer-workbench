@@ -6,6 +6,7 @@ __pycache__/
 # 应用产出与备份（不入库）
 歌单海报生成器/output/
 歌单海报生成器/data/backups/
+歌单海报生成器/tests/golden/
 
 # 打包产物
 build/
