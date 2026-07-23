@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导出历史 · 歌单海报生成器</title>
+    <script>
+      (function(){var t=localStorage.getItem("gp-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");})();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="../shared.css?v=1">
+</head>
+<body class="h-screen overflow-hidden antialiased">
+    <main class="relative z-10 flex h-full">
+      <!-- ============ 侧边导航栏 ============ -->
+      <nav class="gp-stagger flex w-16 shrink-0 flex-col items-center gap-1.5 border-r py-4 bg-card border-border" data-stagger-step="45">
+        <div class="mb-5 flex h-10 w-10 items-center justify-center rounded-xl" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+          <span class="gp-icon h-5 w-5 text-primary-foreground"><i data-lucide="music"></i></span>
+        </div>
+        <a class="gp-nav-item" data-label="海报工作台" href="workspace.html"><span class="gp-icon h-5 w-5"><i data-lucide="layout-dashboard"></i></span></a>
+        <a class="gp-nav-item" data-label="歌曲库" href="library.html"><span class="gp-icon h-5 w-5"><i data-lucide="list-music"></i></span></a>
+        <a class="gp-nav-item" data-label="学歌管理" href="learning.html"><span class="gp-icon h-5 w-5"><i data-lucide="book-open"></i></span></a>
+        <a class="gp-nav-item" data-label="主题管理" href="themes.html"><span class="gp-icon h-5 w-5"><i data-lucide="palette"></i></span></a>
+        <a class="gp-nav-item" data-label="场景预设" href="presets.html"><span class="gp-icon h-5 w-5"><i data-lucide="bookmark"></i></span></a>
+        <a class="gp-nav-item active" data-label="导出历史" href="history.html"><span class="gp-icon h-5 w-5"><i data-lucide="history"></i></span></a>
+        <div class="mt-auto flex flex-col items-center gap-1.5">
+          <button class="gp-nav-item" data-label="切换亮 / 暗" data-theme-toggle><span class="gp-icon h-5 w-5" data-theme-icon></span></button>
+          <a class="gp-nav-item" data-label="设置" href="settings.html"><span class="gp-icon h-5 w-5"><i data-lucide="settings"></i></span></a>
+        </div>
+      </nav>
+
+      <!-- ============ 主区域 ============ -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <header class="gp-rise flex shrink-0 items-end justify-between px-8 pt-7 pb-5">
+          <div>
+            <h1 class="font-serif-d text-[26px] font-bold tracking-wide">导出历史</h1>
+            <p class="mt-1 text-[13px] text-muted-foreground">最近 <span class="tabular">30</span> 天的出图记录 · 共 <span class="tabular">26</span> 次导出 / <span class="tabular">52</span> 张海报</p>
+          </div>
+          <button class="gp-btn-ghost" id="clear-btn">
+            <span class="gp-icon h-4 w-4"><i data-lucide="trash-2"></i></span>清空记录
+          </button>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-8 pb-10">
+          <div id="history-list" class="flex flex-col gap-8"></div>
+        </div>
+      </div>
+    </main>
+
+    <script src="../shared.js?v=1"></script>
+    <script>
+      /* 缩略图用同一张成品图 + 不同色相偏移模拟各主题成品 */
+      const GROUPS = [
+        {
+          day: "今天 · 7月23日",
+          items: [
+            { theme: "海洋柔光", canvas: "抖音全屏 9:20", pages: 2, size: "4.2 MB", time: "14:32", hue: 0 },
+            { theme: "青提气泡", canvas: "抖音全屏 9:20", pages: 2, size: "4.0 MB", time: "14:28", hue: 40 },
+            { theme: "梦幻海洋", canvas: "标准 9:16", pages: 2, size: "3.6 MB", time: "11:05", hue: -30 },
+          ],
+        },
+        {
+          day: "昨天 · 7月22日",
+          items: [
+            { theme: "奶油花园", canvas: "标准 9:16", pages: 2, size: "3.8 MB", time: "21:47", hue: 120 },
+            { theme: "轻复古唱片", canvas: "标准 9:16", pages: 2, size: "3.9 MB", time: "20:12", hue: 160 },
+          ],
+        },
+        {
+          day: "7月20日",
+          items: [
+            { theme: "海洋柔光", canvas: "抖音全屏 9:20", pages: 2, size: "4.2 MB", time: "19:03", hue: 0 },
+            { theme: "卡通音符", canvas: "抖音全屏 9:20", pages: 2, size: "4.1 MB", time: "18:55", hue: -60 },
+            { theme: "奶油玻璃", canvas: "标准 9:16", pages: 2, size: "3.5 MB", time: "18:40", hue: 200 },
+          ],
+        },
+      ];
+
+      const list = document.getElementById("history-list");
+
+      GROUPS.forEach((g, gi) => {
+        const section = document.createElement("section");
+        section.className = "gp-list-anim";
+        section.style.animationDelay = gi * 120 + 150 + "ms";
+        section.innerHTML = `
+          <div class="mb-3 flex items-center gap-3">
+            <h2 class="font-serif-d text-[15px] font-semibold">${g.day}</h2>
+            <span class="gp-badge gp-badge-muted tabular">${g.items.length} 次</span>
+            <span class="h-px flex-1" style="background:var(--gp-border)"></span>
+          </div>`;
+
+        const grid = document.createElement("div");
+        grid.className = "grid grid-cols-4 gap-4";
+
+        g.items.forEach((it, i) => {
+          const card = document.createElement("article");
+          card.className = "gp-card gp-card-hover gp-list-anim group overflow-hidden !p-0";
+          card.style.animationDelay = gi * 120 + i * 70 + 200 + "ms";
+          card.innerHTML = `
+            <div class="relative h-52 overflow-hidden" style="background:var(--gp-muted)">
+              <img src="../assets/preview-poster.png" alt="${it.theme}海报" loading="lazy"
+                   class="h-full w-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-[1.05]"
+                   style="filter:hue-rotate(${it.hue}deg)">
+              <!-- 悬浮操作层 -->
+              <div class="absolute inset-0 flex items-center justify-center gap-2 opacity-0 backdrop-blur-[2px] transition-all duration-300 group-hover:opacity-100"
+                   style="background:rgba(20,32,28,.42)">
+                <button class="act-btn flex h-9 w-9 items-center justify-center rounded-xl transition-transform duration-300 hover:scale-110" style="background:rgba(255,255,255,.92);color:#2f8f7a" data-act="re" data-theme="${it.theme}" title="重新导出">
+                  <span class="gp-icon h-4 w-4"><i data-lucide="refresh-cw"></i></span>
+                </button>
+                <button class="act-btn flex h-9 w-9 items-center justify-center rounded-xl transition-transform duration-300 hover:scale-110" style="background:rgba(255,255,255,.92);color:#2f8f7a" data-act="open" data-theme="${it.theme}" title="打开所在目录">
+                  <span class="gp-icon h-4 w-4"><i data-lucide="folder-open"></i></span>
+                </button>
+                <button class="act-btn flex h-9 w-9 items-center justify-center rounded-xl transition-transform duration-300 hover:scale-110" style="background:rgba(255,255,255,.92);color:#2f8f7a" data-act="dl" data-theme="${it.theme}" title="下载">
+                  <span class="gp-icon h-4 w-4"><i data-lucide="download"></i></span>
+                </button>
+              </div>
+              <span class="gp-badge absolute left-2.5 top-2.5 tabular" style="background:rgba(255,255,255,.85);color:#3a4a44">${it.time}</span>
+            </div>
+            <div class="p-3.5">
+              <div class="mb-1 flex items-center justify-between">
+                <h3 class="truncate text-[13.5px] font-medium">${it.theme}</h3>
+                <span class="gp-badge gp-badge-muted shrink-0 tabular">${it.pages} 页</span>
+              </div>
+              <p class="text-[11px] tabular text-muted-foreground">${it.canvas} · ${it.size}</p>
+            </div>`;
+          grid.appendChild(card);
+        });
+
+        section.appendChild(grid);
+        list.appendChild(section);
+      });
+
+      list.addEventListener("click", (e) => {
+        const btn = e.target.closest(".act-btn");
+        if (!btn) return;
+        const map = {
+          re:   [`已按原参数重新导出「${btn.dataset.theme}」`, "refresh-cw"],
+          open: ["已打开输出目录 output\\", "folder-open"],
+          dl:   [`「${btn.dataset.theme}」海报已开始下载`, "download"],
+        };
+        gp.toast(...map[btn.dataset.act]);
+      });
+
+      document.getElementById("clear-btn").addEventListener("click", () =>
+        gp.toast("导出记录已清空（文件保留在 output\\）", "trash-2")
+      );
+    </script>
+</body>
+</html>

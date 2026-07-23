@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学歌管理 · 歌单海报生成器</title>
+    <script>
+      (function(){var t=localStorage.getItem("gp-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");})();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="../shared.css?v=1">
+</head>
+<body class="h-screen overflow-hidden antialiased">
+    <main class="relative z-10 flex h-full">
+      <!-- ============ 侧边导航栏 ============ -->
+      <nav class="gp-stagger flex w-16 shrink-0 flex-col items-center gap-1.5 border-r py-4 bg-card border-border" data-stagger-step="45">
+        <div class="mb-5 flex h-10 w-10 items-center justify-center rounded-xl" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+          <span class="gp-icon h-5 w-5 text-primary-foreground"><i data-lucide="music"></i></span>
+        </div>
+        <a class="gp-nav-item" data-label="海报工作台" href="workspace.html"><span class="gp-icon h-5 w-5"><i data-lucide="layout-dashboard"></i></span></a>
+        <a class="gp-nav-item" data-label="歌曲库" href="library.html"><span class="gp-icon h-5 w-5"><i data-lucide="list-music"></i></span></a>
+        <a class="gp-nav-item active" data-label="学歌管理" href="learning.html"><span class="gp-icon h-5 w-5"><i data-lucide="book-open"></i></span></a>
+        <a class="gp-nav-item" data-label="主题管理" href="themes.html"><span class="gp-icon h-5 w-5"><i data-lucide="palette"></i></span></a>
+        <a class="gp-nav-item" data-label="场景预设" href="presets.html"><span class="gp-icon h-5 w-5"><i data-lucide="bookmark"></i></span></a>
+        <a class="gp-nav-item" data-label="导出历史" href="history.html"><span class="gp-icon h-5 w-5"><i data-lucide="history"></i></span></a>
+        <div class="mt-auto flex flex-col items-center gap-1.5">
+          <button class="gp-nav-item" data-label="切换亮 / 暗" data-theme-toggle><span class="gp-icon h-5 w-5" data-theme-icon></span></button>
+          <a class="gp-nav-item" data-label="设置" href="settings.html"><span class="gp-icon h-5 w-5"><i data-lucide="settings"></i></span></a>
+        </div>
+      </nav>
+
+      <!-- ============ 主区域 ============ -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <header class="gp-rise flex shrink-0 items-end justify-between px-8 pt-7 pb-5">
+          <div>
+            <h1 class="font-serif-d text-[26px] font-bold tracking-wide">学歌管理</h1>
+            <p class="mt-1 text-[13px] text-muted-foreground">学会后自动进入歌曲库 · 同步更新海报排版</p>
+          </div>
+          <button class="gp-btn" id="add-learning-btn">
+            <span class="gp-icon h-4 w-4"><i data-lucide="plus"></i></span>添加在学
+          </button>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-8 pb-10">
+          <!-- 本周目标 -->
+          <div class="gp-card gp-rise mb-6 flex items-center gap-7 p-6" style="animation-delay:.15s">
+            <div class="relative h-24 w-24 shrink-0">
+              <svg viewBox="0 0 96 96" class="h-full w-full -rotate-90">
+                <circle cx="48" cy="48" r="40" fill="none" stroke="var(--gp-muted)" stroke-width="9"/>
+                <circle id="goal-ring" cx="48" cy="48" r="40" fill="none" stroke="url(#goalGrad)" stroke-width="9"
+                        stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="251.3"
+                        style="transition:stroke-dashoffset 1.4s var(--gp-ease-out)"/>
+                <defs>
+                  <linearGradient id="goalGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="var(--gp-primary)"/>
+                    <stop offset="100%" stop-color="var(--gp-accent)"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span class="tabular font-serif-d text-[22px] font-bold leading-none text-primary" data-count="64" data-count-duration="1300">0</span>
+                <span class="mt-0.5 text-[10px] text-muted-foreground">%</span>
+              </div>
+            </div>
+            <div class="flex-1">
+              <h2 class="font-serif-d text-[17px] font-semibold">本周目标 · 学会 2 首</h2>
+              <p class="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                「那些你很冒险的梦」已完成副歌部分，「我喜欢上你时的内心活动」还在啃前奏指法。
+                保持节奏，周五直播前可以上新。
+              </p>
+              <div class="mt-3 flex items-center gap-2">
+                <span class="gp-badge">连续练习 6 天</span>
+                <span class="gp-badge gp-badge-muted tabular">累计 4.5 小时</span>
+              </div>
+            </div>
+            <div class="flex shrink-0 flex-col items-center gap-1 rounded-2xl px-5 py-4" style="background:var(--gp-primary-softer)">
+              <span class="gp-icon h-5 w-5 text-accent"><i data-lucide="flame"></i></span>
+              <span class="tabular font-serif-d text-[26px] font-bold leading-none text-accent" data-count="6">0</span>
+              <span class="text-[11px] text-muted-foreground">天连胜</span>
+            </div>
+          </div>
+
+          <!-- 在学歌曲卡片 -->
+          <div id="learning-grid" class="gp-stagger-scale grid grid-cols-2 gap-4" data-stagger-step="100" data-stagger-base="250"></div>
+        </div>
+      </div>
+    </main>
+
+    <script src="../shared.js?v=1"></script>
+    <script>
+      const LEARNING = [
+        {
+          title: "那些你很冒险的梦", artist: "林俊杰", key: "C", capo: 0,
+          difficulty: 3, progress: 82,
+          note: "副歌高音区转假声要更放松，第 2 段节奏型注意切分。",
+          updated: "今天",
+        },
+        {
+          title: "我喜欢上你时的内心活动", artist: "陈绮贞", key: "G", capo: 2,
+          difficulty: 4, progress: 45,
+          note: "前奏指弹分解和弦还不稳，先放慢到 60bpm 跟节拍器。",
+          updated: "昨天",
+        },
+        {
+          title: "你就不要想起我", artist: "田馥甄", key: "D", capo: 0,
+          difficulty: 2, progress: 68,
+          note: "情绪铺垫：主歌收敛、预副歌渐强。和弦已熟，抠细节。",
+          updated: "3 天前",
+        },
+        {
+          title: "After 17", artist: "陈绮贞", key: "C", capo: 3,
+          difficulty: 2, progress: 90,
+          note: "基本拿下，再顺两遍全程不出错就可以标记学会。",
+          updated: "今天",
+        },
+        {
+          title: "Forever 21", artist: "曾轶可", key: "A", capo: 2,
+          difficulty: 1, progress: 30,
+          note: "刚开始扒谱，先把主歌和弦走向记下来。",
+          updated: "5 天前",
+        },
+      ];
+
+      const grid = document.getElementById("learning-grid");
+
+      function stars(n) {
+        let html = "";
+        for (let i = 1; i <= 5; i++) {
+          html += `<span class="gp-icon h-3.5 w-3.5" style="color:${i <= n ? "var(--gp-warning)" : "var(--gp-border)"}"><i data-lucide="star"${i <= n ? ' fill="currentColor"' : ""}></i></span>`;
+        }
+        return html;
+      }
+
+      LEARNING.forEach((s) => {
+        const card = document.createElement("article");
+        card.className = "gp-card gp-card-hover flex flex-col p-5";
+        card.innerHTML = `
+          <div class="mb-3 flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h3 class="truncate font-serif-d text-[16px] font-semibold">${s.title}</h3>
+              <p class="mt-0.5 text-xs text-muted-foreground">${s.artist}</p>
+            </div>
+            <span class="gp-badge gp-badge-muted shrink-0 tabular">${s.updated}</span>
+          </div>
+
+          <div class="mb-3 flex items-center gap-4 text-xs text-muted-foreground">
+            <span class="flex items-center gap-1.5"><span class="gp-icon h-3.5 w-3.5"><i data-lucide="music-2"></i></span>Key <b class="font-semibold" style="color:var(--gp-foreground)">${s.key}</b></span>
+            <span class="flex items-center gap-1.5"><span class="gp-icon h-3.5 w-3.5"><i data-lucide="git-branch"></i></span>Capo <b class="font-semibold tabular" style="color:var(--gp-foreground)">${s.capo}</b></span>
+            <span class="flex items-center gap-1">难度 ${stars(s.difficulty)}</span>
+          </div>
+
+          <div class="mb-3">
+            <div class="mb-1.5 flex items-center justify-between text-xs">
+              <span class="text-muted-foreground">练习进度</span>
+              <span class="tabular font-semibold text-primary">${s.progress}%</span>
+            </div>
+            <div class="gp-progress"><i style="width:${s.progress}%;animation-delay:.5s"></i></div>
+          </div>
+
+          <p class="mb-4 flex-1 rounded-xl p-3 text-xs leading-relaxed text-muted-foreground" style="background:var(--gp-primary-softer)">${s.note}</p>
+
+          <div class="flex items-center gap-2">
+            <button class="gp-btn-ghost flex-1 justify-center !py-2 practice-btn" data-title="${s.title}">
+              <span class="gp-icon h-3.5 w-3.5"><i data-lucide="play"></i></span>开始练习
+            </button>
+            <button class="gp-btn flex-1 justify-center !py-2 mastered-btn" data-title="${s.title}">
+              <span class="gp-icon h-4 w-4"><i data-lucide="check"></i></span>标记学会
+            </button>
+          </div>`;
+        grid.appendChild(card);
+      });
+
+      /* 目标环入场 */
+      requestAnimationFrame(() =>
+        setTimeout(() => (document.getElementById("goal-ring").style.strokeDashoffset = 251.3 * (1 - 0.64)), 300)
+      );
+
+      grid.addEventListener("click", (e) => {
+        const practice = e.target.closest(".practice-btn");
+        const mastered = e.target.closest(".mastered-btn");
+        if (practice) gp.toast(`开始练习「${practice.dataset.title}」· 节拍器 60bpm`, "play");
+        if (mastered) gp.toast(`「${mastered.dataset.title}」已学会，已加入歌曲库`, "check-circle-2");
+      });
+
+      document.getElementById("add-learning-btn").addEventListener("click", () =>
+        gp.toast("从歌曲库挑选下一首要学的歌", "music")
+      );
+    </script>
+</body>
+</html>

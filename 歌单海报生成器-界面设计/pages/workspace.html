@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海报工作台 · 歌单海报生成器</title>
+    <script>
+      /* 防 FOUC：首帧前应用已存主题 */
+      (function(){var t=localStorage.getItem("gp-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");})();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="../shared.css?v=1">
+</head>
+<body class="h-screen overflow-hidden antialiased">
+    <main class="relative z-10 flex h-full">
+      <!-- ============ 侧边导航栏 ============ -->
+      <nav class="gp-stagger flex w-16 shrink-0 flex-col items-center gap-1.5 border-r py-4 bg-card border-border" data-stagger-step="45">
+        <div class="mb-5 flex h-10 w-10 items-center justify-center rounded-xl shadow-md" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+          <span class="gp-icon h-5 w-5 text-primary-foreground"><i data-lucide="music"></i></span>
+        </div>
+        <a class="gp-nav-item active" data-label="海报工作台" href="workspace.html"><span class="gp-icon h-5 w-5"><i data-lucide="layout-dashboard"></i></span></a>
+        <a class="gp-nav-item" data-label="歌曲库" href="library.html"><span class="gp-icon h-5 w-5"><i data-lucide="list-music"></i></span></a>
+        <a class="gp-nav-item" data-label="学歌管理" href="learning.html"><span class="gp-icon h-5 w-5"><i data-lucide="book-open"></i></span></a>
+        <a class="gp-nav-item" data-label="主题管理" href="themes.html"><span class="gp-icon h-5 w-5"><i data-lucide="palette"></i></span></a>
+        <a class="gp-nav-item" data-label="场景预设" href="presets.html"><span class="gp-icon h-5 w-5"><i data-lucide="bookmark"></i></span></a>
+        <a class="gp-nav-item" data-label="导出历史" href="history.html"><span class="gp-icon h-5 w-5"><i data-lucide="history"></i></span></a>
+        <div class="mt-auto flex flex-col items-center gap-1.5">
+          <button class="gp-nav-item" data-label="切换亮 / 暗" data-theme-toggle><span class="gp-icon h-5 w-5" data-theme-icon></span></button>
+          <a class="gp-nav-item" data-label="设置" href="settings.html"><span class="gp-icon h-5 w-5"><i data-lucide="settings"></i></span></a>
+        </div>
+      </nav>
+
+      <!-- ============ 右侧主区域 ============ -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <!-- 顶部菜单栏 -->
+        <div class="gp-fade flex h-11 shrink-0 items-center gap-5 border-b px-5 text-[13px] border-border text-muted-foreground">
+          <span class="font-serif-d text-[15px] font-semibold tracking-wide text-foreground">歌单海报</span>
+          <span class="h-4 w-px bg-border"></span>
+          <span class="cursor-pointer transition-colors hover:text-primary">文件</span>
+          <span class="cursor-pointer transition-colors hover:text-primary">编辑</span>
+          <span class="cursor-pointer transition-colors hover:text-primary">视图</span>
+          <span class="cursor-pointer transition-colors hover:text-primary">排版</span>
+          <span class="cursor-pointer transition-colors hover:text-primary">主题</span>
+          <span class="ml-auto cursor-pointer transition-colors hover:text-primary">帮助</span>
+        </div>
+
+        <!-- ============ 三栏工作区 ============ -->
+        <div class="flex flex-1 overflow-hidden">
+          <!-- 左栏：排版 + 主题 + 歌曲库入口 -->
+          <div class="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-border">
+            <div class="gp-stagger" data-stagger-step="90" data-stagger-base="100">
+              <!-- 排版选择 -->
+              <div class="p-4 pb-3">
+                <span class="mb-2.5 block text-xs font-medium tracking-widest text-muted-foreground">排版</span>
+                <div class="gp-card gp-card-hover cursor-pointer p-3.5" style="border-color:color-mix(in srgb,var(--gp-primary) 35%,var(--gp-border));background:linear-gradient(150deg,var(--gp-primary-soft),var(--gp-card) 65%)">
+                  <div class="mb-1 flex items-center gap-2">
+                    <span class="gp-icon h-4 w-4 text-primary"><i data-lucide="grid-3x3"></i></span>
+                    <span class="text-sm font-semibold">全行网格绕排</span>
+                    <span class="gp-badge ml-auto">当前</span>
+                  </div>
+                  <span class="text-xs text-muted-foreground">自动分页 · 避让支持 · 共 2 页</span>
+                </div>
+              </div>
+
+              <div class="mx-4 border-t border-border"></div>
+
+              <!-- 主题选择 -->
+              <div class="p-4 pb-3">
+                <div class="mb-2.5 flex items-center justify-between">
+                  <span class="text-xs font-medium tracking-widest text-muted-foreground">主题</span>
+                  <a href="themes.html" class="text-xs text-muted-foreground transition-colors hover:text-primary">管理 →</a>
+                </div>
+                <div id="theme-list" class="flex flex-col gap-1"></div>
+              </div>
+
+              <div class="mx-4 border-t border-border"></div>
+
+              <!-- 歌曲库入口 -->
+              <div class="p-4">
+                <a href="library.html" class="gp-card gp-card-hover flex items-center justify-between p-3.5">
+                  <div class="flex items-center gap-2.5">
+                    <span class="gp-icon h-4 w-4 text-primary"><i data-lucide="library"></i></span>
+                    <span class="text-sm font-medium">歌曲库</span>
+                  </div>
+                  <span class="gp-badge tabular">177</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- 中栏：预览区 -->
+          <div class="relative flex flex-1 flex-col overflow-hidden">
+            <div class="flex flex-1 items-center justify-center p-8">
+              <div class="gp-scale-in relative" style="animation-delay:.25s">
+                <div class="gp-float relative rounded-2xl p-2" style="background:var(--gp-card);box-shadow:var(--gp-shadow-lg);border:1px solid var(--gp-border)">
+                  <div class="relative overflow-hidden rounded-xl">
+                    <img id="poster" src="../assets/preview-poster.png" alt="海报预览"
+                         class="block max-h-[calc(100vh-270px)] w-auto max-w-[340px] object-contain transition-opacity duration-300">
+                    <span id="page-badge" class="gp-badge absolute left-2.5 top-2.5 backdrop-blur-sm" style="background:rgba(255,255,255,.82);color:#2f8f7a">第 1 页 / 共 2 页</span>
+                  </div>
+                </div>
+                <!-- 页码指示器 -->
+                <div class="absolute -bottom-11 left-1/2 flex -translate-x-1/2 items-center gap-2.5">
+                  <button id="dot-1" class="page-dot h-2 rounded-full transition-all duration-500" style="width:24px;background:var(--gp-primary)"></button>
+                  <button id="dot-2" class="page-dot h-2 w-2 rounded-full transition-all duration-500" style="background:var(--gp-border)"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右栏：参数面板 -->
+          <div class="w-72 shrink-0 overflow-y-auto border-l border-border">
+            <div class="gp-stagger p-4" data-stagger-step="90" data-stagger-base="200">
+              <!-- 布局参数（展开） -->
+              <div class="mb-3">
+                <button class="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted" data-collapse-trigger="#sec-layout" aria-expanded="true">
+                  <span class="gp-icon h-3.5 w-3.5 text-muted-foreground" style="transform:rotate(90deg);transition:transform .35s var(--gp-ease-out)"><i data-lucide="chevron-right"></i></span>
+                  <span class="text-sm font-semibold">布局参数</span>
+                  <span class="gp-badge-muted gp-badge ml-auto">6</span>
+                </button>
+                <div id="sec-layout" class="gp-collapse open">
+                  <div class="gp-collapse-inner">
+                    <div class="flex flex-col gap-3 px-1 pt-3">
+                      <label class="block"><span class="mb-1.5 block text-xs text-muted-foreground">歌名字号</span>
+                        <span class="gp-input flex items-center gap-2 !py-1.5"><input type="number" value="36" class="w-full bg-transparent text-sm outline-none tabular"><span class="text-xs text-muted-foreground">px</span></span></label>
+                      <label class="block"><span class="mb-1.5 block text-xs text-muted-foreground">标签字号</span>
+                        <span class="gp-input flex items-center gap-2 !py-1.5"><input type="number" value="40" class="w-full bg-transparent text-sm outline-none tabular"><span class="text-xs text-muted-foreground">px</span></span></label>
+                      <label class="block"><span class="mb-1.5 block text-xs text-muted-foreground">行高</span>
+                        <span class="gp-input flex items-center gap-2 !py-1.5"><input type="number" value="44" class="w-full bg-transparent text-sm outline-none tabular"><span class="text-xs text-muted-foreground">px</span></span></label>
+                      <label class="block"><span class="mb-1.5 block text-xs text-muted-foreground">标签高度</span>
+                        <span class="gp-input flex items-center gap-2 !py-1.5"><input type="number" value="74" class="w-full bg-transparent text-sm outline-none tabular"><span class="text-xs text-muted-foreground">px</span></span></label>
+                      <label class="block"><span class="mb-1.5 block text-xs text-muted-foreground">外边距</span>
+                        <span class="gp-input flex items-center gap-2 !py-1.5"><input type="number" value="58" class="w-full bg-transparent text-sm outline-none tabular"><span class="text-xs text-muted-foreground">px</span></span></label>
+                      <label class="block"><span class="mb-1.5 block text-xs text-muted-foreground">分类间距</span>
+                        <span class="gp-input flex items-center gap-2 !py-1.5"><input type="number" value="26" class="w-full bg-transparent text-sm outline-none tabular"><span class="text-xs text-muted-foreground">px</span></span></label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 视觉参数（折叠） -->
+              <div class="mb-3">
+                <button class="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted" data-collapse-trigger="#sec-visual" aria-expanded="false">
+                  <span class="gp-icon gp-chevron h-3.5 w-3.5 text-muted-foreground"><i data-lucide="chevron-right"></i></span>
+                  <span class="text-sm text-muted-foreground">视觉参数</span>
+                </button>
+                <div id="sec-visual" class="gp-collapse">
+                  <div class="gp-collapse-inner">
+                    <div class="flex flex-col gap-3 px-1 pt-3">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs text-muted-foreground">水印修正</span>
+                        <span class="gp-switch on"></span>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs text-muted-foreground">雾面柔光</span>
+                        <span class="gp-switch on"></span>
+                      </div>
+                      <label class="block"><span class="mb-1.5 block text-xs text-muted-foreground">雾面浓度</span>
+                        <span class="gp-input flex items-center gap-2 !py-1.5"><input type="number" value="66" class="w-full bg-transparent text-sm outline-none tabular"><span class="text-xs text-muted-foreground">%</span></span></label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 输出参数（折叠） -->
+              <div>
+                <button class="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted" data-collapse-trigger="#sec-output" aria-expanded="false">
+                  <span class="gp-icon gp-chevron h-3.5 w-3.5 text-muted-foreground"><i data-lucide="chevron-right"></i></span>
+                  <span class="text-sm text-muted-foreground">输出参数</span>
+                </button>
+                <div id="sec-output" class="gp-collapse">
+                  <div class="gp-collapse-inner">
+                    <div class="flex flex-col gap-3 px-1 pt-3">
+                      <div>
+                        <span class="mb-1.5 block text-xs text-muted-foreground">画布预设</span>
+                        <div class="gp-segment" style="width:100%">
+                          <button data-value="9:20" class="active">抖音 9:20</button>
+                          <button data-value="9:16">标准 9:16</button>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs text-muted-foreground">禁文区避让</span>
+                        <span class="gp-switch on"></span>
+                      </div>
+                      <div class="flex items-center justify-between text-xs">
+                        <span class="text-muted-foreground">输出尺寸</span>
+                        <span class="tabular text-foreground">1080 × 2400</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底栏：预设 + 导出 -->
+        <div class="gp-fade flex h-14 shrink-0 items-center justify-between border-t px-5 border-border bg-card" style="animation-delay:.35s">
+          <div class="flex items-center gap-3">
+            <button class="gp-btn-ghost !py-2">
+              <span class="gp-icon h-4 w-4"><i data-lucide="bookmark"></i></span>
+              <span id="preset-name">抖音歌单</span>
+              <span class="gp-icon h-3.5 w-3.5"><i data-lucide="chevron-down"></i></span>
+            </button>
+            <button id="export-btn" class="gp-btn">
+              <span class="gp-icon h-4 w-4"><i data-lucide="download"></i></span>
+              <span>一键出图</span>
+            </button>
+          </div>
+          <button class="gp-btn-ghost !border-0">
+            <span>高级导出</span>
+            <span class="gp-icon h-3.5 w-3.5"><i data-lucide="chevron-down"></i></span>
+          </button>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="flex h-8 shrink-0 items-center justify-between border-t px-5 text-xs border-border text-muted-foreground bg-card">
+          <span class="tabular">已会 177 · 在学 5</span>
+          <span id="status-combo">网格绕排 × 海洋柔光</span>
+          <span class="tabular" id="status-time">0.3s</span>
+        </div>
+      </div>
+    </main>
+
+    <script src="../shared.js?v=1"></script>
+    <script>
+      /* ---- 主题数据（与 themes/ 真实主题一致） ---- */
+      const THEMES = [
+        { name: "海洋柔光",   img: "../assets/theme-ocean.png" },
+        { name: "青提气泡",   img: "../assets/theme-grape.png" },
+        { name: "奶油花园",   img: "../assets/theme-cream.png" },
+        { name: "梦幻海洋",   img: "../assets/theme-dream.png" },
+        { name: "卡通音符",   img: "../assets/theme-note.png" },
+        { name: "奶油玻璃",   img: "../assets/theme-glass.png" },
+        { name: "轻复古唱片", img: "../assets/theme-retro.png" },
+      ];
+
+      const list = document.getElementById("theme-list");
+      let activeTheme = "海洋柔光";
+
+      function renderThemes() {
+        list.innerHTML = "";
+        THEMES.forEach((t) => {
+          const on = t.name === activeTheme;
+          const item = document.createElement("button");
+          item.className =
+            "flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition-all duration-300 " +
+            (on ? "" : "hover:bg-muted");
+          if (on) item.style.background = "var(--gp-primary-soft)";
+          item.innerHTML = `
+            <img src="${t.img}" alt="${t.name}" class="h-9 w-9 rounded-lg object-cover object-bottom transition-transform duration-300 ${on ? "" : "group-hover:scale-105"}">
+            <span class="flex min-w-0 items-center gap-1.5">
+              <i class="h-1.5 w-1.5 rounded-full transition-colors duration-300" style="background:${on ? "var(--gp-primary)" : "var(--gp-border)"}"></i>
+              <span class="truncate text-sm ${on ? "font-medium" : "text-muted-foreground"}">${t.name}</span>
+            </span>`;
+          item.addEventListener("click", () => {
+            if (activeTheme === t.name) return;
+            activeTheme = t.name;
+            renderThemes();
+            document.getElementById("status-combo").textContent = "网格绕排 × " + t.name;
+            pulsePoster();
+          });
+          list.appendChild(item);
+        });
+      }
+
+      /* ---- 预览交叉淡入（模拟重渲染） ---- */
+      const poster = document.getElementById("poster");
+      function pulsePoster() {
+        poster.style.opacity = "0.25";
+        setTimeout(() => (poster.style.opacity = "1"), 320);
+        document.getElementById("status-time").textContent = (0.2 + Math.random() * 0.3).toFixed(1) + "s";
+      }
+
+      /* ---- 页码切换 ---- */
+      let page = 1;
+      const dots = [document.getElementById("dot-1"), document.getElementById("dot-2")];
+      function setPage(p) {
+        page = p;
+        dots.forEach((d, i) => {
+          const on = i + 1 === p;
+          d.style.width = on ? "24px" : "8px";
+          d.style.background = on ? "var(--gp-primary)" : "var(--gp-border)";
+        });
+        document.getElementById("page-badge").textContent = `第 ${p} 页 / 共 2 页`;
+        pulsePoster();
+      }
+      dots.forEach((d, i) => d.addEventListener("click", () => setPage(i + 1)));
+
+      /* ---- 一键出图 ---- */
+      const exportBtn = document.getElementById("export-btn");
+      exportBtn.addEventListener("click", () => {
+        if (exportBtn.dataset.busy) return;
+        exportBtn.dataset.busy = "1";
+        const original = exportBtn.innerHTML;
+        exportBtn.innerHTML = '<span class="gp-spinner" style="border-color:rgba(255,255,255,.35);border-top-color:#fff"></span><span>渲染中…</span>';
+        setTimeout(() => {
+          exportBtn.innerHTML = original;
+          delete exportBtn.dataset.busy;
+          lucide.createIcons();
+          gp.toast(`已导出 2 张海报 · ${activeTheme}`, "check-circle-2");
+        }, 1100);
+      });
+
+      renderThemes();
+    </script>
+</body>
+</html>

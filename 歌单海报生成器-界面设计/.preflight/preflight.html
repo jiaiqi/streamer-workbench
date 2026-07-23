@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preflight</title>
+    <style id="theme-vars">
+/* 歌单海报生成器 · 界面配色与字体
+ * 调性：清爽奶油白底 + 海洋青主色，呼应「海洋柔光/青提气泡」主题
+ * brandPrefix: gp
+ */
+
+:root {
+  /* 品牌主色（海洋青） */
+  --gp-primary: #2f8f7a;
+  --gp-primary-foreground: #ffffff;
+
+  /* 中性表面 */
+  --gp-background: #f7f6f2;
+  --gp-foreground: #233730;
+  --gp-card: #ffffff;
+  --gp-card-foreground: #233730;
+  --gp-popover: #ffffff;
+  --gp-popover-foreground: #233730;
+
+  /* 辅助 */
+  --gp-muted: #eeece6;
+  --gp-muted-foreground: #7d8a83;
+  --gp-border: #e4e1d8;
+  --gp-input: #e4e1d8;
+  --gp-ring: #2f8f7a;
+
+  /* 状态色（语义） */
+  --gp-success: #3d9d63;
+  --gp-warning: #d9a03f;
+  --gp-danger: #d05555;
+
+  /* 圆角 */
+  --gp-radius-sm: 8px;
+  --gp-radius-md: 12px;
+  --gp-radius-lg: 18px;
+
+  /* 字体 */
+  --gp-font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+}
+
+.dark {
+  --gp-primary: #4dbb9e;
+  --gp-primary-foreground: #0e1f1a;
+  --gp-background: #15201c;
+  --gp-foreground: #e8efeb;
+  --gp-card: #1e2c26;
+  --gp-card-foreground: #e8efeb;
+  --gp-popover: #1e2c26;
+  --gp-popover-foreground: #e8efeb;
+  --gp-muted: #26352f;
+  --gp-muted-foreground: #8ba096;
+  --gp-border: #2f423b;
+  --gp-input: #2f423b;
+  --gp-ring: #4dbb9e;
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--gp-background);
+    --color-foreground: var(--gp-foreground);
+    --color-card: var(--gp-card);
+    --color-card-foreground: var(--gp-card-foreground);
+    --color-popover: var(--gp-popover);
+    --color-popover-foreground: var(--gp-popover-foreground);
+    --color-primary: var(--gp-primary);
+    --color-primary-foreground: var(--gp-primary-foreground);
+    --color-muted: var(--gp-muted);
+    --color-muted-foreground: var(--gp-muted-foreground);
+    --color-border: var(--gp-border);
+    --color-input: var(--gp-input);
+    --color-ring: var(--gp-ring);
+    --radius-sm: var(--gp-radius-sm);
+    --radius-md: var(--gp-radius-md);
+    --radius-lg: var(--gp-radius-lg);
+  }
+  @layer base {
+    body { background: var(--gp-background); color: var(--gp-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-background { background-color: var(--gp-background); }
+      .text-background { color: var(--gp-background); }
+      .border-background { border-color: var(--gp-background); }
+      .ring-background { --tw-ring-color: var(--gp-background); }
+      .bg-foreground { background-color: var(--gp-foreground); }
+      .text-foreground { color: var(--gp-foreground); }
+      .border-foreground { border-color: var(--gp-foreground); }
+      .ring-foreground { --tw-ring-color: var(--gp-foreground); }
+      .bg-card { background-color: var(--gp-card); }
+      .text-card { color: var(--gp-card); }
+      .border-card { border-color: var(--gp-card); }
+      .ring-card { --tw-ring-color: var(--gp-card); }
+      .bg-card-foreground { background-color: var(--gp-card-foreground); }
+      .text-card-foreground { color: var(--gp-card-foreground); }
+      .border-card-foreground { border-color: var(--gp-card-foreground); }
+      .ring-card-foreground { --tw-ring-color: var(--gp-card-foreground); }
+      .bg-popover { background-color: var(--gp-popover); }
+      .text-popover { color: var(--gp-popover); }
+      .border-popover { border-color: var(--gp-popover); }
+      .ring-popover { --tw-ring-color: var(--gp-popover); }
+      .bg-popover-foreground { background-color: var(--gp-popover-foreground); }
+      .text-popover-foreground { color: var(--gp-popover-foreground); }
+      .border-popover-foreground { border-color: var(--gp-popover-foreground); }
+      .ring-popover-foreground { --tw-ring-color: var(--gp-popover-foreground); }
+      .bg-primary { background-color: var(--gp-primary); }
+      .text-primary { color: var(--gp-primary); }
+      .border-primary { border-color: var(--gp-primary); }
+      .ring-primary { --tw-ring-color: var(--gp-primary); }
+      .bg-primary-foreground { background-color: var(--gp-primary-foreground); }
+      .text-primary-foreground { color: var(--gp-primary-foreground); }
+      .border-primary-foreground { border-color: var(--gp-primary-foreground); }
+      .ring-primary-foreground { --tw-ring-color: var(--gp-primary-foreground); }
+      .bg-muted { background-color: var(--gp-muted); }
+      .text-muted { color: var(--gp-muted); }
+      .border-muted { border-color: var(--gp-muted); }
+      .ring-muted { --tw-ring-color: var(--gp-muted); }
+      .bg-muted-foreground { background-color: var(--gp-muted-foreground); }
+      .text-muted-foreground { color: var(--gp-muted-foreground); }
+      .border-muted-foreground { border-color: var(--gp-muted-foreground); }
+      .ring-muted-foreground { --tw-ring-color: var(--gp-muted-foreground); }
+      .bg-border { background-color: var(--gp-border); }
+      .text-border { color: var(--gp-border); }
+      .border-border { border-color: var(--gp-border); }
+      .ring-border { --tw-ring-color: var(--gp-border); }
+      .bg-input { background-color: var(--gp-input); }
+      .text-input { color: var(--gp-input); }
+      .border-input { border-color: var(--gp-input); }
+      .ring-input { --tw-ring-color: var(--gp-input); }
+      .bg-ring { background-color: var(--gp-ring); }
+      .text-ring { color: var(--gp-ring); }
+      .border-ring { border-color: var(--gp-ring); }
+      .ring-ring { --tw-ring-color: var(--gp-ring); }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+    <main>
+    </main>
+    <script>lucide.createIcons();</script>
+</body>
+</html>
