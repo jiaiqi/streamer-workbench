@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 应用产出与备份（不入库）
+歌单海报生成器/output/
+歌单海报生成器/data/backups/
+
+# 打包产物
+build/
+dist/
+*.spec
