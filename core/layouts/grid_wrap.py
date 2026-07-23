@@ -9,17 +9,22 @@ from ..context import DrawContext
 
 
 def _group(library):
-    """返回按字数分组的歌名列表：索引 1..6 为对应字数，7 为长歌名/英文。"""
+    """返回按原始分类列表分组的歌名列表：索引 1..6 为对应字数，7 为长歌名/英文。
+
+    优先用 Song.section（旧脚本列表归属，保证与金标准逐像素一致）；
+    未打标（用户新增）的歌回退到按字数分组。
+    """
     groups = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
     for s in library.mastered():
         t = s.title.strip()
-        n = len(t)
-        if any(c.isascii() and c.isalpha() for c in t):
+        sec = getattr(s, "section", None)
+        if sec and 1 <= sec <= 7:
+            groups[sec].append(t)
+        elif any(c.isascii() and c.isalpha() for c in t):
             groups[7].append(t)
-        elif n <= 6:
-            groups[n].append(t)
         else:
-            groups[7].append(t)
+            n = len(t)
+            groups[n if n <= 6 else 7].append(t)
     return groups
 
 

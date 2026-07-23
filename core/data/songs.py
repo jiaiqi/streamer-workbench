@@ -23,6 +23,10 @@ class Song:
     pinyin: str = ""
     added_at: str = ""
     notes: str = ""
+    # 分类归属（1=一字..6=六字, 7=长歌名/英文），对应旧脚本 8 个列表的 section。
+    # 用于保证分组与金标准 build_playlist.py 完全一致（旧脚本按列表分组，而非按字数——
+    # 例「恋爱ing」是 5 字但属三字列表）。未打标（用户新增）的歌由排版回退到按字数分组。
+    section: Optional[int] = None
 
 
 @dataclass
@@ -63,7 +67,18 @@ LONG_CN = ["当我唱起这首歌", "远在北方孤独的鬼", "一个人想着
 
 
 def build_default_library() -> SongLibrary:
-    """构造 MVP 起步内置库（全部 mastered）。"""
-    groups = [YI, ER, SAN, SI, WU, LIU, LONG_EN, LONG_CN]
-    songs = [Song(title=t, status="mastered") for lst in groups for t in lst]
+    """构造 MVP 起步内置库（全部 mastered）。
+
+    section 标记对应旧脚本的 8 个分类列表（YI=1..LONG=7），保证分组与
+    build_playlist.py 的 compose() 完全一致——旧脚本按列表分组而非按字数
+    （例「恋爱ing」是 5 字但属三字列表，故 section=3）。
+    """
+    section_map = [
+        (YI, 1), (ER, 2), (SAN, 3), (SI, 4), (WU, 5), (LIU, 6),
+        (LONG_EN, 7), (LONG_CN, 7),
+    ]
+    songs = []
+    for lst, sec in section_map:
+        for t in lst:
+            songs.append(Song(title=t, status="mastered", section=sec))
     return SongLibrary(songs=songs)

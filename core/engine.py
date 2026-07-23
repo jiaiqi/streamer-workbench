@@ -19,7 +19,8 @@ from .layouts.base import LayoutPlugin
 
 
 def render_page(theme: Theme, layout: LayoutPlugin, library,
-                spec: CanvasSpec, page: int, font_path: str) -> Image.Image:
+                spec: CanvasSpec, page: int, font_path: str,
+                skip_text: bool = False) -> Image.Image:
     st: Style = theme.styles[page]
     bg_path = theme.background_path(page)
     AVOID = bool(spec.avoid_zones)
@@ -52,5 +53,6 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
     d = ImageDraw.Draw(img)
     ctx = DrawContext(draw=d, spec=spec, style=st,
                       font_song=font, font_label=font_label)
-    layout.render_page(ctx, page, library)
+    if not skip_text:
+        layout.render_page(ctx, page, library)
     return img.convert("RGB")

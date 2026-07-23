@@ -1,11 +1,11 @@
 {
-  "name": "海洋柔光",
-  "output_prefix": "梓涵吃不饱-AI海洋歌单-柔光UI版",
+  "name": "梦幻海洋",
+  "output_prefix": "梓涵吃不饱-AI歌单-梦幻海洋版",
   "backgrounds": {
-    "1": "background-1.png",
-    "2": "background-2.png"
+    "1": "bg1.png",
+    "2": "bg2.png"
   },
-  "watermark_fix": false,
+  "watermark_fix": true,
   "styles": {
     "1": {
       "text": [
