@@ -2,12 +2,12 @@
 #
 # 三件套质量门：
 #   1. Python 单元测试（21 项）
-#   2. 金标准逐像素对比（14 张，diff=0 死线）
+#   2. 金标准逐像素对比（16 张，diff=0 死线）
 #   3. TypeScript 编译检查
 #
-# 金标准参照图（tests/golden/，22MB）不入 git，CI 上由
-# tools/regenerate_golden.py 用引擎自举生成（178 首全 active 版），
-# 无需依赖设计仓库，无需 PAT。
+# 金标准参照图（tests/golden/）随 git 提交，是版本化的回归基准，
+# 由独立预言机（旧脚本 build_playlist.py，178 首版）生成。
+# 禁止引擎自举覆盖——参照图与被测对象同源会让 diff=0 变成恒等式。
 
 name: CI
 
@@ -46,10 +46,7 @@ jobs:
       - name: 单元测试
         run: .venv/bin/python tests/test_unit.py
 
-      # ---- 门 2：金标准逐像素对比 ----
-      - name: 生成金标准参照图（引擎自举）
-        run: PYTHONPATH=. .venv/bin/python tools/regenerate_golden.py
-
+      # ---- 门 2：金标准逐像素对比（参照图随仓库检出）----
       - name: 金标准测试（diff=0 死线）
         run: PYTHONPATH=. .venv/bin/python tests/test_golden.py
 

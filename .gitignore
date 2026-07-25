@@ -13,9 +13,12 @@ data/backups/
 .vscode/
 .idea/
 
+# 系统垃圾文件
+.DS_Store
+
 # 前端依赖与缓存（可重新安装）
 node_modules/
 .npm-cache/
 
-# 金标准参考 PNG（不入 git，由 tools/regenerate_golden.py 从设计仓库参照图生成）
-tests/golden/
+# 金标准参考 PNG：随 git 提交（版本化的回归基准，禁止引擎自举覆盖）
+# 重建方式见 tools/regenerate_golden.py（调用独立预言机旧脚本）

@@ -1,11 +1,14 @@
-"""金标准测试：新引擎渲染 vs 歌单-排版一 现有成品，逐像素统计差异。
+"""金标准测试：新引擎渲染 vs 独立预言机参照图，逐像素统计差异。
 
-当前对比对象（歌单-排版一下现有成品）：
-  - 全屏绕排版：<prefix>-糖圆体全屏绕排-{page}.png  （1080×2400，grid-wrap）
-  - 海洋柔光另含标准版：<prefix>-糖圆体-{page}.png     （1080×1920）
+参照图来源（2026-07-25 重建，独立预言机）：
+  旧脚本 歌单-排版一/build_playlist.py（178 首全 active 数据集，Pillow 12.2.0）
+  生成后扁平命名钉入 tests/golden/ 并随 git 提交——参照图是版本化资产，
+  任何引擎回归都会表现为 diff≠0。禁止用引擎自举覆盖本目录（循环论证）。
+  - 全屏绕排版：<主题>-全屏p{page}.png  （1080×2400，grid-wrap，14 张）
+  - 海洋柔光标准版：海洋柔光-标准p{page}.png （1080×1920，2 张）
 
 运行：python tests/test_golden.py
-首轮以「报告差异」为主，不强制 assert，便于观察 Pillow 版本/环境带来的差异量级。
+金标准是回归死线：任何像素差异都视为失败（assert）。
 """
 import os
 from PIL import Image, ImageChops, ImageStat
@@ -78,6 +81,11 @@ def main():
     for page in (1, 2):
         img = render_page(t0, layout, library, std_spec, page, FONT)
         gold_path = os.path.join(GOLDEN_DIR, "海洋柔光", f"{t0.output_prefix}-糖圆体-{page}.png")
+        # 也尝试扁平命名（tests/golden/ 格式）
+        if not os.path.isfile(gold_path):
+            flat = os.path.join(GOLDEN_DIR, f"海洋柔光-标准p{page}.png")
+            if os.path.isfile(flat):
+                gold_path = flat
         if not os.path.isfile(gold_path):
             results.append(("海洋柔光", f"标准p{page}", "SKIP(无金标准)"))
             continue
