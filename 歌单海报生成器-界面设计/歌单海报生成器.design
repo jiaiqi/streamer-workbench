@@ -165,7 +165,7 @@
       "createdAt": 1784798000000,
       "canvasData": {
         "x": 0,
-        "y": 377
+        "y": 372
       },
       "devMetadata": {
         "imageSrc": "assets/preview-poster.png"
@@ -271,8 +271,10 @@
     }
   ],
   "config": {
-    "autoLayout": true,
+    "autoLayout": false,
     "deviceType": "desktop",
-    "projectName": "歌单海报生成器"
+    "projectName": "歌单海报生成器",
+    "showEdge": true,
+    "visualEditorEnabled": true
   }
 }
