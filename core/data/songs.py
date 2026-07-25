@@ -23,7 +23,7 @@ class Song:
     lyricist: str = ""
     composer: str = ""
     key: str = ""
-    capo: int = 0
+    capo: Optional[int] = None   # None=未填；0=不夹变调夹（v1→v2 迁移：0→None）
     difficulty: str = ""
     tabs: str = ""
     status: str = "active"     # active（已会，上海报）/ draft（未会，不上海报）
@@ -86,6 +86,44 @@ class SongLibrary:
                 return True
         return False
 
+    def get(self, title: str) -> Optional[Song]:
+        """按歌名精确查找，未找到返回 None。"""
+        for s in self.songs:
+            if s.title == title:
+                return s
+        return None
+
+    # 允许编辑的字段（status 走 mark_active/mark_draft；id/title 是身份标识）
+    EDITABLE_FIELDS: ClassVar[tuple] = (
+        "title", "artists", "lyricist", "composer", "key", "capo",
+        "difficulty", "tabs", "tags", "pinyin", "notes", "section",
+    )
+
+    def update(self, title: str, fields: dict) -> bool:
+        """编辑歌曲信息。title 定位歌曲，fields 为要修改的字段子集。
+
+        title 本身也可通过 fields["title"] 改名（会查重）。
+        返回是否成功找到并更新。
+        """
+        song = self.get(title)
+        if song is None:
+            return False
+        new_title = fields.get("title")
+        if new_title and new_title != title and self.get(new_title) is not None:
+            raise ValueError(f"改名失败：「{new_title}」已存在")
+        for k, v in fields.items():
+            if k in self.EDITABLE_FIELDS:
+                setattr(song, k, v)
+        return True
+
+    def remove(self, title: str) -> bool:
+        """删除歌曲。返回是否成功找到并删除。"""
+        for i, s in enumerate(self.songs):
+            if s.title == title:
+                self.songs.pop(i)
+                return True
+        return False
+
     def count_active(self) -> int:
         return sum(1 for s in self.songs if s.status == "active")
 
@@ -93,8 +131,17 @@ class SongLibrary:
         return sum(1 for s in self.songs if s.status == "draft")
 
     # ---- JSON 持久化 ----
-    CURRENT_VERSION: ClassVar[int] = 1
-    MIGRATIONS: ClassVar[dict] = {}  # {from_version: migrate_fn(data) -> data}
+    CURRENT_VERSION: ClassVar[int] = 2
+
+    @staticmethod
+    def _migrate_v1_to_v2(data: dict) -> dict:
+        """v1→v2：capo 从 int(0=未填) 改为 Optional[int]（0→None）。"""
+        for item in data.get("songs", []):
+            if item.get("capo") == 0:
+                item["capo"] = None
+        return data
+
+    MIGRATIONS: ClassVar[dict] = {}  # {from_version: migrate_fn(data) -> data}，在类定义后注册
 
     @classmethod
     def _migrate(cls, data: dict) -> dict:
@@ -155,6 +202,20 @@ class SongLibrary:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
             raise
+
+
+# 注册版本迁移链（类外注册，避免类体内方法引用顺序问题）
+SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2})
+
+
+def pinyin_initials(title: str) -> str:
+    """生成拼音首字母（如「知足」→「zz」）。
+
+    多音字以 pypinyin 默认读音为准；不准时可在编辑界面手工覆盖
+    Song.pinyin 字段（编辑时不回填空值即保留手工值）。
+    """
+    from pypinyin import lazy_pinyin, Style
+    return "".join(lazy_pinyin(title, style=Style.FIRST_LETTER))
 
 
 # ---- 内置数据（来自 歌单-排版一\build_playlist.py 的 8 个列表）----

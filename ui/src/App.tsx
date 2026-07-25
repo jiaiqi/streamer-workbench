@@ -19,6 +19,16 @@ interface Song {
   status: string;
   section: number | null;
   artists: string[];
+  lyricist: string;
+  composer: string;
+  key: string;
+  capo: number | null;
+  difficulty: string;
+  tabs: string;
+  tags: string[];
+  pinyin: string;
+  added_at: string;
+  notes: string;
 }
 interface SongsData {
   total: number;
@@ -95,6 +105,11 @@ export default function App() {
   const [lastRenderMs, setLastRenderMs] = useState<number | null>(null);
   // Phase 2: 状态栏歌曲统计
   const [songStats, setSongStats] = useState<{ active: number; draft: number } | null>(null);
+  // Phase 2.5: 歌曲编辑（增删改）
+  const [editTarget, setEditTarget] = useState<Song | "new" | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [editError, setEditError] = useState<string>("");
+  const [saving, setSaving] = useState(false);
   // Phase 2: 启动恢复
   const [restored, setRestored] = useState(false);
 
@@ -222,6 +237,70 @@ export default function App() {
   };
 
   const openOutputDir = () => fetch("/api/export/open", { method: "POST" });
+
+  // Phase 2.5: 歌曲编辑（增删改）
+  const refreshSongs = async () => {
+    const d: SongsData = await (await fetch("/api/songs/list")).json();
+    setSongsData(d);
+    setSongStats({ active: d.active, draft: d.draft });
+  };
+
+  const openEdit = (target: Song | "new") => {
+    setEditTarget(target);
+    setEditError("");
+    if (target === "new") {
+      setEditForm({ title: "", artists: "", key: "", capo: "", difficulty: "", section: "", lyricist: "", composer: "", tabs: "", tags: "", pinyin: "", notes: "" });
+    } else {
+      setEditForm({
+        title: target.title, artists: target.artists.join("，"),
+        key: target.key, capo: target.capo === null ? "" : String(target.capo),
+        difficulty: target.difficulty, section: target.section === null ? "" : String(target.section),
+        lyricist: target.lyricist, composer: target.composer, tabs: target.tabs,
+        tags: target.tags.join("，"), pinyin: target.pinyin, notes: target.notes,
+      });
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editForm.title?.trim()) { setEditError("歌名不能为空"); return; }
+    setSaving(true);
+    setEditError("");
+    const fields: Record<string, unknown> = {
+      title: editForm.title.trim(),
+      artists: editForm.artists.split(/[，,]/).map(s => s.trim()).filter(Boolean),
+      key: editForm.key, difficulty: editForm.difficulty,
+      lyricist: editForm.lyricist, composer: editForm.composer,
+      tabs: editForm.tabs, notes: editForm.notes, pinyin: editForm.pinyin,
+      tags: editForm.tags.split(/[，,]/).map(s => s.trim()).filter(Boolean),
+      capo: editForm.capo === "" ? null : parseInt(editForm.capo, 10),
+      section: editForm.section === "" ? null : parseInt(editForm.section, 10),
+    };
+    try {
+      const res = editTarget === "new"
+        ? await fetch("/api/songs/add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) })
+        : await fetch("/api/songs/update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: (editTarget as Song).title, fields }) });
+      if (!res.ok) { setEditError(await res.text()); setSaving(false); return; }
+      await refreshSongs();
+      setEditTarget(null);
+    } catch (e) {
+      setEditError("保存失败：" + e);
+    }
+    setSaving(false);
+  };
+
+  const deleteSong = async (song: Song) => {
+    if (!window.confirm(`确定删除「${song.title}」？此操作会立即写入 songs.json（有自动备份）。`)) return;
+    try {
+      const res = await fetch("/api/songs/delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: song.title }),
+      });
+      if (!res.ok) { console.error("删除失败", await res.text()); return; }
+      await refreshSongs();
+    } catch (e) {
+      console.error("删除失败", e);
+    }
+  };
 
   // Phase 2: 学会了 ⇄ 标回未会
   const handleToggleStatus = async (song: Song) => {
@@ -464,6 +543,10 @@ export default function App() {
                   <option value="active">已会</option>
                   <option value="draft">未会</option>
                 </select>
+                <button onClick={() => openEdit("new")}
+                  className="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white">
+                  + 新增歌曲
+                </button>
               </div>
             </div>
             {songsData ? (
@@ -473,6 +556,7 @@ export default function App() {
                     <tr>
                       <th className="text-left px-4 py-2 font-medium">歌名</th>
                       <th className="text-left px-4 py-2 font-medium">歌手</th>
+                      <th className="text-left px-4 py-2 font-medium">弹唱</th>
                       <th className="text-left px-4 py-2 font-medium">状态</th>
                       <th className="text-left px-4 py-2 font-medium">分类</th>
                       <th className="text-left px-4 py-2 font-medium">操作</th>
@@ -486,6 +570,11 @@ export default function App() {
                         <tr key={s.title} className={`border-t ${dark ? "border-zinc-700/50 hover:bg-zinc-800/50" : "border-border hover:bg-muted/50"}`}>
                           <td className="px-4 py-2">{s.title}</td>
                           <td className="px-4 py-2 text-muted-foreground">{s.artists.join("、") || "—"}</td>
+                          <td className="px-4 py-2 text-muted-foreground tabular-nums">
+                            {s.key || s.capo !== null
+                              ? `${s.key || "?"}${s.capo !== null ? ` · capo${s.capo}` : ""}`
+                              : "—"}
+                          </td>
                           <td className="px-4 py-2">
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${s.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"}`}>
                               {s.status === "active" ? "已会" : "未会"}
@@ -493,12 +582,22 @@ export default function App() {
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">{s.section ? `${s.section}字` : "—"}</td>
                           <td className="px-4 py-2">
-                            <button onClick={() => handleToggleStatus(s)}
-                              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${s.status === "draft"
-                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300"
-                                : "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-300"}`}>
-                              {s.status === "draft" ? "学会了 ✓" : "标回未会"}
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={() => handleToggleStatus(s)}
+                                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${s.status === "draft"
+                                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300"
+                                  : "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-300"}`}>
+                                {s.status === "draft" ? "学会了 ✓" : "标回未会"}
+                              </button>
+                              <button onClick={() => openEdit(s)}
+                                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${dark ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600" : "bg-muted text-foreground hover:bg-border"}`}>
+                                编辑
+                              </button>
+                              <button onClick={() => deleteSong(s)}
+                                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${dark ? "text-red-400 hover:bg-zinc-700" : "text-red-500 hover:bg-red-50"}`}>
+                                删除
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -680,6 +779,123 @@ export default function App() {
                   {exporting ? "导出中…" : "开始导出"}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== 歌曲编辑对话框 ========== */}
+      {editTarget !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
+          onClick={() => !saving && setEditTarget(null)}>
+          <div className={`w-[460px] max-h-[85vh] overflow-y-auto rounded-2xl p-6 shadow-2xl transition-colors ${dark ? "bg-zinc-800 border border-zinc-700 text-zinc-200" : "bg-card border border-border text-card-foreground"}`}
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold mb-4">
+              {editTarget === "new" ? "新增歌曲" : `编辑「${(editTarget as Song).title}」`}
+            </h3>
+
+            <div className="space-y-3">
+              {/* 歌名 */}
+              <label className="block text-xs text-muted-foreground">
+                歌名 <span className="text-red-400">*</span>
+                <input type="text" value={editForm.title ?? ""} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs text-muted-foreground">
+                  歌手（逗号分隔）
+                  <input type="text" value={editForm.artists ?? ""} onChange={e => setEditForm(f => ({ ...f, artists: e.target.value }))}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                </label>
+                <label className="block text-xs text-muted-foreground">
+                  分类
+                  <select value={editForm.section ?? ""} onChange={e => setEditForm(f => ({ ...f, section: e.target.value }))}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`}>
+                    <option value="">自动（按字数）</option>
+                    {[1, 2, 3, 4, 5, 6, 7].map(n => <option key={n} value={n}>{n === 7 ? "7+（长歌名/英文）" : `${n} 字`}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              {/* 弹唱信息 */}
+              <div className={`rounded-xl p-3 space-y-3 ${dark ? "bg-zinc-700/40" : "bg-muted/60"}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">弹唱信息</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <label className="block text-xs text-muted-foreground">
+                    选调
+                    <input type="text" placeholder="如 G" value={editForm.key ?? ""} onChange={e => setEditForm(f => ({ ...f, key: e.target.value }))}
+                      className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-card border border-border text-foreground"}`} />
+                  </label>
+                  <label className="block text-xs text-muted-foreground">
+                    变调夹（品）
+                    <input type="number" min={0} max={12} placeholder="空=未填" value={editForm.capo ?? ""} onChange={e => setEditForm(f => ({ ...f, capo: e.target.value }))}
+                      className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-card border border-border text-foreground"}`} />
+                  </label>
+                  <label className="block text-xs text-muted-foreground">
+                    难度
+                    <select value={editForm.difficulty ?? ""} onChange={e => setEditForm(f => ({ ...f, difficulty: e.target.value }))}
+                      className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-card border border-border text-foreground"}`}>
+                      <option value="">未标</option>
+                      <option value="简单">简单</option>
+                      <option value="中等">中等</option>
+                      <option value="困难">困难</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="block text-xs text-muted-foreground">
+                  谱子（链接或来源）
+                  <input type="text" value={editForm.tabs ?? ""} onChange={e => setEditForm(f => ({ ...f, tabs: e.target.value }))}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-card border border-border text-foreground"}`} />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs text-muted-foreground">
+                  作词
+                  <input type="text" value={editForm.lyricist ?? ""} onChange={e => setEditForm(f => ({ ...f, lyricist: e.target.value }))}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                </label>
+                <label className="block text-xs text-muted-foreground">
+                  作曲
+                  <input type="text" value={editForm.composer ?? ""} onChange={e => setEditForm(f => ({ ...f, composer: e.target.value }))}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs text-muted-foreground">
+                  标签（逗号分隔）
+                  <input type="text" placeholder="如：小甜歌，苦情" value={editForm.tags ?? ""} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                </label>
+                <label className="block text-xs text-muted-foreground">
+                  拼音首字母
+                  <input type="text" placeholder="空=自动生成" value={editForm.pinyin ?? ""} onChange={e => setEditForm(f => ({ ...f, pinyin: e.target.value }))}
+                    className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                </label>
+              </div>
+
+              <label className="block text-xs text-muted-foreground">
+                备注
+                <textarea rows={2} placeholder="如：副歌高音要降 key" value={editForm.notes ?? ""} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                  className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none resize-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+              </label>
+            </div>
+
+            {editError && (
+              <p className="mt-3 text-sm text-red-500">{editError}</p>
+            )}
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => !saving && setEditTarget(null)} disabled={saving}
+                className={`rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer disabled:opacity-50 ${dark ? "text-zinc-400 hover:text-zinc-200" : "text-muted-foreground hover:text-foreground"}`}>
+                取消
+              </button>
+              <button onClick={saveEdit} disabled={saving}
+                className="rounded-xl px-5 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+                {saving ? "保存中…" : "保存"}
+              </button>
             </div>
           </div>
         </div>

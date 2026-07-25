@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from core.spec import CANVAS_PRESETS
 from core.themes.loader import load_themes
 from core.layouts import get_layout, list_layouts, layout_params
-from core.data.songs import build_default_library
+from core.data.songs import SongLibrary, build_default_library
 from core.engine import render_page
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -103,18 +103,52 @@ def api_songs():
             "by_len": _count_by_len()}
 
 
+def _song_dict(s) -> dict:
+    """歌曲的完整可编辑字段视图（/api/songs/list 与编辑对话框用）。"""
+    return {"title": s.title, "status": s.status, "section": s.section,
+            "artists": s.artists, "lyricist": s.lyricist, "composer": s.composer,
+            "key": s.key, "capo": s.capo, "difficulty": s.difficulty,
+            "tabs": s.tabs, "tags": s.tags, "pinyin": s.pinyin,
+            "added_at": s.added_at, "notes": s.notes}
+
+
 @app.get("/api/songs/list")
 def api_songs_list(status: str = None):
-    """返回完整歌曲列表，可按 status 过滤（active/draft）。"""
+    """返回完整歌曲列表（含全部可编辑字段），可按 status 过滤（active/draft）。"""
     songs = library.songs
     if status:
         songs = [s for s in songs if s.status == status]
     return {"total": len(songs),
             "active": library.count_active(),
             "draft": library.count_draft(),
-            "songs": [{"title": s.title, "status": s.status,
-                       "section": s.section, "artists": s.artists}
-                      for s in songs]}
+            "songs": [_song_dict(s) for s in songs]}
+
+
+def _save_library():
+    """变更后统一落盘：原子写 + 自动备份（data/backups/，滚动保留）。"""
+    backup_dir = os.path.join(ROOT, "data", "backups")
+    library.save(SONGS_JSON, backup_dir=backup_dir,
+                 backup_count=settings.get("backup_count", 20))
+
+
+def _clean_song_fields(payload: dict) -> dict:
+    """清洗编辑/新增提交的字段：类型矫正 + 范围约束。"""
+    fields = {}
+    for k in SongLibrary.EDITABLE_FIELDS:
+        if k not in payload:
+            continue
+        v = payload[k]
+        if k in ("artists", "tags"):
+            fields[k] = [str(x).strip() for x in (v or []) if str(x).strip()]
+        elif k == "capo":
+            fields[k] = None if v in (None, "") else max(0, min(12, int(v)))
+        elif k == "section":
+            fields[k] = None if v in (None, "") else max(1, min(7, int(v)))
+        else:
+            fields[k] = str(v).strip() if v is not None else ""
+    if "title" in fields and not fields["title"]:
+        raise ValueError("歌名不能为空")
+    return fields
 
 
 @app.post("/api/songs/status")
@@ -122,8 +156,7 @@ def api_songs_status(payload: dict):
     """切换歌曲状态：{"title": "知足", "status": "active"|"draft"}。
 
     一键「学会了」（draft→active）/「标回未会」（active→draft）。
-    变更即原子写落盘 + 自动备份（data/backups/，滚动保留）。
-    渲染端点每次新排文字层，无需额外缓存失效。
+    变更即原子写落盘 + 自动备份；渲染端点每次新排文字层，无需缓存失效。
     """
     title = (payload.get("title") or "").strip()
     status = (payload.get("status") or "").strip()
@@ -132,10 +165,68 @@ def api_songs_status(payload: dict):
     mark = library.mark_active if status == "active" else library.mark_draft
     if not mark(title):
         return Response(f"未找到歌曲：{title}", status_code=404)
-    backup_dir = os.path.join(ROOT, "data", "backups")
-    library.save(SONGS_JSON, backup_dir=backup_dir,
-                 backup_count=settings.get("backup_count", 20))
+    _save_library()
     return {"ok": True, "title": title, "status": status,
+            "active": library.count_active(), "draft": library.count_draft()}
+
+
+@app.post("/api/songs/update")
+def api_songs_update(payload: dict):
+    """编辑歌曲信息：{"title": "知足", "fields": {"key": "G", "capo": 2, ...}}。
+
+    title 定位歌曲；fields 支持全部可编辑字段（含改名 title，会查重）。
+    变更即落盘 + 备份。
+    """
+    title = (payload.get("title") or "").strip()
+    try:
+        fields = _clean_song_fields(payload.get("fields") or {})
+        if not fields:
+            return Response("fields 为空", status_code=400)
+        ok = library.update(title, fields)
+    except ValueError as e:
+        return Response(str(e), status_code=400)
+    if not ok:
+        return Response(f"未找到歌曲：{title}", status_code=404)
+    _save_library()
+    song = library.get(fields.get("title", title))
+    return {"ok": True, "song": _song_dict(song)}
+
+
+@app.post("/api/songs/add")
+def api_songs_add(payload: dict):
+    """新增歌曲。title 必填且查重；status 默认 draft（学会后再上海报）。
+
+    pinyin 留空则自动生成拼音首字母；added_at 自动填当天。
+    """
+    try:
+        fields = _clean_song_fields(payload)
+    except (ValueError, TypeError) as e:
+        return Response(str(e), status_code=400)
+    title = fields.pop("title", "")
+    if not title:
+        return Response("歌名不能为空", status_code=400)
+    from core.data.songs import Song, pinyin_initials
+    song = Song(title=title,
+                status=payload.get("status") if payload.get("status") in ("active", "draft") else "draft",
+                added_at=datetime.now().strftime("%Y-%m-%d"),
+                **fields)
+    if not song.pinyin:
+        song.pinyin = pinyin_initials(title)
+    if not library.add(song):
+        return Response(f"歌曲已存在：{title}", status_code=409)
+    _save_library()
+    return {"ok": True, "song": _song_dict(song),
+            "active": library.count_active(), "draft": library.count_draft()}
+
+
+@app.post("/api/songs/delete")
+def api_songs_delete(payload: dict):
+    """删除歌曲：{"title": "知足"}。变更即落盘 + 备份。"""
+    title = (payload.get("title") or "").strip()
+    if not library.remove(title):
+        return Response(f"未找到歌曲：{title}", status_code=404)
+    _save_library()
+    return {"ok": True, "title": title,
             "active": library.count_active(), "draft": library.count_draft()}
 
 

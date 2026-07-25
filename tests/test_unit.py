@@ -109,6 +109,41 @@ def test_mark_draft():
     assert lib.mark_draft("x") is False
     assert [s.status for s in lib.songs] == ["draft", "draft"]
 
+def test_update():
+    lib = SongLibrary([Song(title="a"), Song(title="b")])
+    assert lib.update("a", {"key": "G", "capo": 2, "tags": ["小甜歌"]}) is True
+    s = lib.get("a")
+    assert s.key == "G" and s.capo == 2 and s.tags == ["小甜歌"]
+    assert lib.update("x", {"key": "C"}) is False
+
+def test_update_rename_dedupe():
+    lib = SongLibrary([Song(title="a"), Song(title="b")])
+    assert lib.update("a", {"title": "c"}) is True
+    assert lib.get("c") is not None and lib.get("a") is None
+    try:
+        lib.update("b", {"title": "c"})
+        assert False, "改名撞车应抛 ValueError"
+    except ValueError:
+        pass
+
+def test_remove():
+    lib = SongLibrary([Song(title="a"), Song(title="b")])
+    assert lib.remove("a") is True
+    assert lib.remove("x") is False
+    assert [s.title for s in lib.songs] == ["b"]
+
+def test_migration_v1_to_v2_capo():
+    data = {"version": 1, "songs": [
+        {"title": "a", "capo": 0}, {"title": "b", "capo": 3}]}
+    out = SongLibrary._migrate(data)
+    assert out["songs"][0]["capo"] is None
+    assert out["songs"][1]["capo"] == 3
+
+def test_pinyin_initials():
+    from core.data.songs import pinyin_initials
+    assert pinyin_initials("知足") == "zz"
+    assert pinyin_initials("枫") == "f"
+
 def test_search():
     lib = SongLibrary([Song(title="a"), Song(title="ab")])
     s = lib.search("a")
