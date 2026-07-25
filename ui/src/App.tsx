@@ -251,12 +251,13 @@ export default function App() {
     if (target === "new") {
       setEditForm({ title: "", artists: "", key: "", capo: "", difficulty: "", section: "", lyricist: "", composer: "", tabs: "", tags: "", pinyin: "", notes: "" });
     } else {
+      // 防御性回显：字段缺失（如旧后端/旧数据）时降级为空串而不是 undefined
       setEditForm({
-        title: target.title, artists: target.artists.join("，"),
-        key: target.key, capo: target.capo === null ? "" : String(target.capo),
-        difficulty: target.difficulty, section: target.section === null ? "" : String(target.section),
-        lyricist: target.lyricist, composer: target.composer, tabs: target.tabs,
-        tags: target.tags.join("，"), pinyin: target.pinyin, notes: target.notes,
+        title: target.title ?? "", artists: (target.artists ?? []).join("，"),
+        key: target.key ?? "", capo: target.capo == null ? "" : String(target.capo),
+        difficulty: target.difficulty ?? "", section: target.section == null ? "" : String(target.section),
+        lyricist: target.lyricist ?? "", composer: target.composer ?? "", tabs: target.tabs ?? "",
+        tags: (target.tags ?? []).join("，"), pinyin: target.pinyin ?? "", notes: target.notes ?? "",
       });
     }
   };
