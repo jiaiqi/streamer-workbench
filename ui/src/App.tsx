@@ -45,6 +45,14 @@ interface ParamSpec {
   max: number | null;
   choices: string[] | null;
 }
+interface Settings {
+  output_dir: string;
+  default_canvas: string;
+  default_theme: string;
+  font_path: string;
+  backup_count: number;
+  render_threads: number;
+}
 
 const CANVAS_OPTIONS = ["标准 9:16", "抖音全屏 9:20"] as const;
 
@@ -110,6 +118,10 @@ export default function App() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [editError, setEditError] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  // Phase 2: 设置页
+  const [settingsForm, setSettingsForm] = useState<Settings | null>(null);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   // Phase 2: 启动恢复
   const [restored, setRestored] = useState(false);
 
@@ -138,9 +150,17 @@ export default function App() {
   }, [selTheme, page, canvas, avoid, params, restored]);
 
   useEffect(() => {
-    fetch("/api/themes").then(r => r.json()).then((d: Theme[]) => {
-      setThemes(d);
-      if (d.length && !selTheme) setSelTheme(d[0].name);
+    // 先拉设置：无 localStorage 恢复记录时应用默认画布/默认主题
+    const savedWorkspace = localStorage.getItem("gp-workspace");
+    fetch("/api/settings").then(r => r.json()).then((st: Settings) => {
+      if (!savedWorkspace && st.default_canvas) setCanvas(st.default_canvas);
+      fetch("/api/themes").then(r => r.json()).then((d: Theme[]) => {
+        setThemes(d);
+        if (d.length && !selTheme) {
+          const def = !savedWorkspace && d.find(t => t.name === st.default_theme);
+          setSelTheme(def ? def.name : d[0].name);
+        }
+      });
     });
     fetch("/api/layouts").then(r => r.json()).then(setLayouts);
     // Phase 2: 状态栏歌曲统计
@@ -164,6 +184,32 @@ export default function App() {
       fetch("/api/songs/list").then(r => r.json()).then(setSongsData);
     }
   }, [view]);
+
+  // Phase 2: 设置页数据加载
+  useEffect(() => {
+    if (view === "settings") {
+      setSettingsSaved(false);
+      fetch("/api/settings").then(r => r.json()).then(setSettingsForm);
+    }
+  }, [view]);
+
+  const saveSettings = async () => {
+    if (!settingsForm) return;
+    setSettingsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsForm),
+      });
+      if (res.ok) {
+        setSettingsSaved(true);
+        setTimeout(() => setSettingsSaved(false), 2500);
+      }
+    } catch (e) {
+      console.error("设置保存失败", e);
+    }
+    setSettingsSaving(false);
+  };
 
   // Phase 2: 参数防抖（300ms）
   const [debouncedParams, setDebouncedParams] = useState(params);
@@ -378,7 +424,7 @@ export default function App() {
           <button onClick={() => setDark(d => !d)} title="切换亮/暗"
             className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.sun}</button>
-          <button title="设置"
+          <button onClick={() => setView("settings")} title="设置"
             className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.settings}</button>
         </div>
@@ -614,8 +660,84 @@ export default function App() {
           </main>
           )}
 
+          {/* ===== 设置视图 ===== */}
+          {view === "settings" && (
+          <main className="flex-1 overflow-y-auto p-6">
+            <h2 className={`text-lg font-semibold mb-4 ${dark ? "text-zinc-200" : "text-foreground"}`}>设置</h2>
+            {settingsForm ? (
+              <div className="max-w-xl space-y-5">
+                <section className={`rounded-xl p-4 space-y-3 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">输出</h3>
+                  <label className="block text-xs text-muted-foreground">
+                    输出目录
+                    <input type="text" value={settingsForm.output_dir}
+                      onChange={e => setSettingsForm(f => f && { ...f, output_dir: e.target.value })}
+                      className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none font-mono ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-xs text-muted-foreground">
+                      默认画布
+                      <select value={settingsForm.default_canvas}
+                        onChange={e => setSettingsForm(f => f && { ...f, default_canvas: e.target.value })}
+                        className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`}>
+                        {CANVAS_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-xs text-muted-foreground">
+                      默认主题
+                      <select value={settingsForm.default_theme}
+                        onChange={e => setSettingsForm(f => f && { ...f, default_theme: e.target.value })}
+                        className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`}>
+                        {themes.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">默认画布/主题在无历史使用记录（首次启动）时生效；日常使用以「启动恢复」的上次状态为准。</p>
+                </section>
+
+                <section className={`rounded-xl p-4 space-y-3 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">数据与安全</h3>
+                  <label className="block text-xs text-muted-foreground">
+                    自动备份保留份数（1-100）
+                    <input type="number" min={1} max={100} value={settingsForm.backup_count}
+                      onChange={e => setSettingsForm(f => f && { ...f, backup_count: Math.max(1, Math.min(100, parseInt(e.target.value, 10) || 20)) })}
+                      className={`mt-1 w-24 rounded-lg px-3 py-2 text-sm outline-none text-right ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">歌曲数据每次变更前自动备份到 data/backups/，超出份数滚动清理。</p>
+                </section>
+
+                <section className={`rounded-xl p-4 space-y-3 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">高级</h3>
+                  <label className="block text-xs text-muted-foreground">
+                    字体文件路径
+                    <input type="text" value={settingsForm.font_path}
+                      onChange={e => setSettingsForm(f => f && { ...f, font_path: e.target.value })}
+                      className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none font-mono ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">⚠️ 更换字体会使金标准测试失效（渲染像素必变），且需重启后端生效；当前渲染仍使用内置猫啃糖圆体。</p>
+                  <label className="block text-xs text-muted-foreground">
+                    渲染线程数（预留，暂未生效）
+                    <input type="number" min={1} max={8} value={settingsForm.render_threads} disabled
+                      className={`mt-1 w-24 rounded-lg px-3 py-2 text-sm outline-none text-right opacity-50 ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
+                  </label>
+                </section>
+
+                <div className="flex items-center gap-3">
+                  <button onClick={saveSettings} disabled={settingsSaving}
+                    className="rounded-xl px-5 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+                    {settingsSaving ? "保存中…" : "保存设置"}
+                  </button>
+                  {settingsSaved && <span className="text-sm text-emerald-600">✅ 已保存</span>}
+                </div>
+              </div>
+            ) : (
+              <div className="text-muted-foreground">加载中…</div>
+            )}
+          </main>
+          )}
+
           {/* ===== 其他视图占位 ===== */}
-          {["learning", "themes", "presets", "history", "settings"].includes(view) && (
+          {["learning", "themes", "presets", "history"].includes(view) && (
           <main className="flex-1 flex items-center justify-center">
             <div className="text-center space-y-3">
               <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-2xl shadow-sm ${dark ? "bg-zinc-800" : "bg-muted"}`}>
