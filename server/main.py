@@ -197,49 +197,6 @@ def api_settings_update(new_settings: dict):
     return {"ok": True, "settings": settings}
 
 
-# ---- 防抖渲染（支持 If-Modified-Since 语义）----
-_render_cache: dict = {}
-
-@app.get("/api/render/etag")
-def api_render_etag(theme: str, page: int = 1,
-                    canvas: str = "标准 9:16", avoid: bool = False,
-                    layout: str = "grid-wrap",
-                    margin: int = None, font_song: int = None,
-                    row_h: int = None, sec_gap: int = None):
-    """带 ETag 的渲染端点：参数相同时返回 304，减少重复传输。"""
-    if theme not in themes:
-        return Response(f"未知主题：{theme}", status_code=404)
-    try:
-        layout_plugin = get_layout(layout)
-    except KeyError as e:
-        return Response(str(e), status_code=404)
-    base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["标准 9:16"])
-    spec = base
-    if avoid:
-        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
-    overrides = {k: v for k, v in
-                 {"margin": margin, "font_song": font_song,
-                  "row_h": row_h, "sec_gap": sec_gap}.items()
-                 if v is not None}
-    if overrides:
-        spec = replace(spec, **overrides)
-
-    # 缓存键：全部参数哈希
-    cache_key = f"{theme}:{page}:{canvas}:{avoid}:{layout}:{margin}:{font_song}:{row_h}:{sec_gap}"
-    etag = f'"{hash(cache_key)}"'
-
-    if cache_key in _render_cache:
-        # 返回 304 Not Modified（客户端应缓存）
-        return Response(status_code=304, headers={"ETag": etag})
-
-    img = render_page(themes[theme], layout_plugin, library, spec, page, FONT)
-    buf = io.BytesIO()
-    img.save(buf, "PNG")
-    _render_cache[cache_key] = buf.getvalue()
-    return Response(buf.getvalue(), media_type="image/png",
-                    headers={"ETag": etag})
-
-
 @app.get("/api/render")
 def api_render(theme: str, page: int = 1,
                canvas: str = "标准 9:16", avoid: bool = False,
