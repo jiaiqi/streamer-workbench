@@ -1,0 +1,13 @@
+{
+  "name": "poster-electron-spike",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Electron 壳 spike：spawn 打包后端 + alwaysOnTop 速查小窗可行性验证",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^37.0.0"
+  }
+}
