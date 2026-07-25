@@ -4,7 +4,7 @@
 
 ## 技术栈（2026-07-25 定稿，决策过程见设计仓库《歌单海报生成器-设计结论.md》第一节）
 - **渲染引擎**：Python + PIL（纯函数，金标准：与现有成品逐像素一致，当前 16/16 diff=0）
-- **后端**：FastAPI 本地服务（`server/`，开发期 uvicorn 8000 端口）；MVP 后期由 Tauri 2.0 打包成桌面 App（Python 作 sidecar，引擎不重写）
+- **后端**：FastAPI 本地服务（`server/`，开发期 uvicorn 8000 端口）；MVP 后期由 Electron 打包成桌面 App（Python 作 child_process，引擎不重写）
 - **前端**：React 19 + Vite 6 + Tailwind 4（`ui/`，按「晨光纸感」设计稿改造中）；开发期另有 `web/index.html` 原生验证页
 - **视觉蓝本**：设计仓库 `歌单海报生成器-界面设计\`（shared.css 设计令牌/组件 + 7 页静态设计稿）
 - **铁律**：`core/` 禁止 import 任何 UI/服务器框架，UI 只通过 `engine.render_page()` 拿 PIL.Image

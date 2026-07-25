@@ -1,7 +1,7 @@
 """本地渲染后端（开发期）。
 
-FastAPI 暴露渲染/主题/歌曲接口。前端（浏览器或后期 Tauri webview）连
-http://localhost:8000 调用。MVP 后期由 Tauri 把本服务打包成 sidecar。
+FastAPI 暴露渲染/主题/歌曲接口。前端（浏览器或后期 Electron BrowserWindow）连
+http://localhost:8000 调用。MVP 后期由 Electron 把本服务打包为 child_process。
 
 运行（项目根目录下）：
     pip install -r requirements.txt
@@ -29,7 +29,7 @@ FONT = os.path.join(ROOT, "fonts", "MaokenAssortedSans.ttf")
 app = FastAPI(title="歌单海报生成器 · 渲染后端")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # 开发期放开；生产期收窄到 Tauri 域名
+    allow_origins=["*"],   # 开发期放开；生产期收窄到 Electron 域名
     allow_methods=["*"],
     allow_headers=["*"],
 )
