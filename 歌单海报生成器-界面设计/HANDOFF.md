@@ -107,7 +107,7 @@ colors_and_type.css 原始配色文档（保留作源头参考）
 ~~3. `/api/render` 不接受参数覆盖（margin/font_song 等调了不生效）。~~
 ~~4. vite 代理只转 `/api`，`/bg` 需加代理或拼绝对地址。~~
 
-> **2026-07-25 已全部补齐**（generator 仓库 `14f4ee2` + `9235246`）：`/api/layouts` 返回 pages/supports_avoidance；新增 `/api/layouts/{id}/params`；`/api/render` 支持 margin/font_song/row_h/sec_gap 覆盖及 layout 参数；vite 已代理 `/bg`。另：技术栈定稿「FastAPI + React 19/Vite 6/Tailwind 4 + Tauri sidecar」，PySide6 正式移除，《设计结论》《项目结构设计》两份文档已同步。macOS 环境已搭好，金标准 16/16 diff=0（需在仓库上级建 `歌单-排版一` 软链指向本设计仓库）。
+> **2026-07-25 已全部补齐**（generator 仓库 `14f4ee2` + `9235246`）：`/api/layouts` 返回 pages/supports_avoidance；新增 `/api/layouts/{id}/params`；`/api/render` 支持 margin/font_song/row_h/sec_gap 覆盖及 layout 参数；vite 已代理 `/bg`。另：技术栈定稿「FastAPI + React 19/Vite 6/Tailwind 4 + Electron child_process」，PySide6 正式移除，《设计结论》《项目结构设计》两份文档已同步。macOS 环境已搭好，金标准 16/16 diff=0（需在仓库上级建 `歌单-排版一` 软链指向本设计仓库）。
 
 ---
 
