@@ -9,10 +9,12 @@
 
 工作目录 `F:\Desktop\李梓涵\` 下有 **两个相互独立的 git 仓库**（刻意不嵌套，各自提交）：
 
-| 路径 | 仓库 | 内容 |
-|---|---|---|
-| `李梓涵\`（外层） | git 仓库 A | 设计文档、界面设计稿（`歌单海报生成器-界面设计\`） |
-| `李梓涵\歌单海报生成器\`（内层） | git 仓库 B | 产品本体：Python 渲染引擎 + FastAPI 后端 + 前端 |
+| 路径 | 仓库 | GitHub 远程（私有） | 内容 |
+|---|---|---|---|
+| `李梓涵\`（外层） | git 仓库 A（分支 `master`） | `jiaiqi/playlist-poster-design` | 设计文档、界面设计稿（`歌单海报生成器-界面设计\`） |
+| `李梓涵\歌单海报生成器\`（内层） | git 仓库 B（主分支 `master`，另有 `feature/golden-align`） | `jiaiqi/playlist-poster-generator` | 产品本体：Python 渲染引擎 + FastAPI 后端 + 前端 |
+
+> GitHub 账号 `jiaiqi`，凭据已存于 Windows 凭据管理器，`git push` 直接可用。
 
 **协作约定（仓库历史中有明确记录）：每次改动都要 git 提交，原子提交、中文提交信息。**
 
