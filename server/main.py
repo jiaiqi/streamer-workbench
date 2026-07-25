@@ -13,6 +13,7 @@ import os
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from core.spec import CanvasSpec, CANVAS_PRESETS
 from core.themes.loader import load_themes
@@ -31,6 +32,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/bg", StaticFiles(directory=THEMES_DIR), name="theme_bg")
 
 themes = load_themes(THEMES_DIR)
 library = build_default_library()
@@ -44,7 +46,9 @@ def health():
 @app.get("/api/themes")
 def api_themes():
     return [{"name": t.name, "prefix": t.output_prefix,
-             "watermark_fix": t.watermark_fix} for t in themes.values()]
+             "watermark_fix": t.watermark_fix,
+             "backgrounds": t.backgrounds,
+             "notes": t.notes} for t in themes.values()]
 
 
 @app.get("/api/layouts")
