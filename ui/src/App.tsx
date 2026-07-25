@@ -282,6 +282,43 @@ export default function App() {
     setExporting(false);
   };
 
+  // Phase 2: 快捷键（设计文档 §6.8 的 Web 落地子集）
+  // Ctrl/⌘+E 导出 · Ctrl/⌘+R 刷新预览 · ←→ 翻页 · Ctrl/⌘+1~7 切主题 ·
+  // Ctrl/⌘+, 设置 · Esc 关闭对话框。输入控件聚焦时不拦截（Esc 除外）。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+      if (e.key === "Escape") {
+        if (!saving && !exporting) { setEditTarget(null); setExportDialogOpen(false); }
+        return;
+      }
+      if (typing) return;
+
+      if (mod && e.key === "e") {
+        e.preventDefault();
+        setExportDone(null); setExportProgress(null); setExportDialogOpen(true);
+      } else if (mod && e.key === "r") {
+        e.preventDefault();
+        setLoading(true); setRenderKey(k => k + 1);
+      } else if (mod && e.key === ",") {
+        e.preventDefault();
+        setView("settings");
+      } else if (mod && /^[1-7]$/.test(e.key)) {
+        e.preventDefault();
+        const t = themes[parseInt(e.key, 10) - 1];
+        if (t) { setSelTheme(t.name); setPage(1); }
+      } else if (!mod && view === "workspace" && !exportDialogOpen && editTarget === null) {
+        if (e.key === "ArrowLeft") setPage(p => Math.max(1, p - 1));
+        else if (e.key === "ArrowRight") setPage(p => Math.min(maxPage, p + 1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [themes, view, maxPage, saving, exporting, exportDialogOpen, editTarget]);
+
   const openOutputDir = () => fetch("/api/export/open", { method: "POST" });
 
   // Phase 2.5: 歌曲编辑（增删改）
