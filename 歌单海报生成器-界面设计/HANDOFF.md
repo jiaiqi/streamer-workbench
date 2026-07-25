@@ -102,10 +102,12 @@ colors_and_type.css 原始配色文档（保留作源头参考）
 `GET /api/health`、`/api/themes`（含 backgrounds/notes）、`/api/layouts`（仅 id+name）、`/api/songs`（total + by_len）、`/api/render?theme=&page=&canvas=&avoid=` → PNG、`/bg/<主题>/<文件>` 静态背景。
 
 ### 已知 API 差距（前端工程化时需要补）
-1. `/api/layouts` 不返回 `pages`/`supports_avoidance`（React ui/src/App.tsx 里已假设有）。
-2. 排版参数 ParamSpec 无端点暴露（建议加 `/api/layouts/{id}/params`）。
-3. `/api/render` 不接受参数覆盖（margin/font_song 等调了不生效）。
-4. vite 代理只转 `/api`，`/bg` 需加代理或拼绝对地址。
+~~1. `/api/layouts` 不返回 `pages`/`supports_avoidance`（React ui/src/App.tsx 里已假设有）。~~
+~~2. 排版参数 ParamSpec 无端点暴露（建议加 `/api/layouts/{id}/params`）。~~
+~~3. `/api/render` 不接受参数覆盖（margin/font_song 等调了不生效）。~~
+~~4. vite 代理只转 `/api`，`/bg` 需加代理或拼绝对地址。~~
+
+> **2026-07-25 已全部补齐**（generator 仓库 `14f4ee2` + `9235246`）：`/api/layouts` 返回 pages/supports_avoidance；新增 `/api/layouts/{id}/params`；`/api/render` 支持 margin/font_song/row_h/sec_gap 覆盖及 layout 参数；vite 已代理 `/bg`。另：技术栈定稿「FastAPI + React 19/Vite 6/Tailwind 4 + Tauri sidecar」，PySide6 正式移除，《设计结论》《项目结构设计》两份文档已同步。macOS 环境已搭好，金标准 16/16 diff=0（需在仓库上级建 `歌单-排版一` 软链指向本设计仓库）。
 
 ---
 
@@ -140,7 +142,7 @@ npx agent-browser eval 'localStorage.clear()'         # 测暗色前先清 gp-th
 ## 7. 建议的下一步（按优先级）
 
 1. **React `ui/` 按新设计稿改造**：把 shared.css 的设计令牌/组件搬到 Tailwind 4 `@theme`，实现工作台（对接真实 /api/render），替换现有暗色初版。设计稿即视觉蓝本。
-2. **补后端端点**：`/api/layouts` 返回 pages/supports_avoidance；新增参数描述端点；`/api/render` 支持参数覆盖。
+2. ~~**补后端端点**~~（2026-07-25 已完成，见 §4）。
 3. **补数据**：加「奇妙能力歌」凑满 178 首，重跑金标准（`tests/test_golden.py`）。
 4. `tools/migrate_data.py`：双源校验生成 songs.json 唯一数据源。
 5. 歌曲库元数据（artists/key/capo）填充后，设计稿的学歌管理页可直接对接。
