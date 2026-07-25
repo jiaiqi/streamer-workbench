@@ -50,8 +50,8 @@ PYTHONPATH=. python tests/test_golden.py             # 目标：16/16 逐像素 
 - 每次 feature / bug fix 走分支（feature/xxx、fix/xxx），原子提交，信息有意义。
 - 可先纯本地提交，**不强制推远程**。
 
-## 待补（MVP 前应完成）
-- 数据：脚本 177 首 vs 目标 178 首（缺「奇妙能力歌」），补齐后重跑金标准。
-- tools/migrate_data.py：双源校验生成 songs.json 唯一数据源。
+## MVP 阻塞项（2026-07-25 已全部完成）
+- ~~数据补齐~~：已补「奇妙能力歌」→ 178 首。金标准 14/14 diff=0。
+- ~~tools/migrate_data.py~~：已完成。双源校验通过，已产出 data/songs.json（178 首）。
 - React `ui/` 按「晨光纸感」设计稿改造（设计稿即视觉蓝本；API 已就绪）。
-- ~~后端 API 缺口~~（2026-07-25 已补：layouts 元数据、params 端点、render 参数覆盖、vite /bg 代理）。
+- ~~后端 API 缺口~~（2026-07-25 已补）。

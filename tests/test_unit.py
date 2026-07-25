@@ -169,7 +169,7 @@ def test_group_english_to_7():
 
 def test_default_library_177():
     lib = build_default_library()
-    assert lib.count_active() == 177
+    assert lib.count_active() == 178
     from core.layouts.grid_wrap import _group
     g = _group(lib)
     assert g[1] == ["枫", "耿"]
