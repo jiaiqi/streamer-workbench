@@ -12,3 +12,7 @@ data/backups/
 # 编辑器
 .vscode/
 .idea/
+
+# 前端依赖与缓存（可重新安装）
+node_modules/
+.npm-cache/
