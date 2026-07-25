@@ -1,7 +1,7 @@
 # 歌单海报生成器 · Agent 交接上下文
 
 > 写给下一位接手协作的 Agent。本文汇总项目现状、已完成工作、关键决策与坑位，读完后可直接继续开发，无需重新探索。
-> 最近更新：2026-07-25 · 由上一轮 Agent 输出
+> 最近更新：2026-07-25 · 代码重构 + 文档同步
 
 ---
 
@@ -143,6 +143,7 @@ npx agent-browser eval 'localStorage.clear()'         # 测暗色前先清 gp-th
 
 1. **React `ui/` 按新设计稿改造**：把 shared.css 的设计令牌/组件搬到 Tailwind 4 `@theme`，实现工作台（对接真实 /api/render），替换现有暗色初版。设计稿即视觉蓝本。
 2. ~~**补后端端点**~~（2026-07-25 已完成，见 §4）。
-3. **补数据**：加「奇妙能力歌」凑满 178 首，重跑金标准（`tests/test_golden.py`）。
-4. `tools/migrate_data.py`：双源校验生成 songs.json 唯一数据源。
-5. 歌曲库元数据（artists/key/capo）填充后，设计稿的学歌管理页可直接对接。
+3. ~~分组规则已定案（section 标记 + 字数回退）~~（2026-07-25 已完成）
+4. **补数据**：加「奇妙能力歌」凑满 178 首，重跑金标准（`tests/test_golden.py`）。
+5. `tools/migrate_data.py`：双源校验生成 songs.json 唯一数据源。
+6. 歌曲库元数据（artists/key/capo）填充后，设计稿的学歌管理页可直接对接。
