@@ -12,3 +12,13 @@ __pycache__/
 build/
 dist/
 *.spec
+
+# 工具会话目录（不入库）
+.workbuddy/
+.zcode/
+
+# 界面设计验证截图（本地保留，不入库）
+歌单海报生成器-界面设计/.preflight/shots/
+
+# 独立 git 仓库（内层仓库自行管理历史）
+歌单海报生成器/
