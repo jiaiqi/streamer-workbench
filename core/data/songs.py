@@ -1,8 +1,11 @@
-"""歌曲库数据层（MVP 起步）。
+"""歌曲库数据层。
 
-Song 模型带元数据；SongLibrary 提供查重/速查/过滤 mastered。
-MVP 起步用内置的旧脚本歌单数据（178 首目标，当前 177 首，缺「奇妙能力歌」待补）。
-后续由 tools/migrate_data.py 双源校验生成 songs.json 作为唯一数据源。
+Song 模型带元数据；SongLibrary 提供查重/速查/过滤 active。
+2026-07-25 状态模型从四态（mastered/learning/wishlist/archived）简化为两态：
+  - active（已会，上海报）
+  - draft（未会/待学，不上海报）
+简化理由：个人单机工具不需要 wishlist/archived 的精细区分；
+增加状态复杂度应在有真实用户行为数据后再做。
 """
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -18,14 +21,17 @@ class Song:
     capo: int = 0
     difficulty: str = ""
     tabs: str = ""
-    status: str = "mastered"     # mastered / learning / wishlist / archived
+    status: str = "active"     # active（已会，上海报）/ draft（未会，不上海报）
     tags: List[str] = field(default_factory=list)
     pinyin: str = ""
     added_at: str = ""
     notes: str = ""
     # 分类归属（1=一字..6=六字, 7=长歌名/英文），对应旧脚本 8 个列表的 section。
-    # 用于保证分组与金标准 build_playlist.py 完全一致（旧脚本按列表分组，而非按字数——
-    # 例「恋爱ing」是 5 字但属三字列表）。未打标（用户新增）的歌由排版回退到按字数分组。
+    # 分组规则（2026-07-25 定案）：
+    #   1. 优先用 section 标记（从旧脚本手工分组迁移，保证与金标准一致；
+    #      例「恋爱ing」5字但旧脚本在三字列表 → section=3）
+    #   2. section 未标记 → 按字数自动分组（中文按 len()，含英文字母归 group 7）
+    # 覆盖文件：songs.py 的 YI/ER/SAN/.../LONG_CN 列表维护全部 section 标记。
     section: Optional[int] = None
 
 
@@ -33,8 +39,13 @@ class Song:
 class SongLibrary:
     songs: List[Song] = field(default_factory=list)
 
+    def active(self) -> List[Song]:
+        """返回所有会上海报的歌曲（status=active）。"""
+        return [s for s in self.songs if s.status == "active"]
+
     def mastered(self) -> List[Song]:
-        return [s for s in self.songs if s.status == "mastered"]
+        """兼容旧名：等于 active()。"""
+        return self.active()
 
     def search(self, query: str) -> Optional[Song]:
         """按 title 精确/模糊匹配，返回首个命中；直播速查用。"""
@@ -54,6 +65,20 @@ class SongLibrary:
         self.songs.append(song)
         return True
 
+    def mark_active(self, title: str) -> bool:
+        """将歌曲状态从 draft 改为 active（一键「学会了」）。返回是否成功找到。"""
+        for s in self.songs:
+            if s.title == title:
+                s.status = "active"
+                return True
+        return False
+
+    def count_active(self) -> int:
+        return sum(1 for s in self.songs if s.status == "active")
+
+    def count_draft(self) -> int:
+        return sum(1 for s in self.songs if s.status == "draft")
+
 
 # ---- 内置数据（来自 歌单-排版一\build_playlist.py 的 8 个列表）----
 YI = ["枫", "耿"]
@@ -67,7 +92,7 @@ LONG_CN = ["当我唱起这首歌", "远在北方孤独的鬼", "一个人想着
 
 
 def build_default_library() -> SongLibrary:
-    """构造 MVP 起步内置库（全部 mastered）。
+    """构造内置库（全部 active）。
 
     section 标记对应旧脚本的 8 个分类列表（YI=1..LONG=7），保证分组与
     build_playlist.py 的 compose() 完全一致——旧脚本按列表分组而非按字数
@@ -80,5 +105,5 @@ def build_default_library() -> SongLibrary:
     songs = []
     for lst, sec in section_map:
         for t in lst:
-            songs.append(Song(title=t, status="mastered", section=sec))
+            songs.append(Song(title=t, status="active", section=sec))
     return SongLibrary(songs=songs)

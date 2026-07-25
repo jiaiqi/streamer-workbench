@@ -1,24 +1,31 @@
 """全行网格绕排版（grid-wrap）—— 现有 build_playlist.py 排版逻辑移植。
 
-categorize 按歌名字数动态分组（不再硬编码 YI/ER/... 列表）：
+categorize 按分组规则（section 标记 + 字数回退）分页：
   第1页 [一字, 二字, 三字, 四字]，第2页 [五字, 六字, 长歌名/英文]
 render_page 原样搬旧 compose() 的 page1/page2 主流程，保证渲染结果一致。
+
+分组规则（2026-07-25 定案）：
+- 每首歌优先看 Song.section（1-7），这是从旧脚本手工分组直接迁移的标记
+  例「恋爱ing」是 5 字但旧脚本放在三字列表 → section=3
+- section 未标记的歌按字数自动分组（中文按 len(title)，含英文按分类规则）
+- 覆盖文件：songs.py 的 YI/ER/SAN/.../LONG_CN 列表维护 section 标记
 """
 from .base import LayoutPlugin, ParamSpec, PageSections
 from ..context import DrawContext
 
 
 def _group(library):
-    """返回按原始分类列表分组的歌名列表：索引 1..6 为对应字数，7 为长歌名/英文。
+    """返回按分类列表分组的歌名列表，索引 1..6 为对应字数，7 为长歌名/英文。
 
-    优先用 Song.section（旧脚本列表归属，保证与金标准逐像素一致）；
-    未打标（用户新增）的歌回退到按字数分组。
+    分组规则（2026-07-25 定案）：
+    1. 优先用 Song.section（旧脚本手工分组标记，保证与金标准一致）
+    2. 未打标 → 按字数自动分组：中文按 len()、含英文字母归入 group 7
     """
     groups = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
     for s in library.mastered():
         t = s.title.strip()
         sec = getattr(s, "section", None)
-        if sec and 1 <= sec <= 7:
+        if sec is not None and 1 <= sec <= 7:
             groups[sec].append(t)
         elif any(c.isascii() and c.isalpha() for c in t):
             groups[7].append(t)
@@ -78,7 +85,7 @@ class GridWrapLayout(LayoutPlugin):
             y += LABEL_H
             for r, s in enumerate(g[1]):
                 d.text((MARGIN + 4, y + r * ROW_H), s, font=ctx.font_song, fill=st.text)
-            ctx.draw_grid(g[2], 5, y, x2, ctx.spec.r_at(y))
+            ctx.draw_grid(g[2], 5, y, x2, ctx.r_at(y))
             y += 8 * ROW_H + SEC_GAP
             ctx.draw_label(MARGIN, y, "三字")
             y += LABEL_H
@@ -102,7 +109,7 @@ class GridWrapLayout(LayoutPlugin):
         ctx.draw_label(MARGIN, y, "长歌名/英文")
         y += LABEL_H
 
-        # 英文在前，其余按短到长；左列从 MARGIN，右列右缘贴 R_at
+        # 英文在前，其余按短到长；左列从 MARGIN，右列右缘贴 r_at
         long = g[7]
         english = [s for s in long if any(c.isascii() and c.isalpha() for c in s)]
         cn = sorted([s for s in long if s not in english], key=len)
@@ -112,7 +119,7 @@ class GridWrapLayout(LayoutPlugin):
         left, right = short[:half], short[half:]
         lw = max((d.textlength(s, font=ctx.font_song) for s in left), default=0)
         rw = max((d.textlength(s, font=ctx.font_song) for s in right), default=0)
-        rx = ctx.spec.r_at(y) - rw
+        rx = ctx.r_at(y) - rw
         for r, s in enumerate(left):
             d.text((MARGIN, y + r * ROW_H), s, font=ctx.font_song, fill=st.text)
         for r, s in enumerate(right):

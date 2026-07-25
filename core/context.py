@@ -4,6 +4,9 @@
 （胶囊标签、网格、绕排——从旧脚本提炼，所有排版可复用）。
 
 draw_label / draw_grid / draw_grid_wrap 严格照抄旧实现，保证渲染结果与现状一致。
+
+避让区几何定义来自 CanvasSpec.avoid_zones，但避让策略（r_at / r_below）
+是 grid-wrap 的实现细节，不放在 CanvasSpec 上。
 """
 from dataclasses import dataclass
 from typing import List
@@ -14,6 +17,20 @@ from .spec import CanvasSpec
 from .style import Style
 
 
+# ---- grid-wrap 避让策略常量 ----
+# 硬禁文边界右 x；分界线下右边界为 R_BELOW=856（右缩约一栏，硬禁文边界 940 留 84px 余量）
+AVOID_CUTOFF_Y = 1080   # 分界线 y
+AVOID_HARD_X = 940       # 硬禁文边界 x
+R_BELOW = 856            # 分界线下右边界
+
+
+def _r_at(spec: CanvasSpec, y: int) -> int:
+    """grid-wrap 绕排右边界：歌名 y 在分界线上方 → 满宽，下方 → R_BELOW。"""
+    if spec.avoid_zones and y + 36 > AVOID_CUTOFF_Y:
+        return R_BELOW
+    return spec.width - spec.margin
+
+
 @dataclass
 class DrawContext:
     draw: ImageDraw.ImageDraw
@@ -21,6 +38,17 @@ class DrawContext:
     style: Style
     font_song: ImageFont.FreeTypeFont
     font_label: ImageFont.FreeTypeFont
+
+    # ---- 排版公共能力 ----
+
+    def r_at(self, y: int) -> int:
+        """绕排右边界（grid-wrap 语义），排版插件按需调用。"""
+        return _r_at(self.spec, y)
+
+    @property
+    def r_below(self) -> int:
+        """分界线下右边界。"""
+        return R_BELOW
 
     def draw_label(self, x, y, text):
         st = self.style
@@ -64,29 +92,23 @@ class DrawContext:
         spec = self.spec
         font = self.font_song
         AVOID = bool(spec.avoid_zones)
-        R_BELOW = spec.r_below
         ROW_H = spec.row_h
-
-        def R_at(y):
-            if AVOID and y + 36 > 1080:
-                return R_BELOW
-            return spec.width - spec.margin
 
         rows = (len(songs) + cols - 1) // cols
         if not AVOID:
-            self.draw_grid(songs, cols, y0, x0_area, R_at(y0))
+            self.draw_grid(songs, cols, y0, x0_area, _r_at(spec, y0))
             return rows
         r_cut = 0
-        while r_cut < rows and y0 + r_cut * ROW_H + 36 <= 1080:
+        while r_cut < rows and y0 + r_cut * ROW_H + 36 <= AVOID_CUTOFF_Y:
             r_cut += 1
         if r_cut == 0 or r_cut == rows:
-            self.draw_grid(songs, cols, y0, x0_area, R_at(y0))
+            self.draw_grid(songs, cols, y0, x0_area, _r_at(spec, y0))
             return rows
         colws = []
         for c in range(cols):
             ws = [d.textlength(s, font=font) for i, s in enumerate(songs) if i % cols == c]
             colws.append(max(ws) if ws else 0)
-        gutter = max(12, (R_at(y0) - x0_area - sum(colws)) / max(cols - 1, 1))
+        gutter = max(12, (_r_at(spec, y0) - x0_area - sum(colws)) / max(cols - 1, 1))
         positions = []
         cx = x0_area
         for wcol in colws:

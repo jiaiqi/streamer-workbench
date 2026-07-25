@@ -45,3 +45,10 @@ class LayoutPlugin(ABC):
     @abstractmethod
     def render_page(self, ctx, page: int, library) -> int:
         """把该页内容画到 ctx 画布上。返回内容结束 y（供质检/柔光校验）。"""
+
+    # ---- 额外颜色角色 ----
+    # 排版可声明自己需要的扩展颜色（如卡片背景、装饰色）。
+    # 子类重写此方法返回角色名列表；theme.json 可选的 extra 字段提供对应值；
+    # 未提供则回退到内置默认色。
+    def extra_colors(self) -> dict:
+        return {}

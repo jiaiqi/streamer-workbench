@@ -1,6 +1,7 @@
 """画布规格：把散落在旧脚本里的全局常量和开关收拢成显式参数对象。
 
-画布尺寸是自由参数（不再用 bool 切换），避让区以 Rect 列表暴露给排版插件。
+画布尺寸是自由参数（不再用 bool 切换），避让区以 Rect 列表暴露给排版插件，
+由排版插件自行实现避让策略。CanvasSpec 本身不关心具体避让逻辑。
 移植自 歌单-排版一\build_playlist.py 的 FULL/AVOID/R_at/OFF 常量。
 """
 from dataclasses import dataclass
@@ -18,18 +19,11 @@ class CanvasSpec:
     row_h: int = 44
     label_h: int = 74
     sec_gap: int = 26
-    r_below: int = 856                 # 分界线下右边界（grid-wrap 专用，避让时用）
 
     @property
     def content_offset(self) -> int:
         """内容居中偏移：height > 1920 时下移居中，等于旧脚本的 OFF。"""
         return max(0, (self.height - 1920) // 2)
-
-    def r_at(self, y: int) -> int:
-        """绕排右边界：返回歌名文字顶部为 y 的行可用的右边界。"""
-        if self.avoid_zones and y + 36 > 1080:
-            return self.r_below
-        return self.width - self.margin
 
     @property
     def is_fullscreen(self) -> bool:
