@@ -3,6 +3,7 @@ import type { Theme, Layout, SongsData, ParamSpec, Settings } from "./types";
 import { CANVAS_OPTIONS } from "./types";
 import { Icon } from "./icons";
 import LibraryView from "./views/LibraryView";
+import LearningView from "./views/LearningView";
 import SettingsView from "./views/SettingsView";
 import ExportDialog from "./components/ExportDialog";
 
@@ -284,7 +285,15 @@ export default function App() {
             </div>
 
             {/* preview image */}
-            <div className="flex-1 w-full flex items-center justify-center p-6 pt-20">
+            <div className="flex-1 w-full flex items-center justify-center p-6 pt-20"
+              onWheel={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  e.preventDefault();
+                  const delta = e.deltaY > 0 ? -5 : 5;
+                  setZoom(z => Math.max(15, Math.min(150, z + delta)));
+                }
+              }}
+              style={{ touchAction: "none" }}>
               {selTheme ? (
                 <div className="relative rounded-2xl overflow-hidden transition-all duration-300"
                   style={{
@@ -356,8 +365,15 @@ export default function App() {
             <SettingsView dark={dark} themes={themes} />
           )}
 
+          {/* ===== 学歌管理视图 ===== */}
+          {view === "learning" && (
+            <LearningView dark={dark}
+              onStatsChange={setSongStats}
+              onEditTargetChange={setLibDialogOpen} />
+          )}
+
           {/* ===== 其他视图占位 ===== */}
-          {["learning", "themes", "presets", "history"].includes(view) && (
+          {["themes", "presets", "history"].includes(view) && (
           <main className="flex-1 flex items-center justify-center">
             <div className="text-center space-y-3">
               <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-2xl shadow-sm ${dark ? "bg-zinc-800" : "bg-muted"}`}>
@@ -374,10 +390,14 @@ export default function App() {
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">参数</h2>
             </div>
 
-            <div className="px-4 py-3 space-y-5">
-              <section>
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">画布</h3>
-                <div className="space-y-2.5">
+            <div className="px-4 py-3 space-y-3">
+              {/* 折叠：输出参数（默认展开） */}
+              <details open className="group">
+                <summary className={`flex items-center justify-between cursor-pointer py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none`}>
+                  输出参数
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div className="mt-2.5 space-y-2.5">
                   <label className="flex items-center justify-between text-xs text-muted-foreground">
                     预设
                     <select value={canvas} onChange={e => setCanvas(e.target.value)}
@@ -392,11 +412,15 @@ export default function App() {
                     页数 <span className="tabular-nums text-foreground">{maxPage}</span>
                   </label>
                 </div>
-              </section>
+              </details>
 
-              <section>
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">排版参数</h3>
-                <div className="space-y-2.5">
+              {/* 折叠：布局参数（默认展开） */}
+              <details open className="group">
+                <summary className="flex items-center justify-between cursor-pointer py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                  布局参数
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div className="mt-2.5 space-y-2.5">
                   {paramSpecs.length === 0 && (
                     <p className="text-xs text-muted-foreground">参数加载中…</p>
                   )}
@@ -427,17 +451,21 @@ export default function App() {
                     </label>
                   ))}
                 </div>
-              </section>
+              </details>
 
+              {/* 折叠：当前主题（默认折叠） */}
               {activeTheme && (
-                <section>
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">当前主题</h3>
-                  <div className={`rounded-xl p-3 space-y-1.5 text-xs shadow-sm ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
-                    <p className="font-medium text-foreground">{activeTheme.name}</p>
-                    <p className="text-muted-foreground break-all leading-relaxed">{activeTheme.notes || "无备注"}</p>
-                    <p className="text-muted-foreground">水印修正：{activeTheme.watermark_fix ? "是" : "否"}</p>
-                  </div>
-                </section>
+              <details className="group">
+                <summary className="flex items-center justify-between cursor-pointer py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                  当前主题
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div className={`mt-2.5 rounded-xl p-3 space-y-1.5 text-xs shadow-sm ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
+                  <p className="font-medium text-foreground">{activeTheme.name}</p>
+                  <p className="text-muted-foreground break-all leading-relaxed">{activeTheme.notes || "无备注"}</p>
+                  <p className="text-muted-foreground">水印修正：{activeTheme.watermark_fix ? "是" : "否"}</p>
+                </div>
+              </details>
               )}
             </div>
           </aside>

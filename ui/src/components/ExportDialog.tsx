@@ -22,9 +22,9 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [done, setDone] = useState<{ count: number; totalMs: number; outputDir: string } | null>(null);
 
-  // 打开时重置进度/完成态
+  // 打开时重置进度/完成态 + scope 回到默认
   useEffect(() => {
-    if (open) { setDone(null); setProgress(null); }
+    if (open) { setDone(null); setProgress(null); setScope("all"); }
   }, [open]);
 
   // Esc 关闭（导出中不响应）——输入框聚焦时也要生效
