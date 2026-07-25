@@ -1,0 +1,67 @@
+# 歌单海报生成器 · CI 流水线
+#
+# 三件套质量门：
+#   1. Python 单元测试（21 项）
+#   2. 金标准逐像素对比（14 张，diff=0 死线）
+#   3. TypeScript 编译检查
+#
+# 金标准参照图（tests/golden/，22MB）不入 git，CI 上由
+# tools/regenerate_golden.py 用引擎自举生成（178 首全 active 版），
+# 无需依赖设计仓库，无需 PAT。
+
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Python 环境（版本与本地锁定一致）----
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 安装 Python 依赖
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+      # ---- Node 环境 ----
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # ---- 门 1：单元测试 ----
+      - name: 单元测试
+        run: .venv/bin/python tests/test_unit.py
+
+      # ---- 门 2：金标准逐像素对比 ----
+      - name: 生成金标准参照图（引擎自举）
+        run: PYTHONPATH=. .venv/bin/python tools/regenerate_golden.py
+
+      - name: 金标准测试（diff=0 死线）
+        run: PYTHONPATH=. .venv/bin/python tests/test_golden.py
+
+      # ---- 门 3：TypeScript 编译检查 ----
+      - name: 安装前端依赖
+        working-directory: ui
+        run: npm ci
+
+      - name: TS 编译检查
+        working-directory: ui
+        run: npx tsc --noEmit
+
+      # ---- 汇总 ----
+      - name: ✅ 全部质量门通过
+        run: echo "单元测试 + 金标准 diff=0 + TS 编译 —— 三件套全部通过"

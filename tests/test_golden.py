@@ -46,6 +46,8 @@ def diff_stats(new: Image.Image, gold: Image.Image):
 
 def main():
     themes = load_themes(THEMES_DIR)
+    # 金标准固定使用内置 178 首全 active 数据集：
+    # 与 songs.json 中的学歌 draft 状态解耦，保证基准稳定。
     library = build_default_library()
     layout = get_layout("grid-wrap")
     results = []
