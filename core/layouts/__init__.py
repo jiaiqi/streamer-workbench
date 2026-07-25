@@ -13,4 +13,13 @@ def get_layout(layout_id: str):
 
 
 def list_layouts():
-    return [{"id": lid, "name": p.name} for lid, p in REGISTRY.items()]
+    return [{"id": lid, "name": p.name,
+             "pages": p.pages,
+             "supports_avoidance": p.supports_avoidance}
+            for lid, p in REGISTRY.items()]
+
+
+def layout_params(layout_id: str):
+    """排版插件的可调参数描述（ParamSpec），UI 据此动态生成参数面板。"""
+    from dataclasses import asdict
+    return [asdict(ps) for ps in get_layout(layout_id).params()]

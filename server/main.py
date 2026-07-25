@@ -10,14 +10,15 @@ http://localhost:8000 调用。MVP 后期由 Tauri 把本服务打包成 sidecar
 
 import io
 import os
+from dataclasses import replace
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from core.spec import CanvasSpec, CANVAS_PRESETS
+from core.spec import CANVAS_PRESETS
 from core.themes.loader import load_themes
-from core.layouts import get_layout
+from core.layouts import get_layout, list_layouts, layout_params
 from core.data.songs import build_default_library
 from core.engine import render_page
 
@@ -53,8 +54,15 @@ def api_themes():
 
 @app.get("/api/layouts")
 def api_layouts():
-    from core.layouts import list_layouts
     return list_layouts()
+
+
+@app.get("/api/layouts/{layout_id}/params")
+def api_layout_params(layout_id: str):
+    try:
+        return layout_params(layout_id)
+    except KeyError as e:
+        return Response(str(e), status_code=404)
 
 
 @app.get("/api/songs")
@@ -65,16 +73,28 @@ def api_songs():
 
 @app.get("/api/render")
 def api_render(theme: str, page: int = 1,
-               canvas: str = "标准 9:16", avoid: bool = False):
+               canvas: str = "标准 9:16", avoid: bool = False,
+               layout: str = "grid-wrap",
+               margin: int = None, font_song: int = None,
+               row_h: int = None, sec_gap: int = None):
     if theme not in themes:
         return Response(f"未知主题：{theme}", status_code=404)
+    try:
+        layout_plugin = get_layout(layout)
+    except KeyError as e:
+        return Response(str(e), status_code=404)
     base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["标准 9:16"])
     spec = base
     if avoid:
-        spec = CanvasSpec(width=base.width, height=base.height,
-                          avoid_zones=((940, 1080, 1080, base.height),))
-    layout = get_layout("grid-wrap")
-    img = render_page(themes[theme], layout, library, spec, page, FONT)
+        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
+    # 排版参数覆盖（对应插件 ParamSpec 的 key，未传则用预设默认值）
+    overrides = {k: v for k, v in
+                 {"margin": margin, "font_song": font_song,
+                  "row_h": row_h, "sec_gap": sec_gap}.items()
+                 if v is not None}
+    if overrides:
+        spec = replace(spec, **overrides)
+    img = render_page(themes[theme], layout_plugin, library, spec, page, FONT)
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return Response(buf.getvalue(), media_type="image/png")
