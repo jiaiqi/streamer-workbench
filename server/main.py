@@ -9,8 +9,11 @@ http://localhost:8000 调用。MVP 后期由 Electron 把本服务打包为 chil
 """
 
 import io
+import json
 import os
-from dataclasses import replace
+import time
+from dataclasses import replace, asdict
+from datetime import datetime
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,8 +39,32 @@ app.add_middleware(
 app.mount("/bg", StaticFiles(directory=THEMES_DIR), name="theme_bg")
 
 SONGS_JSON = os.path.join(ROOT, "data", "songs.json")
+SETTINGS_PATH = os.path.join(ROOT, "data", "settings.json")
 themes = load_themes(THEMES_DIR)
 library = build_default_library(json_path=SONGS_JSON)
+
+# ---- 应用设置（settings.json）----
+DEFAULT_SETTINGS = {
+    "output_dir": os.path.join(ROOT, "output"),
+    "default_canvas": "抖音全屏 9:20",
+    "default_theme": "海洋柔光",
+    "font_path": FONT,
+    "backup_count": 20,
+    "render_threads": 1,
+}
+
+def _load_settings() -> dict:
+    if os.path.isfile(SETTINGS_PATH):
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            return {**DEFAULT_SETTINGS, **json.load(f)}
+    return DEFAULT_SETTINGS.copy()
+
+def _save_settings(s: dict):
+    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+    with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(s, f, ensure_ascii=False, indent=2)
+
+settings = _load_settings()
 
 
 @app.get("/api/health")
@@ -84,6 +111,133 @@ def api_songs_list(status: str = None):
             "songs": [{"title": s.title, "status": s.status,
                        "section": s.section, "artists": s.artists}
                       for s in songs]}
+
+
+# ---- 导出 ----
+@app.post("/api/export")
+def api_export(theme: str, page: int = 1,
+               canvas: str = "标准 9:16", avoid: bool = False,
+               layout: str = "grid-wrap",
+               margin: int = None, font_song: int = None,
+               row_h: int = None, sec_gap: int = None):
+    """导出单页 PNG 到输出目录，返回文件路径。"""
+    if theme not in themes:
+        return Response(f"未知主题：{theme}", status_code=404)
+    try:
+        layout_plugin = get_layout(layout)
+    except KeyError as e:
+        return Response(str(e), status_code=404)
+    base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["标准 9:16"])
+    spec = base
+    if avoid:
+        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
+    overrides = {k: v for k, v in
+                 {"margin": margin, "font_song": font_song,
+                  "row_h": row_h, "sec_gap": sec_gap}.items()
+                 if v is not None}
+    if overrides:
+        spec = replace(spec, **overrides)
+
+    t0 = time.perf_counter()
+    img = render_page(themes[theme], layout_plugin, library, spec, page, FONT)
+    duration = time.perf_counter() - t0
+
+    # 输出命名：{prefix}-{layout_id}-{tag}-{page}.png
+    tag = "糖圆体全屏绕排" if avoid and spec.height > 1920 else "糖圆体"
+    filename = f"{themes[theme].output_prefix}-{layout}-{tag}-{page}.png"
+    out_dir = settings["output_dir"]
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, filename)
+    img.save(out_path, "PNG")
+
+    return {"ok": True, "path": out_path, "filename": filename,
+            "duration_ms": round(duration * 1000, 1)}
+
+
+@app.post("/api/export/batch")
+def api_export_batch(layout: str = "grid-wrap",
+                     canvas: str = "抖音全屏 9:20", avoid: bool = True):
+    """批量导出：当前排版 × 全部 7 主题 × 2 页 = 14 张。"""
+    try:
+        layout_plugin = get_layout(layout)
+    except KeyError as e:
+        return Response(str(e), status_code=404)
+    base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["抖音全屏 9:20"])
+    spec = base
+    if avoid:
+        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
+
+    out_dir = settings["output_dir"]
+    os.makedirs(out_dir, exist_ok=True)
+    results = []
+    t0 = time.perf_counter()
+    for tname, theme in themes.items():
+        for page in (1, 2):
+            img = render_page(theme, layout_plugin, library, spec, page, FONT)
+            tag = "糖圆体全屏绕排" if avoid and spec.height > 1920 else "糖圆体"
+            filename = f"{theme.output_prefix}-{layout}-{tag}-{page}.png"
+            out_path = os.path.join(out_dir, filename)
+            img.save(out_path, "PNG")
+            results.append({"theme": tname, "page": page, "path": out_path})
+    total_ms = round((time.perf_counter() - t0) * 1000, 1)
+    return {"ok": True, "count": len(results), "total_ms": total_ms,
+            "output_dir": out_dir, "files": results}
+
+
+# ---- 设置 ----
+@app.get("/api/settings")
+def api_settings_get():
+    return settings
+
+
+@app.post("/api/settings")
+def api_settings_update(new_settings: dict):
+    settings.update(new_settings)
+    _save_settings(settings)
+    return {"ok": True, "settings": settings}
+
+
+# ---- 防抖渲染（支持 If-Modified-Since 语义）----
+_render_cache: dict = {}
+
+@app.get("/api/render/etag")
+def api_render_etag(theme: str, page: int = 1,
+                    canvas: str = "标准 9:16", avoid: bool = False,
+                    layout: str = "grid-wrap",
+                    margin: int = None, font_song: int = None,
+                    row_h: int = None, sec_gap: int = None):
+    """带 ETag 的渲染端点：参数相同时返回 304，减少重复传输。"""
+    if theme not in themes:
+        return Response(f"未知主题：{theme}", status_code=404)
+    try:
+        layout_plugin = get_layout(layout)
+    except KeyError as e:
+        return Response(str(e), status_code=404)
+    base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["标准 9:16"])
+    spec = base
+    if avoid:
+        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
+    overrides = {k: v for k, v in
+                 {"margin": margin, "font_song": font_song,
+                  "row_h": row_h, "sec_gap": sec_gap}.items()
+                 if v is not None}
+    if overrides:
+        spec = replace(spec, **overrides)
+
+    # 缓存键：全部参数哈希
+    cache_key = f"{theme}:{page}:{canvas}:{avoid}:{layout}:{margin}:{font_song}:{row_h}:{sec_gap}"
+    etag = f'"{hash(cache_key)}"'
+
+    if cache_key in _render_cache:
+        # 返回 304 Not Modified（客户端应缓存）
+        return Response(status_code=304, headers={"ETag": etag})
+
+    img = render_page(themes[theme], layout_plugin, library, spec, page, FONT)
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    _render_cache[cache_key] = buf.getvalue()
+    return Response(buf.getvalue(), media_type="image/png",
+                    headers={"ETag": etag})
 
 
 @app.get("/api/render")

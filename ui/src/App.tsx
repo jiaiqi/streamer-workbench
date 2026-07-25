@@ -14,6 +14,24 @@ interface Layout {
   pages: number;
   supports_avoidance: boolean;
 }
+interface Song {
+  title: string;
+  status: string;
+  section: number | null;
+  artists: string[];
+}
+interface SongsData {
+  total: number;
+  active: number;
+  draft: number;
+  songs: Song[];
+}
+interface ExportResult {
+  ok: boolean;
+  path: string;
+  filename: string;
+  duration_ms: number;
+}
 
 const CANVAS_OPTIONS = ["标准 9:16", "抖音全屏 9:20"] as const;
 
@@ -57,6 +75,41 @@ export default function App() {
   const [params, setParams] = useState<Record<string, number>>({
     margin: 58, font_song: 36, row_h: 44, sec_gap: 26,
   });
+  // Phase 2: 视图路由
+  const [view, setView] = useState<string>("workspace");
+  // Phase 2: 歌曲库数据
+  const [songsData, setSongsData] = useState<SongsData | null>(null);
+  const [songFilter, setSongFilter] = useState<string>("");
+  const [songStatusFilter, setSongStatusFilter] = useState<string>("all");
+  // Phase 2: 导出
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  // Phase 2: 启动恢复
+  const [restored, setRestored] = useState(false);
+
+  // Phase 2: 启动恢复
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("gp-workspace");
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s.selTheme) setSelTheme(s.selTheme);
+        if (s.page) setPage(s.page);
+        if (s.canvas) setCanvas(s.canvas);
+        if (s.avoid !== undefined) setAvoid(s.avoid);
+        if (s.params) setParams(s.params);
+      }
+    } catch { /* ignore */ }
+    setRestored(true);
+  }, []);
+
+  // Phase 2: 持久化到 localStorage
+  useEffect(() => {
+    if (!restored) return;
+    localStorage.setItem("gp-workspace", JSON.stringify({
+      selTheme, page, canvas, avoid, params,
+    }));
+  }, [selTheme, page, canvas, avoid, params, restored]);
 
   useEffect(() => {
     fetch("/api/themes").then(r => r.json()).then((d: Theme[]) => {
@@ -66,8 +119,22 @@ export default function App() {
     fetch("/api/layouts").then(r => r.json()).then(setLayouts);
   }, []);
 
+  // Phase 2: 歌曲库数据加载
+  useEffect(() => {
+    if (view === "library") {
+      fetch("/api/songs/list").then(r => r.json()).then(setSongsData);
+    }
+  }, [view]);
+
+  // Phase 2: 参数防抖（300ms）
+  const [debouncedParams, setDebouncedParams] = useState(params);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedParams(params), 300);
+    return () => clearTimeout(t);
+  }, [params]);
+
   const maxPage = layouts.find(l => l.id === "grid-wrap")?.pages ?? 2;
-  const paramsQuery = Object.entries(params)
+  const paramsQuery = Object.entries(debouncedParams)
     .map(([k, v]) => `&${k}=${v}`)
     .join("");
   const previewSrc = selTheme
@@ -75,6 +142,40 @@ export default function App() {
     : "";
   const activeTheme = themes.find(t => t.name === selTheme);
   const activeLayout = layouts.find(l => l.id === "grid-wrap");
+
+  // Phase 2: 导出单页
+  const handleExport = async () => {
+    if (!selTheme) return;
+    setExporting(true);
+    setExportResult(null);
+    try {
+      const res = await fetch(
+        `/api/export?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      setExportResult(data);
+    } catch (e) {
+      console.error("导出失败", e);
+    }
+    setExporting(false);
+  };
+
+  // Phase 2: 批量导出
+  const handleExportBatch = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch(
+        `/api/export/batch?canvas=${encodeURIComponent(canvas)}&avoid=${avoid}`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      alert(`批量导出完成：${data.count} 张，耗时 ${data.total_ms}ms`);
+    } catch (e) {
+      console.error("批量导出失败", e);
+    }
+    setExporting(false);
+  };
 
   return (
     <div className={`flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${dark ? "bg-zinc-900 text-zinc-200" : "bg-background text-foreground"}`}>
@@ -102,7 +203,8 @@ export default function App() {
           <button
             key={item.id}
             title={item.label}
-            className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 group ${item.id === "workspace"
+            onClick={() => setView(item.id)}
+            className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 group ${item.id === view
               ? (dark ? "bg-emerald-500/20 text-emerald-400" : "bg-primary-soft text-primary")
               : (dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
             }`}
@@ -168,6 +270,7 @@ export default function App() {
           </aside>
 
           {/* ===== CENTER: preview ===== */}
+          {view === "workspace" && (
           <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
             {/* toolbar */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
@@ -254,6 +357,14 @@ export default function App() {
                     {Icon.download} 下载
                   </a>
                 )}
+                <button onClick={handleExport} disabled={exporting}
+                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+                  {exporting ? "导出中…" : "导出当前页"}
+                </button>
+                <button onClick={handleExportBatch} disabled={exporting}
+                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer bg-amber-600 hover:bg-amber-700 text-white font-medium disabled:opacity-50">
+                  批量导出 14 张
+                </button>
                 <button onClick={() => { setLoading(true); setRenderKey(k => k + 1); }}
                   className="flex items-center gap-1.5 bg-primary hover:bg-primary-strong text-primary-foreground font-medium rounded-xl px-5 py-2 text-sm transition-all active:scale-95 cursor-pointer">
                   {Icon.refresh} {loading ? "渲染中…" : "刷新预览"}
@@ -261,6 +372,75 @@ export default function App() {
               </div>
             </div>
           </main>
+          )}
+
+          {/* ===== 歌曲库视图 ===== */}
+          {view === "library" && (
+          <main className="flex-1 flex flex-col overflow-hidden p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className={`text-lg font-semibold ${dark ? "text-zinc-200" : "text-foreground"}`}>歌曲库</h2>
+              <div className="flex items-center gap-2">
+                <input type="text" placeholder="搜索歌名…" value={songFilter}
+                  onChange={e => setSongFilter(e.target.value)}
+                  className={`rounded-lg px-3 py-1.5 text-sm outline-none ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`} />
+                <select value={songStatusFilter} onChange={e => setSongStatusFilter(e.target.value)}
+                  className={`rounded-lg px-3 py-1.5 text-sm outline-none ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`}>
+                  <option value="all">全部</option>
+                  <option value="active">已会</option>
+                  <option value="draft">未会</option>
+                </select>
+              </div>
+            </div>
+            {songsData ? (
+              <div className={`flex-1 overflow-auto rounded-xl border ${dark ? "border-zinc-700/50" : "border-border"}`}>
+                <table className="w-full text-sm">
+                  <thead className={`sticky top-0 ${dark ? "bg-zinc-800" : "bg-muted"}`}>
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium">歌名</th>
+                      <th className="text-left px-4 py-2 font-medium">歌手</th>
+                      <th className="text-left px-4 py-2 font-medium">状态</th>
+                      <th className="text-left px-4 py-2 font-medium">分类</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {songsData.songs
+                      .filter(s => songStatusFilter === "all" || s.status === songStatusFilter)
+                      .filter(s => !songFilter || s.title.includes(songFilter))
+                      .map(s => (
+                        <tr key={s.title} className={`border-t ${dark ? "border-zinc-700/50 hover:bg-zinc-800/50" : "border-border hover:bg-muted/50"}`}>
+                          <td className="px-4 py-2">{s.title}</td>
+                          <td className="px-4 py-2 text-muted-foreground">{s.artists.join("、") || "—"}</td>
+                          <td className="px-4 py-2">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${s.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"}`}>
+                              {s.status === "active" ? "已会" : "未会"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground">{s.section ? `${s.section}字` : "—"}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">加载中…</div>
+            )}
+            <div className={`mt-3 text-xs ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+              共 {songsData?.total ?? 0} 首 · 已会 {songsData?.active ?? 0} · 未会 {songsData?.draft ?? 0}
+            </div>
+          </main>
+          )}
+
+          {/* ===== 其他视图占位 ===== */}
+          {["learning", "themes", "presets", "history", "settings"].includes(view) && (
+          <main className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-3">
+              <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-2xl shadow-sm ${dark ? "bg-zinc-800" : "bg-muted"}`}>
+                {navItems.find(n => n.id === view)?.icon}
+              </div>
+              <p className="text-sm text-muted-foreground">{navItems.find(n => n.id === view)?.label} — 二期功能</p>
+            </div>
+          </main>
+          )}
 
           {/* ===== RIGHT: params ===== */}
           <aside className={`w-60 shrink-0 border-l overflow-y-auto transition-colors duration-500 ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
