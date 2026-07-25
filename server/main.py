@@ -35,8 +35,9 @@ app.add_middleware(
 )
 app.mount("/bg", StaticFiles(directory=THEMES_DIR), name="theme_bg")
 
+SONGS_JSON = os.path.join(ROOT, "data", "songs.json")
 themes = load_themes(THEMES_DIR)
-library = build_default_library()
+library = build_default_library(json_path=SONGS_JSON)
 
 
 @app.get("/api/health")
@@ -69,6 +70,20 @@ def api_layout_params(layout_id: str):
 def api_songs():
     return {"total": len(library.mastered()),
             "by_len": _count_by_len()}
+
+
+@app.get("/api/songs/list")
+def api_songs_list(status: str = None):
+    """返回完整歌曲列表，可按 status 过滤（active/draft）。"""
+    songs = library.songs
+    if status:
+        songs = [s for s in songs if s.status == status]
+    return {"total": len(songs),
+            "active": library.count_active(),
+            "draft": library.count_draft(),
+            "songs": [{"title": s.title, "status": s.status,
+                       "section": s.section, "artists": s.artists}
+                      for s in songs]}
 
 
 @app.get("/api/render")

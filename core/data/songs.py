@@ -7,7 +7,10 @@ Song 模型带元数据；SongLibrary 提供查重/速查/过滤 active。
 简化理由：个人单机工具不需要 wishlist/archived 的精细区分；
 增加状态复杂度应在有真实用户行为数据后再做。
 """
-from dataclasses import dataclass, field
+import json
+import os
+import tempfile
+from dataclasses import dataclass, field, asdict
 from typing import List, Optional
 
 
@@ -79,6 +82,33 @@ class SongLibrary:
     def count_draft(self) -> int:
         return sum(1 for s in self.songs if s.status == "draft")
 
+    # ---- JSON 持久化 ----
+    @classmethod
+    def load_from_json(cls, path: str) -> "SongLibrary":
+        """从 JSON 文件加载歌曲库。文件不存在时返回空库。"""
+        if not os.path.isfile(path):
+            return cls()
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        songs = [Song(**{k: v for k, v in item.items() if k in Song.__dataclass_fields__})
+                 for item in data.get("songs", [])]
+        return cls(songs=songs)
+
+    def save(self, path: str):
+        """原子写入 JSON 文件（先写临时文件再 rename）。"""
+        payload = {"version": 1, "songs": [asdict(s) for s in self.songs]}
+        dir_name = os.path.dirname(path)
+        os.makedirs(dir_name, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+        except BaseException:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
+
 
 # ---- 内置数据（来自 歌单-排版一\build_playlist.py 的 8 个列表）----
 YI = ["枫", "耿"]
@@ -91,9 +121,13 @@ LONG_EN = ["After 17", "Forever 21", "April Encounter"]
 LONG_CN = ["当我唱起这首歌", "远在北方孤独的鬼", "一个人想着一个人", "你就不要想起我", "我喜欢上你时的内心活动", "一个像夏天一个像秋天", "那些你很冒险的梦", "考试什么的都去死吧", "二十岁的某一天", "给我一首歌的时间", "这世界那么多人", "遇见你的时候所有星星都落到我头上", "第57次取消发送", "你被写在我的歌里", "我不愿让你一个人", "刻在我心底的名字"]
 
 
-def build_default_library() -> SongLibrary:
+def build_default_library(json_path: str = None) -> SongLibrary:
+    """构造歌曲库。若提供 json_path 且文件存在则优先从 JSON 加载。"""
+    if json_path and os.path.isfile(json_path):
+        return SongLibrary.load_from_json(json_path)
     """构造内置库（全部 active）。
 
+    优先从 JSON 加载；无 JSON 时 fallback 到内置列表。
     section 标记对应旧脚本的 8 个分类列表（YI=1..LONG=7），保证分组与
     build_playlist.py 的 compose() 完全一致——旧脚本按列表分组而非按字数
     （例「恋爱ing」是 5 字但属三字列表，故 section=3）。

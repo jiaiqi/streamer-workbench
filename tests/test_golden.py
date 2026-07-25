@@ -104,8 +104,11 @@ def main():
                   f"max={st['max']} total={st['total']} bbox={st['bbox']}")
     print("=" * 70)
     print(f"完美对齐 {perfect}/{checked}；像素级一致目标 = 逐像素 diff=0")
-    if perfect != checked:
-        print("注：差异可能来自 Pillow 版本/字体光栅化环境差异，需进一步定位。")
+    # 金标准是回归死线：任何像素差异都视为失败
+    assert perfect == checked, (
+        f"金标准测试失败：{perfect}/{checked} 通过。"
+        "差异可能来自 Pillow 版本/字体光栅化环境差异，请检查环境后重试。"
+    )
 
 
 if __name__ == "__main__":

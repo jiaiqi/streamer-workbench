@@ -52,6 +52,11 @@ export default function App() {
   const [zoom, setZoom] = useState(45);
   const [loading, setLoading] = useState(false);
   const [dark, setDark] = useState(false);
+  const [renderKey, setRenderKey] = useState(0);
+  // P0-1: 排版参数受控
+  const [params, setParams] = useState<Record<string, number>>({
+    margin: 58, font_song: 36, row_h: 44, sec_gap: 26,
+  });
 
   useEffect(() => {
     fetch("/api/themes").then(r => r.json()).then((d: Theme[]) => {
@@ -62,8 +67,11 @@ export default function App() {
   }, []);
 
   const maxPage = layouts.find(l => l.id === "grid-wrap")?.pages ?? 2;
+  const paramsQuery = Object.entries(params)
+    .map(([k, v]) => `&${k}=${v}`)
+    .join("");
   const previewSrc = selTheme
-    ? `/api/render?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}&t=${Date.now()}`
+    ? `/api/render?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}&t=${renderKey}`
     : "";
   const activeTheme = themes.find(t => t.name === selTheme);
   const activeLayout = layouts.find(l => l.id === "grid-wrap");
@@ -207,7 +215,7 @@ export default function App() {
                     maxHeight: "calc(100vh - 120px)",
                     boxShadow: "0 4px 12px rgba(35,55,48,0.06), 0 24px 56px rgba(35,55,48,0.13)",
                   }}>
-                  <img key={`${selTheme}-${page}-${avoid}-${canvas}`}
+                  <img key={`${selTheme}-${page}-${avoid}-${canvas}-${renderKey}`}
                     src={previewSrc} alt={selTheme}
                     className="w-full object-contain"
                     onLoad={() => setLoading(false)}
@@ -246,7 +254,7 @@ export default function App() {
                     {Icon.download} 下载
                   </a>
                 )}
-                <button onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 500); }}
+                <button onClick={() => { setLoading(true); setRenderKey(k => k + 1); }}
                   className="flex items-center gap-1.5 bg-primary hover:bg-primary-strong text-primary-foreground font-medium rounded-xl px-5 py-2 text-sm transition-all active:scale-95 cursor-pointer">
                   {Icon.refresh} {loading ? "渲染中…" : "刷新预览"}
                 </button>
@@ -283,11 +291,15 @@ export default function App() {
               <section>
                 <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">排版参数</h3>
                 <div className="space-y-2.5">
-                  {[{ label: "边距", key: "margin", val: 58 }, { label: "歌名字号", key: "font_song", val: 36 }, { label: "行高", key: "row_h", val: 44 }, { label: "区块间距", key: "sec_gap", val: 26 }]
+                  {([{ label: "边距", key: "margin" }, { label: "歌名字号", key: "font_song" }, { label: "行高", key: "row_h" }, { label: "区块间距", key: "sec_gap" }] as const)
                     .map(p => (
                       <label key={p.key} className="flex items-center justify-between text-xs text-muted-foreground">
                         {p.label}
-                        <input type="number" defaultValue={p.val}
+                        <input type="number" value={params[p.key]}
+                          onChange={e => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!isNaN(v)) setParams(prev => ({ ...prev, [p.key]: v }));
+                          }}
                           className={`w-16 rounded-lg px-2 py-1 text-xs outline-none text-right ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`} />
                       </label>
                     ))}
