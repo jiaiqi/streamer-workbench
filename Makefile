@@ -42,3 +42,7 @@ for p in (1,2):
     render_page(t, l, b, s, p, 'fonts/MaokenAssortedSans.ttf').save(f'output/sample-p{p}.png')
 print('导出了 output/sample-p1.png output/sample-p2.png')
 "
+
+# ── 重新生成金标准参照图（从设计仓库复制） ──
+regenerate-golden:
+	PYTHONPATH=. python tools/regenerate_golden.py

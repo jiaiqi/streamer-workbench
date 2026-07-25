@@ -18,7 +18,10 @@ from core.engine import render_page
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 THEMES_DIR = os.path.join(ROOT, "themes")
-GOLDEN_DIR = os.path.join(ROOT, "..", "歌单-排版一")
+GOLDEN_DIR_LOCAL = os.path.join(ROOT, "tests", "golden")
+GOLDEN_DIR_UP = os.path.join(ROOT, "..", "歌单-排版一")
+# 优先用本地 tests/golden/（从设计仓库复制而来），其次用上级软链
+GOLDEN_DIR = GOLDEN_DIR_LOCAL if os.path.isdir(GOLDEN_DIR_LOCAL) and os.listdir(GOLDEN_DIR_LOCAL) else GOLDEN_DIR_UP
 FONT = os.path.join(ROOT, "fonts", "MaokenAssortedSans.ttf")
 
 
@@ -55,6 +58,11 @@ def main():
         for page in (1, 2):
             img = render_page(t, layout, library, fs_spec, page, FONT)
             gold_path = os.path.join(GOLDEN_DIR, name, f"{prefix}-糖圆体全屏绕排-{page}.png")
+            # 也尝试扁平命名（tests/golden/ 格式）
+            if not os.path.isfile(gold_path):
+                flat = os.path.join(GOLDEN_DIR, f"{name}-全屏p{page}.png")
+                if os.path.isfile(flat):
+                    gold_path = flat
             if not os.path.isfile(gold_path):
                 results.append((name, f"全屏p{page}", "SKIP(无金标准)"))
                 continue

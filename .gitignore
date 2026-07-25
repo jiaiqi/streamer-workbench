@@ -16,3 +16,6 @@ data/backups/
 # 前端依赖与缓存（可重新安装）
 node_modules/
 .npm-cache/
+
+# 金标准参考 PNG（不入 git，由 tools/regenerate_golden.py 从设计仓库参照图生成）
+tests/golden/
