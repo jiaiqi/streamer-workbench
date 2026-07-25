@@ -18,10 +18,15 @@ from .themes.model import Theme
 from .layouts.base import LayoutPlugin
 
 
-def render_page(theme: Theme, layout: LayoutPlugin, library,
-                spec: CanvasSpec, page: int, font_path: str,
-                skip_text: bool = False) -> Image.Image:
-    st: Style = theme.styles[page]
+# ---- 背景预处理缓存（设计文档 §9.2）----
+# key: (theme_name, page, canvas_width, canvas_height)
+# value: 合成后的 RGBA 底版（背景+水印+延展+柔光）
+# 参数调整（字号/边距/栏数）时底版完全不变，只重排文字层。
+_BG_CACHE: dict = {}
+
+
+def _compose_base(theme: Theme, page: int, spec: CanvasSpec) -> Image.Image:
+    """合成背景底版：读图→去水印→全屏延展→柔光。返回 RGBA。"""
     bg_path = theme.background_path(page)
     AVOID = bool(spec.avoid_zones)
     CH = spec.height
@@ -45,10 +50,34 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
     else:
         img = img.resize((W, CH), Image.LANCZOS).convert("RGBA")
 
+    st: Style = theme.styles[page]
+    img = draw_mist(img, st, AVOID, OFF, W)
+    return img
+
+
+def _get_base(theme: Theme, page: int, spec: CanvasSpec) -> Image.Image:
+    """获取缓存底版，未命中则合成并缓存。"""
+    key = (theme.name, page, spec.width, spec.height)
+    if key not in _BG_CACHE:
+        _BG_CACHE[key] = _compose_base(theme, page, spec)
+    return _BG_CACHE[key].copy()  # 返回副本，避免污染缓存
+
+
+def clear_bg_cache():
+    """清空缓存（主题文件变更后调用）。"""
+    _BG_CACHE.clear()
+
+
+def render_page(theme: Theme, layout: LayoutPlugin, library,
+                spec: CanvasSpec, page: int, font_path: str,
+                skip_text: bool = False) -> Image.Image:
+    st: Style = theme.styles[page]
+    AVOID = bool(spec.avoid_zones)
+
+    img = _get_base(theme, page, spec)
+
     font = ImageFont.truetype(font_path, spec.font_song if not AVOID else 34)
     font_label = ImageFont.truetype(font_path, spec.font_label)
-
-    img = draw_mist(img, st, AVOID, OFF, W)
 
     d = ImageDraw.Draw(img)
     ctx = DrawContext(draw=d, spec=spec, style=st,

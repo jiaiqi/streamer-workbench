@@ -9,9 +9,11 @@ Song 模型带元数据；SongLibrary 提供查重/速查/过滤 active。
 """
 import json
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional
+from datetime import datetime
+from typing import ClassVar, List, Optional
 
 
 @dataclass
@@ -83,6 +85,21 @@ class SongLibrary:
         return sum(1 for s in self.songs if s.status == "draft")
 
     # ---- JSON 持久化 ----
+    CURRENT_VERSION: ClassVar[int] = 1
+    MIGRATIONS: ClassVar[dict] = {}  # {from_version: migrate_fn(data) -> data}
+
+    @classmethod
+    def _migrate(cls, data: dict) -> dict:
+        """版本迁移：从数据版本号迭代到 CURRENT_VERSION。"""
+        v = data.get("version", 1)
+        while v < cls.CURRENT_VERSION:
+            migrate_fn = cls.MIGRATIONS.get(v)
+            if migrate_fn is None:
+                raise ValueError(f"缺少版本迁移函数：v{v} → v{v+1}")
+            data = migrate_fn(data)
+            v += 1
+        return data
+
     @classmethod
     def load_from_json(cls, path: str) -> "SongLibrary":
         """从 JSON 文件加载歌曲库。文件不存在时返回空库。"""
@@ -90,13 +107,35 @@ class SongLibrary:
             return cls()
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        # 版本迁移
+        data = cls._migrate(data)
         songs = [Song(**{k: v for k, v in item.items() if k in Song.__dataclass_fields__})
                  for item in data.get("songs", [])]
         return cls(songs=songs)
 
-    def save(self, path: str):
-        """原子写入 JSON 文件（先写临时文件再 rename）。"""
-        payload = {"version": 1, "songs": [asdict(s) for s in self.songs]}
+    def save(self, path: str, backup_dir: str = None, backup_count: int = 20):
+        """原子写入 JSON 文件（先写临时文件再 rename）。
+
+        若提供 backup_dir，写入前把现有文件备份到该目录（时间戳命名），
+        保留最近 backup_count 份。
+        """
+        # 1. 备份现有文件
+        if backup_dir and os.path.isfile(path):
+            os.makedirs(backup_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = os.path.join(backup_dir, f"songs_{ts}.json")
+            shutil.copy2(path, backup_path)
+            # 清理旧备份
+            backups = sorted(
+                (os.path.join(backup_dir, f) for f in os.listdir(backup_dir)
+                 if f.startswith("songs_") and f.endswith(".json")),
+                key=os.path.getmtime
+            )
+            for old in backups[:-backup_count]:
+                os.unlink(old)
+
+        # 2. 原子写新文件
+        payload = {"version": self.CURRENT_VERSION, "songs": [asdict(s) for s in self.songs]}
         dir_name = os.path.dirname(path)
         os.makedirs(dir_name, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
