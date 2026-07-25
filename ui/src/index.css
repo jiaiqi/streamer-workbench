@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-glass: rgba(255, 255, 255, 0.06);
+  --color-glass-hover: rgba(255, 255, 255, 0.10);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-glass-active: rgba(255, 255, 255, 0.14);
+  --color-accent: #f4a261;
+  --color-accent-soft: rgba(244, 162, 97, 0.12);
+  --color-surface: #18181b;
+  --color-surface-hi: #27272a;
+}
+
+/* 玻璃拟态面板 */
+.glass {
+  background: var(--color-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-glass-border);
+}
+
+.glass-hover:hover {
+  background: var(--color-glass-hover);
+}
+
+.glass-active {
+  background: var(--color-glass-active);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* 图片拖拽不可选 */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
