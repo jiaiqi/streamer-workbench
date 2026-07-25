@@ -177,6 +177,31 @@ export default function App() {
     setExporting(false);
   };
 
+  // Phase 2: 学会了 ⇄ 标回未会
+  const handleToggleStatus = async (song: Song) => {
+    const next = song.status === "active" ? "draft" : "active";
+    try {
+      const res = await fetch("/api/songs/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: song.title, status: next }),
+      });
+      if (!res.ok) {
+        console.error("状态切换失败", await res.text());
+        return;
+      }
+      // 本地更新该行 + 顶部统计，避免整表重拉
+      setSongsData(prev => prev && {
+        ...prev,
+        active: prev.songs.reduce((n, s) => n + ((s.title === song.title ? next : s.status) === "active" ? 1 : 0), 0),
+        draft: prev.songs.reduce((n, s) => n + ((s.title === song.title ? next : s.status) === "draft" ? 1 : 0), 0),
+        songs: prev.songs.map(s => s.title === song.title ? { ...s, status: next } : s),
+      });
+    } catch (e) {
+      console.error("状态切换失败", e);
+    }
+  };
+
   return (
     <div className={`flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${dark ? "bg-zinc-900 text-zinc-200" : "bg-background text-foreground"}`}>
       {/* ===== paper texture (light mode) ===== */}
@@ -400,6 +425,7 @@ export default function App() {
                       <th className="text-left px-4 py-2 font-medium">歌手</th>
                       <th className="text-left px-4 py-2 font-medium">状态</th>
                       <th className="text-left px-4 py-2 font-medium">分类</th>
+                      <th className="text-left px-4 py-2 font-medium">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -416,6 +442,14 @@ export default function App() {
                             </span>
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">{s.section ? `${s.section}字` : "—"}</td>
+                          <td className="px-4 py-2">
+                            <button onClick={() => handleToggleStatus(s)}
+                              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${s.status === "draft"
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300"
+                                : "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-300"}`}>
+                              {s.status === "draft" ? "学会了 ✓" : "标回未会"}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                   </tbody>

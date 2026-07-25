@@ -103,6 +103,12 @@ def test_mark_active():
     assert lib.mark_active("x") is False
     assert [s.status for s in lib.songs] == ["active", "active"]
 
+def test_mark_draft():
+    lib = SongLibrary([Song(title="a", status="active"), Song(title="b", status="draft")])
+    assert lib.mark_draft("a") is True
+    assert lib.mark_draft("x") is False
+    assert [s.status for s in lib.songs] == ["draft", "draft"]
+
 def test_search():
     lib = SongLibrary([Song(title="a"), Song(title="ab")])
     s = lib.search("a")
@@ -167,7 +173,7 @@ def test_group_english_to_7():
     g = _group(lib)
     assert "Hello" in g[7]
 
-def test_default_library_177():
+def test_default_library_178():
     lib = build_default_library()
     assert lib.count_active() == 178
     from core.layouts.grid_wrap import _group

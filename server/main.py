@@ -113,6 +113,28 @@ def api_songs_list(status: str = None):
                       for s in songs]}
 
 
+@app.post("/api/songs/status")
+def api_songs_status(payload: dict):
+    """切换歌曲状态：{"title": "知足", "status": "active"|"draft"}。
+
+    一键「学会了」（draft→active）/「标回未会」（active→draft）。
+    变更即原子写落盘 + 自动备份（data/backups/，滚动保留）。
+    渲染端点每次新排文字层，无需额外缓存失效。
+    """
+    title = (payload.get("title") or "").strip()
+    status = (payload.get("status") or "").strip()
+    if status not in ("active", "draft"):
+        return Response("status 必须是 active 或 draft", status_code=400)
+    mark = library.mark_active if status == "active" else library.mark_draft
+    if not mark(title):
+        return Response(f"未找到歌曲：{title}", status_code=404)
+    backup_dir = os.path.join(ROOT, "data", "backups")
+    library.save(SONGS_JSON, backup_dir=backup_dir,
+                 backup_count=settings.get("backup_count", 20))
+    return {"ok": True, "title": title, "status": status,
+            "active": library.count_active(), "draft": library.count_draft()}
+
+
 # ---- 导出 ----
 @app.post("/api/export")
 def api_export(theme: str, page: int = 1,

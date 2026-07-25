@@ -78,6 +78,14 @@ class SongLibrary:
                 return True
         return False
 
+    def mark_draft(self, title: str) -> bool:
+        """将歌曲状态从 active 改为 draft（「标回未会」，下海报）。返回是否成功找到。"""
+        for s in self.songs:
+            if s.title == title:
+                s.status = "draft"
+                return True
+        return False
+
     def count_active(self) -> int:
         return sum(1 for s in self.songs if s.status == "active")
 
