@@ -1,49 +1,121 @@
+/* ═══════════════════════════════════════════════════════════════════
+   歌单海报生成器 · React 前端样式（Tailwind 4 @theme）
+
+   设计令牌源：../../歌单海报生成器-界面设计/design-tokens.json
+   本文件从 design-tokens.json 的 light 色板手动同步生成。
+   改色板/间距/字体请先改 design-tokens.json。
+   ═══════════════════════════════════════════════════════════════════ */
 @import "tailwindcss";
 
 @theme {
-  --color-glass: rgba(255, 255, 255, 0.06);
-  --color-glass-hover: rgba(255, 255, 255, 0.10);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glass-active: rgba(255, 255, 255, 0.14);
-  --color-accent: #f4a261;
-  --color-accent-soft: rgba(244, 162, 97, 0.12);
-  --color-surface: #18181b;
-  --color-surface-hi: #27272a;
+  /* ── 品牌色（海洋青 · 晨光纸感）── */
+  --color-primary: #2f8f7a;
+  --color-primary-strong: #257a67;
+  --color-primary-soft: rgba(47, 143, 122, 0.1);
+  --color-primary-softer: rgba(47, 143, 122, 0.06);
+
+  /* ── 辅助点缀（暖珊瑚）── */
+  --color-accent: #d9764f;
+  --color-accent-soft: rgba(217, 118, 79, 0.12);
+
+  /* ── 中性表面 ── */
+  --color-background: #f7f6f2;
+  --color-foreground: #233730;
+  --color-card: #ffffff;
+  --color-card-foreground: #233730;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #233730;
+  --color-muted: #eeece6;
+  --color-muted-foreground: #7d8a83;
+  --color-border: #e4e1d8;
+  --color-input: #e4e1d8;
+  --color-ring: #2f8f7a;
+
+  /* ── 状态色 ── */
+  --color-success: #3d9d63;
+  --color-warning: #d9a03f;
+  --color-danger: #d05555;
+
+  /* ── 圆角 ── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* ── 投影 ── */
+  --shadow-sm: 0 1px 2px rgba(35, 55, 48, 0.04), 0 2px 8px rgba(35, 55, 48, 0.05);
+  --shadow-md: 0 2px 6px rgba(35, 55, 48, 0.05), 0 10px 28px rgba(35, 55, 48, 0.08);
+  --shadow-lg: 0 4px 12px rgba(35, 55, 48, 0.06), 0 24px 56px rgba(35, 55, 48, 0.13);
+  --shadow-primary: 0 4px 14px rgba(47, 143, 122, 0.32);
+
+  /* ── 字体（与 design-tokens.json 一致）── */
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
 }
 
-/* 玻璃拟态面板 */
-.glass {
-  background: var(--color-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--color-glass-border);
+/* ── 全局基调（晨光纸感）── */
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
 }
 
-.glass-hover:hover {
-  background: var(--color-glass-hover);
+/* ── 组件类（对应 shared.css 的 .gp-card / .gp-btn 等，Tailwind 化）── */
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
-.glass-active {
-  background: var(--color-glass-active);
-  border-color: rgba(255, 255, 255, 0.14);
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-strong);
+  box-shadow: var(--shadow-primary);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-foreground);
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease;
+}
+
+.btn-ghost:hover {
+  background: var(--color-muted);
+}
+
+.input {
+  background: var(--color-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-foreground);
+  padding: 8px 12px;
+}
+
+.input:focus {
+  border-color: var(--color-ring);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
 
 /* 滚动条 */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
 
-/* 图片拖拽不可选 */
 img {
   -webkit-user-drag: none;
   user-select: none;
