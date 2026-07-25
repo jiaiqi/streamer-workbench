@@ -131,7 +131,7 @@ class SongLibrary:
         return sum(1 for s in self.songs if s.status == "draft")
 
     # ---- JSON 持久化 ----
-    CURRENT_VERSION: ClassVar[int] = 2
+    CURRENT_VERSION: ClassVar[int] = 3
 
     @staticmethod
     def _migrate_v1_to_v2(data: dict) -> dict:
@@ -139,6 +139,17 @@ class SongLibrary:
         for item in data.get("songs", []):
             if item.get("capo") == 0:
                 item["capo"] = None
+        return data
+
+    @staticmethod
+    def _migrate_v2_to_v3(data: dict) -> dict:
+        """v2→v3：回填空 pinyin（拼音首字母是歌曲库搜索索引，旧数据全为空）。
+
+        手工改过的非空 pinyin 保留不动。
+        """
+        for item in data.get("songs", []):
+            if not item.get("pinyin") and item.get("title"):
+                item["pinyin"] = pinyin_initials(item["title"])
         return data
 
     MIGRATIONS: ClassVar[dict] = {}  # {from_version: migrate_fn(data) -> data}，在类定义后注册
@@ -205,7 +216,7 @@ class SongLibrary:
 
 
 # 注册版本迁移链（类外注册，避免类体内方法引用顺序问题）
-SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2})
+SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2, 2: SongLibrary._migrate_v2_to_v3})
 
 
 def pinyin_initials(title: str) -> str:

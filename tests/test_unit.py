@@ -139,6 +139,22 @@ def test_migration_v1_to_v2_capo():
     assert out["songs"][0]["capo"] is None
     assert out["songs"][1]["capo"] == 3
 
+def test_migration_v2_to_v3_pinyin():
+    data = {"version": 2, "songs": [
+        {"title": "知足", "pinyin": ""},          # 空 → 回填
+        {"title": "枫", "pinyin": "custom"},      # 手工非空 → 保留
+        {"title": "", "pinyin": ""}]}             # 无标题 → 不炸
+    out = SongLibrary._migrate(data)
+    assert out["songs"][0]["pinyin"] == "zz"
+    assert out["songs"][1]["pinyin"] == "custom"
+    assert out["songs"][2]["pinyin"] == ""
+
+def test_migration_chain_v1_to_v3():
+    data = {"version": 1, "songs": [{"title": "知足", "capo": 0, "pinyin": ""}]}
+    out = SongLibrary._migrate(data)
+    assert out["songs"][0]["capo"] is None
+    assert out["songs"][0]["pinyin"] == "zz"
+
 def test_pinyin_initials():
     from core.data.songs import pinyin_initials
     assert pinyin_initials("知足") == "zz"
