@@ -11,7 +11,11 @@ http://localhost:8000 调用。MVP 后期由 Electron 把本服务打包为 chil
 import io
 import json
 import os
+import subprocess
+import sys
+import threading
 import time
+import uuid
 from dataclasses import replace, asdict
 from datetime import datetime
 
@@ -176,10 +180,39 @@ def api_export(theme: str, page: int = 1,
             "duration_ms": round(duration * 1000, 1)}
 
 
+# ---- 批量导出任务（后台线程 + 进度查询）----
+_EXPORT_JOBS: dict = {}
+
+
+def _run_batch_job(job_id: str, layout_plugin, spec, out_dir: str):
+    job = _EXPORT_JOBS[job_id]
+    t0 = time.perf_counter()
+    try:
+        for tname, theme in themes.items():
+            for page in range(1, (layout_plugin.pages or 2) + 1):
+                job["current"] = f"{tname} p{page}"
+                img = render_page(theme, layout_plugin, library, spec, page, FONT)
+                tag = "糖圆体全屏绕排" if spec.avoid_zones and spec.height > 1920 else "糖圆体"
+                filename = f"{theme.output_prefix}-{layout_plugin.id}-{tag}-{page}.png"
+                out_path = os.path.join(out_dir, filename)
+                img.save(out_path, "PNG")
+                job["files"].append({"theme": tname, "page": page, "path": out_path})
+                job["done"] += 1
+        job["status"] = "done"
+    except Exception as e:  # 任务失败也要让前端能查到
+        job["status"] = "error"
+        job["error"] = str(e)
+    job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+
+
 @app.post("/api/export/batch")
 def api_export_batch(layout: str = "grid-wrap",
                      canvas: str = "抖音全屏 9:20", avoid: bool = True):
-    """批量导出：当前排版 × 全部 7 主题 × 2 页 = 14 张。"""
+    """启动批量导出（当前排版 × 全部主题 × 全部页）。
+
+    立即返回 job_id，后台线程渲染；前端轮询 /api/export/jobs/{job_id}
+    获取进度（done/total/current/status）。
+    """
     try:
         layout_plugin = get_layout(layout)
     except KeyError as e:
@@ -191,19 +224,43 @@ def api_export_batch(layout: str = "grid-wrap",
 
     out_dir = settings["output_dir"]
     os.makedirs(out_dir, exist_ok=True)
-    results = []
-    t0 = time.perf_counter()
-    for tname, theme in themes.items():
-        for page in (1, 2):
-            img = render_page(theme, layout_plugin, library, spec, page, FONT)
-            tag = "糖圆体全屏绕排" if avoid and spec.height > 1920 else "糖圆体"
-            filename = f"{theme.output_prefix}-{layout}-{tag}-{page}.png"
-            out_path = os.path.join(out_dir, filename)
-            img.save(out_path, "PNG")
-            results.append({"theme": tname, "page": page, "path": out_path})
-    total_ms = round((time.perf_counter() - t0) * 1000, 1)
-    return {"ok": True, "count": len(results), "total_ms": total_ms,
-            "output_dir": out_dir, "files": results}
+    pages = layout_plugin.pages or 2
+    job_id = uuid.uuid4().hex[:8]
+    _EXPORT_JOBS[job_id] = {
+        "status": "running", "done": 0, "total": len(themes) * pages,
+        "current": "", "files": [], "output_dir": out_dir,
+        "total_ms": None, "error": None,
+    }
+    threading.Thread(target=_run_batch_job,
+                     args=(job_id, layout_plugin, spec, out_dir),
+                     daemon=True).start()
+    return {"ok": True, "job_id": job_id, "total": len(themes) * pages}
+
+
+@app.get("/api/export/jobs/{job_id}")
+def api_export_job(job_id: str):
+    """查询批量导出任务进度。"""
+    job = _EXPORT_JOBS.get(job_id)
+    if job is None:
+        return Response(f"未知任务：{job_id}", status_code=404)
+    return job
+
+
+@app.post("/api/export/open")
+def api_export_open():
+    """在系统文件管理器中打开输出目录（macOS Finder / Windows 资源管理器）。"""
+    out_dir = settings["output_dir"]
+    os.makedirs(out_dir, exist_ok=True)
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", out_dir])
+        elif sys.platform.startswith("win"):
+            subprocess.Popen(["explorer", out_dir])
+        else:
+            subprocess.Popen(["xdg-open", out_dir])
+    except Exception as e:
+        return Response(f"打开目录失败：{e}", status_code=500)
+    return {"ok": True, "output_dir": out_dir}
 
 
 # ---- 设置 ----

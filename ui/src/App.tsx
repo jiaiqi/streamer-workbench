@@ -26,11 +26,14 @@ interface SongsData {
   draft: number;
   songs: Song[];
 }
-interface ExportResult {
-  ok: boolean;
-  path: string;
-  filename: string;
-  duration_ms: number;
+interface ParamSpec {
+  key: string;
+  label: string;
+  kind: string;            // "int" | "color" | "bool" | "choice"
+  default: number;
+  min: number | null;
+  max: number | null;
+  choices: string[] | null;
 }
 
 const CANVAS_OPTIONS = ["标准 9:16", "抖音全屏 9:20"] as const;
@@ -71,19 +74,27 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [dark, setDark] = useState(false);
   const [renderKey, setRenderKey] = useState(0);
-  // P0-1: 排版参数受控
+  // P0-1: 排版参数受控（初始为 grid-wrap 默认值，ParamSpec 拉取后合并）
   const [params, setParams] = useState<Record<string, number>>({
     margin: 58, font_song: 36, row_h: 44, sec_gap: 26,
   });
+  // Phase 2: 参数面板动态渲染（对接 /api/layouts/{id}/params 的 ParamSpec 契约）
+  const [paramSpecs, setParamSpecs] = useState<ParamSpec[]>([]);
   // Phase 2: 视图路由
   const [view, setView] = useState<string>("workspace");
   // Phase 2: 歌曲库数据
   const [songsData, setSongsData] = useState<SongsData | null>(null);
   const [songFilter, setSongFilter] = useState<string>("");
   const [songStatusFilter, setSongStatusFilter] = useState<string>("all");
-  // Phase 2: 导出
+  // Phase 2: 导出对话框（范围选择 + 预估 + 进度 + 打开目录）
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<"page" | "theme" | "all">("all");
   const [exporting, setExporting] = useState(false);
-  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [exportDone, setExportDone] = useState<{ count: number; totalMs: number; outputDir: string } | null>(null);
+  const [lastRenderMs, setLastRenderMs] = useState<number | null>(null);
+  // Phase 2: 状态栏歌曲统计
+  const [songStats, setSongStats] = useState<{ active: number; draft: number } | null>(null);
   // Phase 2: 启动恢复
   const [restored, setRestored] = useState(false);
 
@@ -117,6 +128,19 @@ export default function App() {
       if (d.length && !selTheme) setSelTheme(d[0].name);
     });
     fetch("/api/layouts").then(r => r.json()).then(setLayouts);
+    // Phase 2: 状态栏歌曲统计
+    fetch("/api/songs/list").then(r => r.json()).then((d: SongsData) =>
+      setSongStats({ active: d.active, draft: d.draft }));
+    // Phase 2: 拉取排版参数描述（ParamSpec），动态生成参数面板；
+    // 已有参数值（含 localStorage 恢复的）优先，缺的用插件默认值补齐
+    fetch("/api/layouts/grid-wrap/params").then(r => r.json()).then((specs: ParamSpec[]) => {
+      setParamSpecs(specs);
+      setParams(prev => {
+        const merged = { ...prev };
+        for (const s of specs) if (merged[s.key] === undefined) merged[s.key] = s.default;
+        return merged;
+      });
+    });
   }, []);
 
   // Phase 2: 歌曲库数据加载
@@ -143,39 +167,61 @@ export default function App() {
   const activeTheme = themes.find(t => t.name === selTheme);
   const activeLayout = layouts.find(l => l.id === "grid-wrap");
 
-  // Phase 2: 导出单页
-  const handleExport = async () => {
-    if (!selTheme) return;
+  // Phase 2: 导出对话框逻辑
+  const estimateCount = exportScope === "page" ? 1
+    : exportScope === "theme" ? maxPage
+    : themes.length * maxPage;
+  const estimateMs = estimateCount * (lastRenderMs ?? 900);
+
+  const runExport = async () => {
     setExporting(true);
-    setExportResult(null);
+    setExportDone(null);
+    setExportProgress({ done: 0, total: estimateCount, current: "" });
     try {
-      const res = await fetch(
-        `/api/export?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`,
-        { method: "POST" }
-      );
-      const data = await res.json();
-      setExportResult(data);
+      if (exportScope === "all") {
+        // 批量：后端后台任务 + 300ms 轮询进度
+        const res = await fetch(
+          `/api/export/batch?canvas=${encodeURIComponent(canvas)}&avoid=${avoid}`,
+          { method: "POST" });
+        const { job_id } = await res.json();
+        await new Promise<void>((resolve) => {
+          const timer = setInterval(async () => {
+            const j = await (await fetch(`/api/export/jobs/${job_id}`)).json();
+            setExportProgress({ done: j.done, total: j.total, current: j.current });
+            if (j.status === "done" || j.status === "error") {
+              clearInterval(timer);
+              if (j.status === "done") {
+                setExportDone({ count: j.done, totalMs: j.total_ms, outputDir: j.output_dir });
+                setLastRenderMs(j.total_ms / j.total);
+              }
+              resolve();
+            }
+          }, 300);
+        });
+      } else {
+        // 单页 / 当前主题全部页：前端顺序调用单页导出
+        const pages = exportScope === "page" ? [page]
+          : Array.from({ length: maxPage }, (_, i) => i + 1);
+        const t0 = performance.now();
+        for (const p of pages) {
+          setExportProgress({ done: p - pages[0], total: pages.length, current: `${selTheme} p${p}` });
+          const res = await fetch(
+            `/api/export?theme=${encodeURIComponent(selTheme)}&page=${p}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`,
+            { method: "POST" });
+          const data = await res.json();
+          setLastRenderMs(data.duration_ms);
+          setExportProgress({ done: p - pages[0] + 1, total: pages.length, current: `${selTheme} p${p}` });
+        }
+        const st = await (await fetch("/api/settings")).json();
+        setExportDone({ count: pages.length, totalMs: Math.round(performance.now() - t0), outputDir: st.output_dir });
+      }
     } catch (e) {
       console.error("导出失败", e);
     }
     setExporting(false);
   };
 
-  // Phase 2: 批量导出
-  const handleExportBatch = async () => {
-    setExporting(true);
-    try {
-      const res = await fetch(
-        `/api/export/batch?canvas=${encodeURIComponent(canvas)}&avoid=${avoid}`,
-        { method: "POST" }
-      );
-      const data = await res.json();
-      alert(`批量导出完成：${data.count} 张，耗时 ${data.total_ms}ms`);
-    } catch (e) {
-      console.error("批量导出失败", e);
-    }
-    setExporting(false);
-  };
+  const openOutputDir = () => fetch("/api/export/open", { method: "POST" });
 
   // Phase 2: 学会了 ⇄ 标回未会
   const handleToggleStatus = async (song: Song) => {
@@ -191,6 +237,9 @@ export default function App() {
         return;
       }
       // 本地更新该行 + 顶部统计，避免整表重拉
+      setSongStats(prev => prev && (next === "active"
+        ? { active: prev.active + 1, draft: prev.draft - 1 }
+        : { active: prev.active - 1, draft: prev.draft + 1 }));
       setSongsData(prev => prev && {
         ...prev,
         active: prev.songs.reduce((n, s) => n + ((s.title === song.title ? next : s.status) === "active" ? 1 : 0), 0),
@@ -262,6 +311,11 @@ export default function App() {
           <span className={`font-serif text-[15px] font-semibold tracking-wide ${dark ? "text-zinc-200" : "text-foreground"}`}>歌单海报</span>
           <span className={`h-4 w-px ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
           <span>{themes.length} 个主题 · {maxPage} 页</span>
+          <span className={`h-4 w-px ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
+          <span>已会 {songStats?.active ?? "—"} · 未会 {songStats?.draft ?? "—"}</span>
+          {lastRenderMs !== null && (
+            <span className="ml-auto tabular-nums">渲染 {Math.round(lastRenderMs)}ms/张</span>
+          )}
         </header>
 
         <div className="flex flex-1 overflow-hidden">
@@ -382,13 +436,9 @@ export default function App() {
                     {Icon.download} 下载
                   </a>
                 )}
-                <button onClick={handleExport} disabled={exporting}
-                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
-                  {exporting ? "导出中…" : "导出当前页"}
-                </button>
-                <button onClick={handleExportBatch} disabled={exporting}
-                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer bg-amber-600 hover:bg-amber-700 text-white font-medium disabled:opacity-50">
-                  批量导出 14 张
+                <button onClick={() => { setExportDialogOpen(true); setExportDone(null); setExportProgress(null); }}
+                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
+                  {Icon.download} 导出…
                 </button>
                 <button onClick={() => { setLoading(true); setRenderKey(k => k + 1); }}
                   className="flex items-center gap-1.5 bg-primary hover:bg-primary-strong text-primary-foreground font-medium rounded-xl px-5 py-2 text-sm transition-all active:scale-95 cursor-pointer">
@@ -505,18 +555,35 @@ export default function App() {
               <section>
                 <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">排版参数</h3>
                 <div className="space-y-2.5">
-                  {([{ label: "边距", key: "margin" }, { label: "歌名字号", key: "font_song" }, { label: "行高", key: "row_h" }, { label: "区块间距", key: "sec_gap" }] as const)
-                    .map(p => (
-                      <label key={p.key} className="flex items-center justify-between text-xs text-muted-foreground">
-                        {p.label}
-                        <input type="number" value={params[p.key]}
+                  {paramSpecs.length === 0 && (
+                    <p className="text-xs text-muted-foreground">参数加载中…</p>
+                  )}
+                  {paramSpecs.map(p => (
+                    <label key={p.key} className="flex items-center justify-between text-xs text-muted-foreground">
+                      {p.label}
+                      {p.kind === "int" && (
+                        <input type="number" value={params[p.key] ?? p.default}
+                          min={p.min ?? undefined} max={p.max ?? undefined}
                           onChange={e => {
                             const v = parseInt(e.target.value, 10);
                             if (!isNaN(v)) setParams(prev => ({ ...prev, [p.key]: v }));
                           }}
                           className={`w-16 rounded-lg px-2 py-1 text-xs outline-none text-right ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`} />
-                      </label>
-                    ))}
+                      )}
+                      {p.kind === "bool" && (
+                        <input type="checkbox" checked={!!params[p.key]}
+                          onChange={e => setParams(prev => ({ ...prev, [p.key]: e.target.checked ? 1 : 0 }))}
+                          className={`w-3.5 h-3.5 rounded ${dark ? "accent-emerald-400" : "accent-primary"}`} />
+                      )}
+                      {p.kind === "choice" && (
+                        <select value={params[p.key] ?? p.default}
+                          onChange={e => setParams(prev => ({ ...prev, [p.key]: Number(e.target.value) }))}
+                          className={`rounded-lg px-2 py-1 text-xs outline-none cursor-pointer ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`}>
+                          {(p.choices ?? []).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      )}
+                    </label>
+                  ))}
                 </div>
               </section>
 
@@ -534,6 +601,89 @@ export default function App() {
           </aside>
         </div>
       </div>
+
+      {/* ========== 导出对话框 ========== */}
+      {exportDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
+          onClick={() => !exporting && setExportDialogOpen(false)}>
+          <div className={`w-[420px] rounded-2xl p-6 shadow-2xl transition-colors ${dark ? "bg-zinc-800 border border-zinc-700 text-zinc-200" : "bg-card border border-border text-card-foreground"}`}
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold mb-1">导出海报</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              排版 全行网格绕排版 · 主题 {selTheme || "—"} · 画布 {canvas} · 避让{avoid ? "开" : "关"}
+            </p>
+
+            {/* 范围选择 */}
+            <div className="space-y-2 mb-4">
+              {([
+                { id: "page", label: `当前页（${selTheme || "—"} 第 ${page} 页）`, count: 1 },
+                { id: "theme", label: `当前主题全部页（${maxPage} 张）`, count: maxPage },
+                { id: "all", label: `全部 ${themes.length} 个主题 × ${maxPage} 页`, count: themes.length * maxPage },
+              ] as const).map(opt => (
+                <label key={opt.id} className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-colors ${exportScope === opt.id
+                  ? (dark ? "bg-emerald-500/15 ring-1 ring-emerald-400/50" : "bg-primary-soft ring-1 ring-primary/40")
+                  : (dark ? "hover:bg-zinc-700/50" : "hover:bg-muted")}`}>
+                  <input type="radio" name="export-scope" checked={exportScope === opt.id}
+                    onChange={() => setExportScope(opt.id)} disabled={exporting}
+                    className={dark ? "accent-emerald-400" : "accent-primary"} />
+                  <span className="flex-1">{opt.label}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{opt.count} 张</span>
+                </label>
+              ))}
+            </div>
+
+            {/* 预估 */}
+            {!exporting && !exportDone && (
+              <p className="text-xs text-muted-foreground mb-4">
+                预估输出 <span className={dark ? "text-zinc-200" : "text-foreground"}>{estimateCount} 张</span>
+                ，耗时约 <span className={dark ? "text-zinc-200" : "text-foreground"}>{(estimateMs / 1000).toFixed(1)} 秒</span>
+                {lastRenderMs ? `（按实测 ${Math.round(lastRenderMs)}ms/张）` : "（按冷启动估 900ms/张）"}
+              </p>
+            )}
+
+            {/* 进度条 */}
+            {exportProgress && !exportDone && (
+              <div className="mb-4">
+                <div className={`h-2 rounded-full overflow-hidden ${dark ? "bg-zinc-700" : "bg-muted"}`}>
+                  <div className={`h-full rounded-full transition-all duration-300 ${dark ? "bg-emerald-400" : "bg-primary"}`}
+                    style={{ width: `${exportProgress.total ? (exportProgress.done / exportProgress.total) * 100 : 0}%` }} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1.5 tabular-nums">
+                  {exportProgress.done}/{exportProgress.total}　{exportProgress.current}
+                </p>
+              </div>
+            )}
+
+            {/* 完成状态 */}
+            {exportDone && (
+              <div className={`rounded-xl px-3 py-2.5 mb-4 text-sm ${dark ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-50 text-emerald-700"}`}>
+                ✅ 导出完成：{exportDone.count} 张，耗时 {(exportDone.totalMs / 1000).toFixed(1)} 秒
+                <p className="text-xs mt-1 opacity-75 break-all">{exportDone.outputDir}</p>
+              </div>
+            )}
+
+            {/* 操作按钮 */}
+            <div className="flex justify-end gap-2">
+              {exportDone && (
+                <button onClick={openOutputDir}
+                  className={`rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer ${dark ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-muted hover:bg-border text-foreground"}`}>
+                  打开目录
+                </button>
+              )}
+              <button onClick={() => !exporting && setExportDialogOpen(false)} disabled={exporting}
+                className={`rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer disabled:opacity-50 ${dark ? "text-zinc-400 hover:text-zinc-200" : "text-muted-foreground hover:text-foreground"}`}>
+                关闭
+              </button>
+              {!exportDone && (
+                <button onClick={runExport} disabled={exporting || !selTheme}
+                  className="rounded-xl px-5 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+                  {exporting ? "导出中…" : "开始导出"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
