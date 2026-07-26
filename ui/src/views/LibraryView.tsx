@@ -26,6 +26,9 @@ function KeyCapo({ song }: { song: Song }) {
   );
 }
 
+// 卡片网格：auto-fill + minmax 天然响应不同分辨率，无需断点
+const GRID_CLASS = "grid gap-3 grid-cols-[repeat(auto-fill,minmax(232px,1fr))]";
+
 /* ================= 主视图 ================= */
 export default function LibraryView({ dark, onStatsChange, onEditTargetChange }: {
   dark: boolean;
@@ -41,6 +44,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
+  const probeRef = useRef<HTMLDivElement>(null);
 
   const refresh = async () => {
     const d: SongsData = await (await fetch("/api/songs/list")).json();
@@ -76,7 +80,16 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
 
   const groupLabel = (sec: number) => sec === 0 ? "未分类" : sec >= 7 ? "7+ 字" : `${sec} 字`;
 
-  /* ---- 键盘导航：↑↓ 光标 · Enter 展开 · X 学会了 · / 搜索 ---- */
+  /* ---- 当前网格实际列数（从隐藏探针元素的 computed style 读） ---- */
+  const currentCols = () => {
+    const el = probeRef.current;
+    if (!el) return 1;
+    const tracks = getComputedStyle(el).gridTemplateColumns;
+    if (!tracks || tracks === "none") return 1;
+    return tracks.split(" ").length;
+  };
+
+  /* ---- 键盘导航：←→↑↓ 光标 · Enter 展开 · X 学会了 · / 搜索 ---- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (editTarget !== null) return;
@@ -91,11 +104,15 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
       if (typing || filtered.length === 0) return;
 
       const idx = cursor === null ? -1 : filtered.findIndex(s => s.title === cursor);
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const cols = currentCols();
+      let next: number | null = null;
+      if (e.key === "ArrowRight") next = Math.min(filtered.length - 1, idx + 1);
+      else if (e.key === "ArrowLeft") next = Math.max(0, idx === -1 ? 0 : idx - 1);
+      else if (e.key === "ArrowDown") next = Math.min(filtered.length - 1, (idx === -1 ? 0 : idx) + (idx === -1 ? 0 : cols));
+      else if (e.key === "ArrowUp") next = Math.max(0, idx - cols);
+
+      if (next !== null) {
         e.preventDefault();
-        const next = e.key === "ArrowDown"
-          ? Math.min(filtered.length - 1, idx + 1)
-          : Math.max(0, idx === -1 ? 0 : idx - 1);
         const title = filtered[next].title;
         setCursor(title);
         rowRefs.current.get(title)?.scrollIntoView({ block: "nearest" });
@@ -172,7 +189,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
           const withKey = songsData.songs.filter(s => s.key).length;
           const pct = Math.round((withKey / (songsData.total || 1)) * 100);
           return (
-            <span className="flex items-center gap-2" title={`${withKey}/${songsData.total} 首已填选调，点行展开 → 编辑可补`}>
+            <span className="flex items-center gap-2" title={`${withKey}/${songsData.total} 首已填选调，点卡片展开 → 编辑可补`}>
               <span className={`w-16 h-1 rounded-full overflow-hidden ${dark ? "bg-zinc-700" : "bg-muted"}`}>
                 <span className={`block h-full rounded-full transition-all duration-500 ${dark ? "bg-emerald-400" : "bg-emerald-600"}`}
                   style={{ width: `${pct}%` }} />
@@ -219,13 +236,15 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
           </button>
         ))}
         <span className={`ml-auto text-[11px] ${dark ? "text-zinc-600" : "text-muted-foreground/70"}`}>
-          ↑↓ 移动 · Enter 展开 · X 学会了 · / 搜索
+          ←→↑↓ 移动 · Enter 展开 · X 学会了 · / 搜索
         </span>
       </div>
 
-      {/* ===== 分组列表 ===== */}
+      {/* ===== 分组卡片网格 ===== */}
       {songsData ? (
         <div ref={listRef} className="flex-1 overflow-y-auto">
+          {/* 列数探针：与真实网格同 class，键盘导航据此计算 ↑↓ 步长 */}
+          <div ref={probeRef} aria-hidden="true" className={`invisible h-0 overflow-hidden ${GRID_CLASS}`} />
           {groups.length === 0 && (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
               没有匹配「{query}」的歌曲
@@ -233,7 +252,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
           )}
           {groups.map(([sec, songs]) => (
             <div key={sec}>
-              {/* 吸顶组头：大号分类字 + 数量 + 发线 */}
+              {/* 吸顶组头：大号分类字 + 数量 */}
               <div className={`sticky top-0 z-10 flex items-baseline gap-3 px-6 py-2 border-b ${hairline} ${
                 dark ? "bg-zinc-900/95 backdrop-blur-sm" : "bg-background/95 backdrop-blur-sm"}`}>
                 <span className={`font-serif text-[15px] font-semibold ${dark ? "text-zinc-300" : "text-foreground"}`}>
@@ -244,147 +263,148 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                 </span>
               </div>
 
-              {songs.map((s, i) => {
-                const isOpen = expanded === s.title;
-                const isCursor = cursor === s.title;
-                return (
-                  <div key={s.title} ref={el => { if (el) rowRefs.current.set(s.title, el); else rowRefs.current.delete(s.title); }}>
-                    {/* ---- 行：点击就地展开 ---- */}
-                    <div
-                      onClick={() => setExpanded(isOpen ? null : s.title)}
-                      className={`group flex items-center gap-3 px-6 py-2 cursor-pointer border-b transition-colors duration-300 ease-out ${hairline} ${
-                        isOpen
-                          ? (dark ? "bg-zinc-800/70" : "bg-muted/70")
-                          : isCursor
-                            ? (dark ? "bg-zinc-800/50" : "bg-muted/50")
-                            : (dark ? "hover:bg-zinc-800/40" : "hover:bg-muted/40")}`}
-                    >
-                      {/* 序号 */}
-                      <span className={`w-7 text-right text-[11px] tabular-nums shrink-0 ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-
-                      {/* 状态点：单击直接切换 学会了⇄未会 */}
-                      <button
-                        onClick={e => { e.stopPropagation(); toggleStatus(s); }}
-                        title={s.status === "active" ? "已会 · 点击标回未会" : "未会 · 点击标记学会了"}
-                        className="shrink-0 w-5 h-5 flex items-center justify-center cursor-pointer">
-                        <span className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                          s.status === "active"
-                            ? (dark ? "bg-emerald-400" : "bg-emerald-600")
-                            : `bg-transparent border ${dark ? "border-amber-400/70" : "border-amber-500/80"}`}`} />
-                      </button>
-
-                      {/* 歌名 + 歌手 */}
-                      <div className="flex-1 min-w-0 flex items-baseline gap-2.5">
-                        <span className={`font-serif text-[14px] truncate ${
-                          s.status === "draft"
-                            ? (dark ? "text-zinc-400" : "text-muted-foreground")
-                            : (dark ? "text-zinc-100" : "text-foreground")}`}>
-                          {s.title}
-                        </span>
-                        <span className={`text-[12px] truncate ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
-                          {s.artists.join("、") || "—"}
-                        </span>
-                      </div>
-
-                      {/* 右侧元数据：符号化 + 等宽对齐 */}
-                      <div className="shrink-0 flex items-center gap-5 text-[12px]">
-                        <span className="w-14 text-right"><DifficultyMark value={s.difficulty} dark={dark} /></span>
-                        <span className={`w-16 text-right font-mono ${dark ? "text-zinc-300" : "text-foreground"}`}><KeyCapo song={s} /></span>
-                        {(s.tags ?? []).length > 0 && (
-                          <span className={`hidden xl:block w-24 truncate text-right text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
-                            {s.tags.join(" · ")}
+              <div className={`px-6 py-3 ${GRID_CLASS}`}>
+                {songs.map(s => {
+                  const isOpen = expanded === s.title;
+                  const isCursor = cursor === s.title;
+                  return (
+                    <div key={s.title}
+                      ref={el => { if (el) rowRefs.current.set(s.title, el); else rowRefs.current.delete(s.title); }}
+                      className={isOpen ? "col-span-full" : ""}>
+                      {/* ---- 卡片：点击就地展开；状态变化只用背景填充，不加边框 ---- */}
+                      <div
+                        onClick={() => setExpanded(isOpen ? null : s.title)}
+                        className={`h-full rounded-xl px-3.5 py-3 cursor-pointer transition-colors duration-200 ${
+                          isOpen
+                            ? (dark ? "bg-zinc-800/80" : "bg-muted/80")
+                            : isCursor
+                              ? (dark ? "bg-zinc-800/70" : "bg-muted/70")
+                              : (dark ? "bg-zinc-800/40 hover:bg-zinc-800/60" : "bg-muted/40 hover:bg-muted/60")}`}
+                      >
+                        {/* 歌名 + 展开指示 */}
+                        <div className="flex items-start gap-2">
+                          <span className={`flex-1 min-w-0 font-serif text-[14px] leading-snug truncate ${
+                            s.status === "draft"
+                              ? (dark ? "text-zinc-400" : "text-muted-foreground")
+                              : (dark ? "text-zinc-100" : "text-foreground")}`}
+                            title={s.title}>
+                            {s.title}
                           </span>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            className={`mt-1 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""} ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>
+                            <path d="m6 9 6 6 6-6"/>
+                          </svg>
+                        </div>
+                        {/* 歌手 */}
+                        <p className={`mt-0.5 text-[12px] truncate ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                          {s.artists.join("、") || "—"}
+                        </p>
+                        {/* 元数据行：状态点 · 难度 · 选调 */}
+                        <div className="mt-2.5 flex items-center gap-2.5 text-[12px]">
+                          <button
+                            onClick={e => { e.stopPropagation(); toggleStatus(s); }}
+                            title={s.status === "active" ? "已会 · 点击标回未会" : "未会 · 点击标记学会了"}
+                            className="shrink-0 w-5 h-5 -ml-1 flex items-center justify-center cursor-pointer">
+                            <span className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                              s.status === "active"
+                                ? (dark ? "bg-emerald-400" : "bg-emerald-600")
+                                : `bg-transparent border ${dark ? "border-amber-400/70" : "border-amber-500/80"}`}`} />
+                          </button>
+                          <DifficultyMark value={s.difficulty} dark={dark} />
+                          {(s.tags ?? []).length > 0 && (
+                            <span className={`min-w-0 truncate text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                              {s.tags.join(" · ")}
+                            </span>
+                          )}
+                          <span className={`ml-auto shrink-0 font-mono ${dark ? "text-zinc-300" : "text-foreground"}`}>
+                            <KeyCapo song={s} />
+                          </span>
+                        </div>
+
+                        {/* ---- 展开面板：大字选调 + 详情网格 + 操作 ---- */}
+                        {isOpen && (
+                          <div className={`mt-3 pt-4 border-t ${hairline}`}
+                            onClick={e => e.stopPropagation()}>
+                            <div className="flex flex-wrap gap-8">
+                              {/* 大字选调：主播一瞥可读；空态转为补全 CTA */}
+                              <div className="shrink-0 w-36">
+                                <p className={label}>选调</p>
+                                {s.key ? (
+                                  <p className={`font-mono text-4xl font-semibold mt-1 leading-none ${dark ? "text-zinc-100" : "text-foreground"}`}>
+                                    {s.key}
+                                  </p>
+                                ) : (
+                                  <button onClick={() => setEditTarget(s)}
+                                    className={`mt-1 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                                      dark ? "bg-zinc-700/70 text-zinc-300 hover:bg-zinc-700" : "bg-background border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50"}`}>
+                                    未填 · 点我补选调 →
+                                  </button>
+                                )}
+                                <p className={`mt-2 text-[12px] tabular-nums ${dark ? "text-zinc-400" : "text-muted-foreground"}`}>
+                                  {s.capo !== null ? `变调夹 ${s.capo} 品` : "变调夹未填"}
+                                </p>
+                                <p className="mt-1"><DifficultyMark value={s.difficulty} dark={dark} /></p>
+                              </div>
+
+                              {/* 详情网格 */}
+                              <div className="flex-1 min-w-64 grid md:grid-cols-2 gap-x-8 gap-y-3 content-start text-[13px]">
+                                <div><p className={label}>作词</p><p className={`mt-0.5 ${dark ? "text-zinc-300" : ""}`}>{s.lyricist || "—"}</p></div>
+                                <div><p className={label}>作曲</p><p className={`mt-0.5 ${dark ? "text-zinc-300" : ""}`}>{s.composer || "—"}</p></div>
+                                <div>
+                                  <p className={label}>谱子</p>
+                                  <p className={`mt-0.5 break-all ${dark ? "text-zinc-300" : ""}`}>
+                                    {s.tabs
+                                      ? /^https?:\/\//.test(s.tabs)
+                                        ? <a href={s.tabs} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-emerald-500">{s.tabs}</a>
+                                        : s.tabs
+                                      : "—"}
+                                  </p>
+                                </div>
+                                <div><p className={label}>拼音</p><p className={`mt-0.5 font-mono ${dark ? "text-zinc-300" : ""}`}>{s.pinyin || "—"}</p></div>
+                                {(s.tags ?? []).length > 0 && (
+                                  <div className="md:col-span-2">
+                                    <p className={label}>标签</p>
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                      {s.tags.map(t => (
+                                        <span key={t} className={`rounded-md px-2 py-0.5 text-[11px] ${
+                                          dark ? "bg-zinc-700/70 text-zinc-300" : "bg-background border border-border text-muted-foreground"}`}>{t}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {s.notes && (
+                                  <div className="md:col-span-2">
+                                    <p className={label}>备注</p>
+                                    <p className={`mt-0.5 leading-relaxed ${dark ? "text-zinc-300" : ""}`}>{s.notes}</p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 操作列 */}
+                              <div className="shrink-0 ml-auto flex md:flex-col gap-1.5 w-full md:w-24">
+                                <button onClick={() => toggleStatus(s)}
+                                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${s.status === "draft"
+                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    : dark ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600" : "bg-background border border-border text-muted-foreground hover:text-foreground"}`}>
+                                  {s.status === "draft" ? "学会了 ✓" : "标回未会"}
+                                </button>
+                                <button onClick={() => setEditTarget(s)}
+                                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${dark ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600" : "bg-background border border-border text-foreground hover:bg-muted"}`}>
+                                  编辑
+                                </button>
+                                <button onClick={() => deleteSong(s)}
+                                  className={`rounded-lg px-3 py-1.5 text-xs transition-colors cursor-pointer ${dark ? "text-red-400/80 hover:bg-zinc-700 hover:text-red-400" : "text-red-500/80 hover:bg-red-50 hover:text-red-500"}`}>
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         )}
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`transition-transform duration-300 ${isOpen ? "rotate-180" : ""} ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>
-                          <path d="m6 9 6 6 6-6"/>
-                        </svg>
                       </div>
                     </div>
-
-                    {/* ---- 展开面板：大字选调 + 详情网格 + 操作 ---- */}
-                    {isOpen && (
-                      <div className={`border-b ${hairline} ${dark ? "bg-zinc-800/40" : "bg-muted/30"}`}>
-                        <div className="flex gap-8 px-6 py-5 pl-[4.5rem]">
-                          {/* 大字选调：主播一瞥可读；空态转为补全 CTA */}
-                          <div className="shrink-0 w-36">
-                            <p className={label}>选调</p>
-                            {s.key ? (
-                              <p className={`font-mono text-4xl font-semibold mt-1 leading-none ${dark ? "text-zinc-100" : "text-foreground"}`}>
-                                {s.key}
-                              </p>
-                            ) : (
-                              <button onClick={() => setEditTarget(s)}
-                                className={`mt-1 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
-                                  dark ? "bg-zinc-700/70 text-zinc-300 hover:bg-zinc-700" : "bg-background border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50"}`}>
-                                未填 · 点我补选调 →
-                              </button>
-                            )}
-                            <p className={`mt-2 text-[12px] tabular-nums ${dark ? "text-zinc-400" : "text-muted-foreground"}`}>
-                              {s.capo !== null ? `变调夹 ${s.capo} 品` : "变调夹未填"}
-                            </p>
-                            <p className="mt-1"><DifficultyMark value={s.difficulty} dark={dark} /></p>
-                          </div>
-
-                          {/* 详情网格 */}
-                          <div className="flex-1 grid grid-cols-2 gap-x-8 gap-y-3 content-start text-[13px]">
-                            <div><p className={label}>作词</p><p className={`mt-0.5 ${dark ? "text-zinc-300" : ""}`}>{s.lyricist || "—"}</p></div>
-                            <div><p className={label}>作曲</p><p className={`mt-0.5 ${dark ? "text-zinc-300" : ""}`}>{s.composer || "—"}</p></div>
-                            <div>
-                              <p className={label}>谱子</p>
-                              <p className={`mt-0.5 break-all ${dark ? "text-zinc-300" : ""}`}>
-                                {s.tabs
-                                  ? /^https?:\/\//.test(s.tabs)
-                                    ? <a href={s.tabs} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-emerald-500">{s.tabs}</a>
-                                    : s.tabs
-                                  : "—"}
-                              </p>
-                            </div>
-                            <div><p className={label}>拼音</p><p className={`mt-0.5 font-mono ${dark ? "text-zinc-300" : ""}`}>{s.pinyin || "—"}</p></div>
-                            {(s.tags ?? []).length > 0 && (
-                              <div className="col-span-2">
-                                <p className={label}>标签</p>
-                                <div className="mt-1 flex flex-wrap gap-1.5">
-                                  {s.tags.map(t => (
-                                    <span key={t} className={`rounded-md px-2 py-0.5 text-[11px] ${
-                                      dark ? "bg-zinc-700/70 text-zinc-300" : "bg-background border border-border text-muted-foreground"}`}>{t}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {s.notes && (
-                              <div className="col-span-2">
-                                <p className={label}>备注</p>
-                                <p className={`mt-0.5 leading-relaxed ${dark ? "text-zinc-300" : ""}`}>{s.notes}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* 操作列 */}
-                          <div className="shrink-0 flex flex-col gap-1.5 w-24">
-                            <button onClick={() => toggleStatus(s)}
-                              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${s.status === "draft"
-                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                                : dark ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600" : "bg-background border border-border text-muted-foreground hover:text-foreground"}`}>
-                              {s.status === "draft" ? "学会了 ✓" : "标回未会"}
-                            </button>
-                            <button onClick={() => setEditTarget(s)}
-                              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${dark ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600" : "bg-background border border-border text-foreground hover:bg-muted"}`}>
-                              编辑
-                            </button>
-                            <button onClick={() => deleteSong(s)}
-                              className={`rounded-lg px-3 py-1.5 text-xs transition-colors cursor-pointer ${dark ? "text-red-400/80 hover:bg-zinc-700 hover:text-red-400" : "text-red-500/80 hover:bg-red-50 hover:text-red-500"}`}>
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
@@ -392,7 +412,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
         <div className="flex-1 flex items-center justify-center text-muted-foreground">加载中…</div>
       )}
 
-      {/* ===== 底栏：键盘提示（右侧筛选条已有，此处仅计数收尾） ===== */}
+      {/* ===== 底栏：计数收尾 ===== */}
       <div className={`shrink-0 flex items-center px-6 h-8 border-t text-[11px] ${hairline} ${dark ? "text-zinc-600" : "text-muted-foreground"}`}>
         <span className="tabular-nums">显示 {filtered.length} / {songsData?.total ?? 0} 首</span>
         {query && <span className="ml-3">匹配：「{query}」（歌名 / 歌手 / 拼音）</span>}
