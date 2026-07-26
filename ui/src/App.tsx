@@ -11,9 +11,9 @@ const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
   { id: "library", label: "歌曲库", icon: Icon.list },
   { id: "learning", label: "学歌管理", icon: Icon.book },
-  { id: "themes", label: "主题管理", icon: Icon.palette },
-  { id: "presets", label: "场景预设", icon: Icon.bookmark },
-  { id: "history", label: "导出历史", icon: Icon.history },
+  { id: "themes", label: "主题管理", icon: Icon.palette, soon: true },
+  { id: "presets", label: "场景预设", icon: Icon.bookmark, soon: true },
+  { id: "history", label: "导出历史", icon: Icon.history, soon: true },
 ];
 
 /* ==================== App ==================== */
@@ -115,6 +115,13 @@ export default function App() {
     : "";
   const activeTheme = themes.find(t => t.name === selTheme);
 
+  // P0-1: 预览加载反馈——src 任何变化（切主题/翻页/调参/刷新）都进入 loading；
+  // 失败进入错误态给出重试入口，不再静默白屏
+  const [previewError, setPreviewError] = useState(false);
+  useEffect(() => {
+    if (previewSrc) { setLoading(true); setPreviewError(false); }
+  }, [previewSrc]);
+
   // Phase 2: 快捷键（设计文档 §6.8 的 Web 落地子集）
   // Ctrl/⌘+E 导出 · Ctrl/⌘+R 刷新预览 · ←→ 翻页 · Ctrl/⌘+1~7 切主题 ·
   // Ctrl/⌘+, 设置。输入控件聚焦时不拦截；Esc 由各对话框内部处理。
@@ -172,11 +179,14 @@ export default function App() {
         {navItems.map(item => (
           <button
             key={item.id}
-            title={item.label}
-            onClick={() => setView(item.id)}
+            title={item.soon ? `${item.label} · 敬请期待` : item.label}
+            onClick={() => !item.soon && setView(item.id)}
+            disabled={!!item.soon}
             className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 group ${item.id === view
               ? (dark ? "bg-emerald-500/20 text-emerald-400" : "bg-primary-soft text-primary")
-              : (dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
+              : item.soon
+                ? (dark ? "text-zinc-700 cursor-not-allowed" : "text-muted-foreground/40 cursor-not-allowed")
+                : (dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
             }`}
           >
             {item.icon}
@@ -186,7 +196,7 @@ export default function App() {
                 color: dark ? "#e4e4e7" : "var(--color-card-foreground)",
                 border: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "var(--color-border)"}`,
               }}
-            >{item.label}</span>
+            >{item.soon ? `${item.label} · 敬请期待` : item.label}</span>
           </button>
         ))}
 
@@ -215,7 +225,8 @@ export default function App() {
         </header>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* ===== LEFT: theme list ===== */}
+          {/* ===== LEFT: theme list（仅工作台视图显示） ===== */}
+          {view === "workspace" && (
           <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
             <div className="px-4 pt-4 pb-2">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">主题 · {themes.length}</p>
@@ -231,7 +242,8 @@ export default function App() {
                   }`}
                 >
                   <div className={`aspect-[9/16] relative overflow-hidden ${dark ? "bg-zinc-800" : "bg-muted"}`}>
-                    <img src={`/bg/${encodeURIComponent(t.name)}/${t.backgrounds["1"]}`}
+                    {/* P0-2: 缩略图端点（宽 360 JPEG），不再直出多 MB 原图 */}
+                    <img src={`/api/thumb/${encodeURIComponent(t.name)}`}
                       alt={t.name} className="w-full h-full object-cover object-bottom opacity-90 group-hover:opacity-100 transition-opacity" loading="lazy" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                   </div>
@@ -243,6 +255,7 @@ export default function App() {
               ))}
             </div>
           </aside>
+          )}
 
           {/* ===== CENTER: preview ===== */}
           {view === "workspace" && (
@@ -259,19 +272,15 @@ export default function App() {
                   >{i + 1}</button>
                 ))}
                 <span className={`w-px h-5 mx-1 ${dark ? "bg-zinc-700" : "bg-border"}`} />
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-muted-foreground">
+                <label title="避开抖音右侧评论/礼物互动区（9:20 画布右下安全区）"
+                  className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-muted-foreground">
                   <input type="checkbox" checked={avoid} onChange={e => setAvoid(e.target.checked)}
                     className={`w-3.5 h-3.5 rounded ${dark ? "accent-emerald-400" : "accent-primary"}`} />
-                  避让
+                  避让互动区
                 </label>
               </div>
 
               <div className="flex items-center gap-2">
-                <select value={canvas} onChange={e => setCanvas(e.target.value)}
-                  className={`rounded-lg px-3 py-2 text-xs outline-none appearance-none cursor-pointer transition-colors duration-500 ${dark ? "bg-zinc-800/80 border border-zinc-700/50 text-zinc-300" : "bg-card border border-border text-foreground shadow-sm"}`}>
-                  {CANVAS_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-
                 <div className={`flex items-center gap-1 rounded-lg px-2 py-1.5 shadow-sm transition-colors duration-500 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
                   <button onClick={() => setZoom(z => Math.max(15, z - 10))}
                     className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -299,16 +308,29 @@ export default function App() {
                   style={{
                     width: `${(1080 * zoom) / 100}px`,
                     maxHeight: "calc(100vh - 120px)",
+                    aspectRatio: canvas === "标准 9:16" ? "9 / 16" : "9 / 20",
                     boxShadow: "0 4px 12px rgba(35,55,48,0.06), 0 24px 56px rgba(35,55,48,0.13)",
                   }}>
-                  <img key={`${selTheme}-${page}-${avoid}-${canvas}-${renderKey}`}
-                    src={previewSrc} alt={selTheme}
-                    className="w-full object-contain"
-                    onLoad={() => setLoading(false)}
-                    onError={() => setLoading(false)} />
-                  {loading && (
-                    <div className="absolute inset-0 bg-background/30 flex items-center justify-center">
+                  {previewError ? (
+                    /* P0-1: 渲染失败兜底——错误占位 + 重试，不再静默白屏 */
+                    <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${dark ? "bg-zinc-800" : "bg-muted"}`}>
+                      <p className="text-sm text-muted-foreground">预览渲染失败</p>
+                      <button onClick={() => { setPreviewError(false); setLoading(true); setRenderKey(k => k + 1); }}
+                        className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm bg-primary hover:bg-primary-strong text-primary-foreground font-medium transition-all active:scale-95 cursor-pointer">
+                        {Icon.refresh} 重试
+                      </button>
+                    </div>
+                  ) : (
+                    <img key={`${selTheme}-${page}-${avoid}-${canvas}-${renderKey}`}
+                      src={previewSrc} alt={selTheme}
+                      className="w-full object-contain"
+                      onLoad={() => setLoading(false)}
+                      onError={() => { setLoading(false); setPreviewError(true); }} />
+                  )}
+                  {loading && !previewError && (
+                    <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2.5 ${dark ? "bg-zinc-800/60" : "bg-background/60"}`}>
                       <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs text-muted-foreground">渲染中…</p>
                     </div>
                   )}
                   {avoid && canvas === "抖音全屏 9:20" && (
@@ -332,6 +354,7 @@ export default function App() {
                 <span>主题：<span className={dark ? "text-zinc-300" : "text-foreground"}>{selTheme || "—"}</span></span>
                 <span className={`w-px h-4 ${dark ? "bg-zinc-700" : "bg-border"}`} />
                 <span>画布：<span className={dark ? "text-zinc-300" : "text-foreground"}>{canvas}</span></span>
+                <span className={`hidden xl:inline ml-2 ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>⌘E 导出 · ⌘R 刷新 · ←→ 翻页 · ⌘1~7 切主题</span>
               </div>
               <div className="flex items-center gap-2">
                 {previewSrc && (
@@ -372,19 +395,8 @@ export default function App() {
               onEditTargetChange={setLibDialogOpen} />
           )}
 
-          {/* ===== 其他视图占位 ===== */}
-          {["themes", "presets", "history"].includes(view) && (
-          <main className="flex-1 flex items-center justify-center">
-            <div className="text-center space-y-3">
-              <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-2xl shadow-sm ${dark ? "bg-zinc-800" : "bg-muted"}`}>
-                {navItems.find(n => n.id === view)?.icon}
-              </div>
-              <p className="text-sm text-muted-foreground">{navItems.find(n => n.id === view)?.label} — 二期功能</p>
-            </div>
-          </main>
-          )}
-
-          {/* ===== RIGHT: params ===== */}
+          {/* ===== RIGHT: params（仅工作台视图显示） ===== */}
+          {view === "workspace" && (
           <aside className={`w-60 shrink-0 border-l overflow-y-auto transition-colors duration-500 ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
             <div className={`px-5 py-4 border-b ${dark ? "border-zinc-700/50" : "border-border"}`}>
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">参数</h2>
@@ -469,6 +481,7 @@ export default function App() {
               )}
             </div>
           </aside>
+          )}
         </div>
       </div>
 

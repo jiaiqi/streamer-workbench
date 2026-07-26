@@ -84,10 +84,34 @@ def api_themes():
              "notes": t.notes} for t in themes.values()]
 
 
+@app.get("/api/thumb/{theme_name}")
+def api_thumb(theme_name: str):
+    """主题列表缩略图：第 1 页背景缩到宽 360，JPEG + 内存缓存（主题不变不用失效）。"""
+    if theme_name in _THUMB_CACHE:
+        return Response(content=_THUMB_CACHE[theme_name], media_type="image/jpeg")
+    t = themes.get(theme_name)
+    if t is None:
+        return Response("主题不存在", status_code=404)
+    bg = t.backgrounds.get("1")
+    path = os.path.join(THEMES_DIR, theme_name, bg) if bg else ""
+    if not bg or not os.path.isfile(path):
+        return Response("背景不存在", status_code=404)
+    from PIL import Image
+    im = Image.open(path).convert("RGB")
+    im.thumbnail((360, 1080))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=80)
+    data = buf.getvalue()
+    _THUMB_CACHE[theme_name] = data
+    return Response(content=data, media_type="image/jpeg")
+
+
+_THUMB_CACHE: dict = {}
+
+
 @app.get("/api/layouts")
 def api_layouts():
     return list_layouts()
-
 
 @app.get("/api/layouts/{layout_id}/params")
 def api_layout_params(layout_id: str):

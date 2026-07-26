@@ -167,6 +167,23 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
           {songsData ? `${songsData.total} 首 · 已会 ${songsData.active} · 未会 ${songsData.draft}` : "…"}
         </span>
 
+        {/* 弹唱信息完整度：已填选调歌曲占比，把补数据变成有终点的进度 */}
+        {songsData && (() => {
+          const withKey = songsData.songs.filter(s => s.key).length;
+          const pct = Math.round((withKey / (songsData.total || 1)) * 100);
+          return (
+            <span className="flex items-center gap-2" title={`${withKey}/${songsData.total} 首已填选调，点行展开 → 编辑可补`}>
+              <span className={`w-16 h-1 rounded-full overflow-hidden ${dark ? "bg-zinc-700" : "bg-muted"}`}>
+                <span className={`block h-full rounded-full transition-all duration-500 ${dark ? "bg-emerald-400" : "bg-emerald-600"}`}
+                  style={{ width: `${pct}%` }} />
+              </span>
+              <span className={`text-[11px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                弹唱完整度 {pct}%
+              </span>
+            </span>
+          );
+        })()}
+
         {/* 搜索：歌名 / 歌手 / 拼音首字母；按 / 聚焦 */}
         <div className={`ml-auto flex items-center gap-2 rounded-lg px-3 h-8 w-64 transition-colors ${
           dark ? "bg-zinc-800 border border-zinc-700/60 focus-within:border-emerald-500/60"
@@ -291,12 +308,20 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                     {isOpen && (
                       <div className={`border-b ${hairline} ${dark ? "bg-zinc-800/40" : "bg-muted/30"}`}>
                         <div className="flex gap-8 px-6 py-5 pl-[4.5rem]">
-                          {/* 大字选调：主播一瞥可读 */}
+                          {/* 大字选调：主播一瞥可读；空态转为补全 CTA */}
                           <div className="shrink-0 w-36">
                             <p className={label}>选调</p>
-                            <p className={`font-mono text-4xl font-semibold mt-1 leading-none ${dark ? "text-zinc-100" : "text-foreground"}`}>
-                              {s.key || "—"}
-                            </p>
+                            {s.key ? (
+                              <p className={`font-mono text-4xl font-semibold mt-1 leading-none ${dark ? "text-zinc-100" : "text-foreground"}`}>
+                                {s.key}
+                              </p>
+                            ) : (
+                              <button onClick={() => setEditTarget(s)}
+                                className={`mt-1 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors cursor-pointer ${
+                                  dark ? "bg-zinc-700/70 text-zinc-300 hover:bg-zinc-700" : "bg-background border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50"}`}>
+                                未填 · 点我补选调 →
+                              </button>
+                            )}
                             <p className={`mt-2 text-[12px] tabular-nums ${dark ? "text-zinc-400" : "text-muted-foreground"}`}>
                               {s.capo !== null ? `变调夹 ${s.capo} 品` : "变调夹未填"}
                             </p>
