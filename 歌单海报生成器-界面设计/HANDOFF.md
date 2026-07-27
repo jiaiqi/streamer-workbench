@@ -1,8 +1,8 @@
 # 歌单海报生成器 · Agent 交接上下文
 
 > 写给下一位接手协作的 Agent。本文汇总项目现状、已完成工作、关键决策与坑位，读完后可直接继续开发，无需重新探索。
-> 最近更新：2026-07-26 · 合并工作空间交接文档（`song-list/agent-handoff-2026-07-25.md`，原文件保留在工作空间根目录）并核实到最新提交 `b980702`
-> 项目整体完工度：引擎层 100%（金标准 16/16 diff=0，独立预言机基准），UI 层约 75%（工作台/歌曲库/学歌/设置/速查可用），打包 spike 已过、正式壳 0%
+> 最近更新：2026-07-27 晚 · 数据时间维度 Phase 5 进行中（S1 事件日志 / S2 点歌双写 / S3 曲谱管理 已上线，S4 学歌打卡 / S5 统计视图 待开发），核实到最新提交 `42fc392`
+> 项目整体完工度：引擎层 100%（金标准 16/16 diff=0，独立预言机基准），UI 层约 80%（工作台/歌曲库/学歌/设置/速查/曲谱可用），打包 spike 已过、正式壳 0%
 
 ---
 
@@ -10,7 +10,7 @@
 
 这是一个「歌单海报生成器」——把 178 首中文歌曲以精美排版打印成竖版海报 PNG（抖音 9:20 全屏），7 套主题、2 页/主题、逐像素排版精度已用金标准锁死。架构是 **Python PIL 引擎 + FastAPI HTTP 后端 + React 前端 + Electron 壳（spike 已过，正式壳未做）**。
 
-**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官（导出对话框/设置页/歌曲库增删改/视图路由/防抖/启动恢复/ParamSpec 参数面板/状态栏/快捷键）；Phase 3 打包 spike 完成（PyInstaller onefile 渲染逐像素一致，Electron spawn + alwaysOnTop 实测生效）；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手字段回填 141/178、选调/capo 回填 27/178、UI/UX 快修包。MVP 完成度约 90%+。剩余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳（electron-builder 工程化）、引擎魔数清理、性能基准脚本。
+**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官；Phase 3 打包 spike 完成；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手/选调回填、UI/UX 快修包、歌曲库响应式卡片网格。**Phase 5（数据时间维度）进行中**：✅ S1 事件日志地基（events.jsonl + 迁移 v4 learned_at/tab_files + 五端点埋点 + /api/events feed）→ ✅ S2 点歌双写上报（/api/events/report + QuickView localStorage 双写保序补报）→ ✅ S3 曲谱管理（data/tabs/ 附件上传/删除/预览 + 曲库/学歌/直播 T 键三触点）→ ⬜ S4 学歌打卡 → ⬜ S5 统计视图。**下一步开发就按仓库 B 的 `design/roadmap-data-stats.md` 继续做 S4/S5**。其余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳、引擎魔数清理。另有 UI/UX 重设计提案 v2 交互稿（仓库 B `design/redesign-v2.html`，暗色「演出后台」方向，未落地）。
 
 ---
 
@@ -25,10 +25,10 @@
 | 层 | 技术 | 说明 |
 |---|---|---|
 | 渲染引擎 | Python 3.13.14 + PIL/Pillow 12.2.0 | 纯函数库，金标准 16/16 逐像素 diff=0 |
-| 后端 | FastAPI（uvicorn 8000 端口） | 18 个 API 端点 |
+| 后端 | FastAPI（uvicorn 8000 端口） | 23 个 API 端点 |
 | 前端 | React 19 + Vite 6 + Tailwind 4 | 多文件结构（views/components），晨光纸感风格 |
 | 桌面打包 | Electron（spike 已过） | Python 作 child_process；PyInstaller onefile 后端 |
-| 测试 | 金标准逐像素对比 + 29 项单元测试 | make test-unit / make test-golden |
+| 测试 | 金标准逐像素对比 + 42 项单元测试 | make test-unit / make test-golden |
 
 ### 已废弃的路由
 
@@ -46,9 +46,14 @@
 
 **协作约定：每次改动都要 git 提交，原子提交、中文提交信息。**
 
-### 仓库 B git log（最新 12 条，截至合并时）
+### 仓库 B git log（最新 12 条，截至 2026-07-27 晚）
 
 ```
+42fc392 feat(tabs): 曲谱管理全链路——附件上传/预览/直播 T 键看谱（S3）
+403165c feat(quick): 点歌双写上报——今晚歌单接入事件流（S2）
+05ac6e7 feat(data): 事件日志地基 + songs.json 迁移 v4（S1）
+cbbc5e1 docs(design): UI/UX 重设计提案 v1/v2 交互稿 + 数据时间维度路线图
+52c538d feat(library): 歌曲库改响应式多列卡片网格
 b980702 feat(quick): 今晚歌单——直播点歌队列
 c942d20 feat(data): 批量回填弹唱选调/capo 27/178（主流弹唱谱版本）
 519c919 feat(quick): 速查小窗 Web 版（/quick 路由）
@@ -56,30 +61,28 @@ c942d20 feat(data): 批量回填弹唱选调/capo 27/178（主流弹唱谱版本
 b52f198 feat(data): 批量回填歌手字段 141/178（高置信度条目）
 f734fab fix(learning): 学歌卡片版收尾——接通编辑对话框 + 共享组件落地
 8d8ce92 feat(library): 歌曲库视图重设计 + pinyin 搜索索引回填（迁移 v3）
-e766135 feat: Ctrl+滚轮缩放 + 参数折叠面板 + 学歌管理视图
-c010911 chore: songs.json 落盘 v1→v2 迁移结果 + electron lockfile
-8129824 spike(packaging): PyInstaller + Electron 可行性验证
-346f2d0 refactor(ui): App.tsx 拆分为 types/icons/views/components
-84d3be2 feat(ui): 快捷键落地（设计文档 §6.8 Web 子集）
 ```
 
 ### 仓库 B 结构速览
 
 ```
-core/        纯函数引擎（spec/style/engine/watermark/mist/context + data/ + layouts/ + themes/）约 700 行
-server/      FastAPI 后端（main.py 405 行，18 端点）
+core/        纯函数引擎（spec/style/engine/watermark/mist/context + data/ + layouts/ + themes/）
+             data/ 新增 events.py（事件日志）+ tabs.py（曲谱存储）
+server/      FastAPI 后端（main.py 约 560 行，23 端点）
 ui/src/      React 前端（App.tsx 壳层 + views/{Library,Learning,Settings}View + QuickView
-             + components/{ExportDialog,SongEditDialog} + types/icons）约 1400+ 行
+             + components/{ExportDialog,SongEditDialog,TabsPanel} + types/icons）约 1900+ 行
+design/      redesign-v1/v2.html（UI/UX 重设计交互稿）+ roadmap-data-stats.md（Phase 5 规格）
 electron/    Electron 壳 spike（main.js：spawn 后端 + 就绪轮询 + alwaysOnTop）
 packaging/   PyInstaller spike（backend_entry.py + poster-backend.spec）
 web/         原生验证页（开发期）
 prototype/   高保真原型 + 14 张成品海报 + 背景副本
 themes/      7 套主题包（theme.json + 背景图 + 设计理念.md）
 fonts/       MaokenAssortedSans.ttf（猫啃糖圆体，免费可商用）
-data/        songs.json（v3，178 首，唯一数据源）+ backups/
+data/        songs.json（v4，178 首，唯一数据源）+ backups/ + events.jsonl（gitignore）
+             + tabs/（曲谱附件，gitignore）
 output/      默认导出目录
-tests/       test_golden.py（16 张，assert 拦截）+ test_unit.py（29 项）+ golden/（参照图入库）
-tools/       migrate_data / migrate_themes / regenerate_golden / render_samples
+tests/       test_golden.py（16 张，assert 拦截）+ test_unit.py（42 项）+ golden/（参照图入库）
+tools/       migrate_data / migrate_themes / regenerate_golden / render_samples / fill_artists / fill_playing_fields
 Makefile     test / test-unit / test-golden / run-backend / run-ui / export-sample / regenerate-golden
 ```
 
@@ -104,7 +107,7 @@ Makefile     test / test-unit / test-golden / run-backend / run-ui / export-samp
 
 ### ✅ 已完成
 
-渲染引擎全部模块、7 套主题 JSON 驱动、Song 模型 15 字段（capo Optional[int]）、FastAPI 18 端点、React 工作台+歌曲库+学歌+设置四视图、速查小窗 Web 版（/quick）、「今晚歌单」点歌队列、视图路由、Ctrl+滚轮缩放、参数折叠面板、300ms 防抖、localStorage 启动恢复、设计令牌单源、29 项单元测试、178 首歌曲补齐、歌手回填 141/178、选调/capo 回填 27/178、pinyin 搜索索引全量回填（迁移 v3）、背景预处理缓存（热渲染 33.8ms）、自动备份（20 份滚动）、版本迁移框架（v1→v2→v3 已实战）、CI 三件套、导出 API（单页+批量后台任务+进度+打开目录）、导出对话框、settings.json 持久化、一键「学会了⇄标回未会」、歌曲编辑全链路（增删改+弹唱字段+pinyin 自动）、参数面板 ParamSpec 动态渲染、状态栏、快捷键（⌘E/⌘R/←→/⌘1~7/⌘,/Esc）、App.tsx 组件拆分、PyInstaller+Electron 打包 spike、UI/UX 快修包（加载反馈/信息架构/引导）
+渲染引擎全部模块、7 套主题 JSON 驱动、Song 模型 17 字段（capo Optional[int]、learned_at、tab_files）、FastAPI 23 端点、React 工作台+歌曲库+学歌+设置四视图、速查小窗 Web 版（/quick）、「今晚歌单」点歌队列、视图路由、Ctrl+滚轮缩放、参数折叠面板、300ms 防抖、localStorage 启动恢复、设计令牌单源、42 项单元测试、178 首歌曲补齐、歌手回填 141/178、选调/capo 回填 27/178、pinyin 搜索索引全量回填（迁移 v3）、背景预处理缓存（热渲染 33.8ms）、自动备份（20 份滚动）、版本迁移框架（v1→v2→v3→v4 已实战）、CI 三件套、导出 API（单页+批量后台任务+进度+打开目录）、导出对话框、settings.json 持久化、一键「学会了⇄标回未会」、歌曲编辑全链路（增删改+弹唱字段+pinyin 自动）、参数面板 ParamSpec 动态渲染、状态栏、快捷键（⌘E/⌘R/←→/⌘1~7/⌘,/Esc）、App.tsx 组件拆分、PyInstaller+Electron 打包 spike、UI/UX 快修包（加载反馈/信息架构/引导）、歌曲库响应式卡片网格（auto-fill+四向键盘导航）、**事件日志地基**（events.jsonl 追加式事件流 + 五端点埋点 + /api/events feed + /api/events/report 客户端上报）、**点歌双写**（QuickView localStorage+后端双写、失败保序补报、撤销已唱不上报）、**曲谱管理**（data/tabs/ 附件存储、上传/列表/删除 API、TabsPanel 共享组件、曲库/学歌/直播 T 键三触点、白底卡片渲染兼容透明底谱图）
 
 ### ⚠️ 部分完成
 
@@ -169,15 +172,17 @@ draft 未会 ── mark_active() ──→ active 已会（上海报）
 
 ## 4. 数据真相（以 data/songs.json 为准）
 
-- **歌曲**：`data/songs.json` v3，178 首（175 active + 3 draft）；artists 回填 141/178，key/capo 回填 27/178，pinyin 全量。学歌 5 首身份已决策为 demo 数据保留现状（坑 17）
+- **歌曲**：`data/songs.json` v4，178 首（175 active + 3 draft）；artists 回填 141/178，key/capo 回填 27/178，pinyin 全量；v4 新增 learned_at（标记学会时回填）与 tab_files（曲谱附件路径）。学歌 5 首身份已决策为 demo 数据保留现状（坑 17）
+- **事件流**：`data/events.jsonl`（gitignore）——追加式 JSONL，9 类事件（song_added/deleted/edited/learned/unlearned、practice_logged、queue_added、song_sung、poster_exported）；songs.json 是当前状态唯一真相，事件流是历史；统计只算不存
+- **曲谱附件**：`data/tabs/{歌名}/{文件}`（gitignore），tab_files 存相对 data/ 路径，/tabs 静态路由访问；示例：知足/下雨天 各挂 1 张 G 大调开放和弦图
 - **主题**：7 套 = 卡通音符、奶油玻璃、奶油花园、梦幻海洋、海洋柔光、轻复古唱片、青提气泡。theme.json 含双页背景 + 五角色配色。背景图文件名不统一（bg1.png 或 background-1.png，以各自 theme.json 为准）
 - **排版**：仅 `grid-wrap`，固定 2 页，支持避让
 - **画布预设**：`抖音全屏 9:20`（1080×2400，禁文区 (940,1080,1080,2400)）、`标准 9:16`（1080×1920）
 - **排版参数**（ParamSpec）：margin 58 / font_song 36 / row_h 44 / sec_gap 26，另有 font_label 40 / label_h 74
 
-### 后端 API（server/main.py，18 端点）
+### 后端 API（server/main.py，23 端点）
 
-`/api/health`、`/api/themes`、`/api/layouts`（含 pages/supports_avoidance）、`/api/layouts/{id}/params`、`/api/songs`、`/api/songs/list`、`/api/songs/status|add|update|delete`（POST）、`/api/render`（支持参数覆盖）、`/api/export`（POST）、`/api/export/batch`（POST 后台任务）、`/api/export/jobs/{id}`、`/api/export/open`（POST）、`/api/settings`（GET+POST）、`/bg/<主题>/<文件>`
+`/api/health`、`/api/themes`、`/api/layouts`（含 pages/supports_avoidance）、`/api/layouts/{id}/params`、`/api/songs`、`/api/songs/list`、`/api/songs/status|add|update|delete`（POST）、`/api/songs/{title}/tabs`（POST 上传/GET 列表/DELETE 删除）、`/api/events`（feed）、`/api/events/report`（POST 客户端上报，仅 queue_added/song_sung/practice_logged）、`/api/render`（支持参数覆盖）、`/api/export`（POST）、`/api/export/batch`（POST 后台任务）、`/api/export/jobs/{id}`、`/api/export/open`（POST）、`/api/settings`（GET+POST）、`/bg/<主题>/<文件>`、`/tabs/<歌名>/<文件>`
 
 ---
 
@@ -241,7 +246,7 @@ pip install -r requirements.txt
 cd ui && npm install && cd ..
 
 # 测试（Makefile 封装：make test / make test-unit / make test-golden）
-PYTHONPATH=. .venv/bin/python tests/test_unit.py              # 单元测试 29 项
+PYTHONPATH=. .venv/bin/python tests/test_unit.py              # 单元测试 42 项
 PYTHONPATH=. .venv/bin/python tests/test_golden.py            # 金标准 16 张，diff=0
 cd ui && npx tsc --noEmit                                     # TS 编译检查
 
@@ -276,7 +281,18 @@ npx agent-browser eval 'localStorage.clear()'         # 测暗色前先清 gp-th
 
 ## 9. 下一步行动清单
 
-### Phase 4：正式 Electron 壳（5-8 天，最高优先）
+### Phase 5：数据时间维度（进行中，最高优先）
+
+> **规格文档（必读）**：仓库 B `design/roadmap-data-stats.md`——事件 schema、迁移 v4、API 契约、统计口径、验收标准全部在内。
+> 关联设计稿：仓库 B `design/redesign-v2.html`（UI/UX 重设计提案 v2，暗色「演出后台」，含统计视图的方向指引，未落地）。
+
+- [x] **S1 事件日志地基** ✅ `05ac6e7`：core/data/events.py + 迁移 v4（learned_at/tab_files）+ 五端点埋点 + /api/events feed
+- [x] **S2 点歌双写上报** ✅ `403165c`：/api/events/report + QuickView 双写（localStorage 为现场真相，失败 localStorage 保序补报）
+- [x] **S3 曲谱管理** ✅ `42fc392`：core/data/tabs.py + 上传/列表/删除 API + TabsPanel 共享组件 + 曲库/学歌/直播 T 键三触点
+- [ ] **S4 学歌打卡**：POST /api/practice/log（写 practice_logged 事件，report 端点已预留该类型）+ 学歌卡片「打卡」按钮（note+可选时长+自评）+ 卡片展开练习时间线 + 累计打卡天数
+- [ ] **S5 统计视图**：/api/stats/overview|learning|live（从 events 现算，只算不存）+ 导航第五视图「统计」（总览卡/趋势图/排行榜，口径见规格文档 §8）
+
+### Phase 4：正式 Electron 壳（5-8 天）
 
 - [ ] electron-builder 工程化：可写目录外置（用户目录）+ Vite 静态产物进壳 + 菜单栏原生快捷键
 - [ ] 速查小窗 Electron 化（置顶 + 全局热键，Web 版 /quick 已就绪）
@@ -285,8 +301,9 @@ npx agent-browser eval 'localStorage.clear()'         # 测暗色前先清 gp-th
 
 - 使用场景：**手机直播，电脑运行本软件**
 - Song 弹唱字段已开始回填（artists 141/178、key/capo 27/178），是速查 2.0 / 专场筛选 / 调式推荐的地基
-- 候选方向（未排期）：互动点歌版排版提前、「很久没唱」提醒（last_sung_at）、专场筛选出图、导出后扫码传手机（局域网二维码）
-- 已落地：速查小窗 Web 版、「今晚歌单」点歌队列
+- 候选方向（未排期）：互动点歌版排版提前、「很久没唱」提醒（可用 song_sung 事件实现 last_sung_at）、专场筛选出图、导出后扫码传手机（局域网二维码）
+- 已落地：速查小窗 Web 版、「今晚歌单」点歌队列、曲谱管理、事件流数据沉淀
+- UI/UX 重设计提案 v2（暗色「演出后台」）已出交互稿待评审落地，落地顺序：token+组件 → 歌曲库/学歌 → 工作台 → 直播模式
 
 ### 工程债（按需）
 
