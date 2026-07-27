@@ -16,6 +16,7 @@ core/        纯函数引擎（spec/style/engine/watermark/mist/context + themes
 server/      FastAPI 渲染后端
 web/         原生验证页（开发期）
 ui/          React + Vite 前端工作台
+design/      UI/UX 重设计提案交互稿（redesign-v1/v2.html）+ 数据时间维度路线图（roadmap-data-stats.md）
 prototype/   高保真 UI 原型 + 7 主题背景 + 14 张成品海报
 themes/      主题包（从 歌单-排版一 复制背景图 + theme.json）
 fonts/       字体 MaokenAssortedSans.ttf
