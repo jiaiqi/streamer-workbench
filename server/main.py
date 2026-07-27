@@ -27,6 +27,7 @@ from core.spec import CANVAS_PRESETS
 from core.themes.loader import load_themes
 from core.layouts import get_layout, list_layouts, layout_params
 from core.data.songs import SongLibrary, build_default_library
+from core.data.events import EVENT_TYPES, append_event, iter_events, tail as events_tail
 from core.engine import render_page
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,6 +45,7 @@ app.mount("/bg", StaticFiles(directory=THEMES_DIR), name="theme_bg")
 
 SONGS_JSON = os.path.join(ROOT, "data", "songs.json")
 SETTINGS_PATH = os.path.join(ROOT, "data", "settings.json")
+EVENTS_JSON = os.path.join(ROOT, "data", "events.jsonl")
 themes = load_themes(THEMES_DIR)
 library = build_default_library(json_path=SONGS_JSON)
 
@@ -189,7 +191,14 @@ def api_songs_status(payload: dict):
     mark = library.mark_active if status == "active" else library.mark_draft
     if not mark(title):
         return Response(f"未找到歌曲：{title}", status_code=404)
+    if status == "active":
+        # 迁移 v4：「标记学会」顺手回填 learned_at（标回未会不清除，历史以事件流为准）
+        song = library.get(title)
+        if song is not None:
+            song.learned_at = datetime.now().strftime("%Y-%m-%d")
     _save_library()
+    append_event(EVENTS_JSON, "song_learned" if status == "active" else "song_unlearned",
+                 title=title)
     return {"ok": True, "title": title, "status": status,
             "active": library.count_active(), "draft": library.count_draft()}
 
@@ -206,6 +215,8 @@ def api_songs_update(payload: dict):
         fields = _clean_song_fields(payload.get("fields") or {})
         if not fields:
             return Response("fields 为空", status_code=400)
+        old_song = library.get(title)
+        old_view = _song_dict(old_song) if old_song else None
         ok = library.update(title, fields)
     except ValueError as e:
         return Response(str(e), status_code=400)
@@ -213,6 +224,11 @@ def api_songs_update(payload: dict):
         return Response(f"未找到歌曲：{title}", status_code=404)
     _save_library()
     song = library.get(fields.get("title", title))
+    # 字段级 diff 记入事件流（更新记录 feed 用）
+    changes = [{"field": k, "old": old_view.get(k), "new": song and _song_dict(song).get(k)}
+               for k in fields if old_view and old_view.get(k) != _song_dict(song).get(k)]
+    append_event(EVENTS_JSON, "song_edited", title=song.title,
+                 meta={"changes": changes})
     return {"ok": True, "song": _song_dict(song)}
 
 
@@ -239,6 +255,7 @@ def api_songs_add(payload: dict):
     if not library.add(song):
         return Response(f"歌曲已存在：{title}", status_code=409)
     _save_library()
+    append_event(EVENTS_JSON, "song_added", title=title, meta={"status": song.status})
     return {"ok": True, "song": _song_dict(song),
             "active": library.count_active(), "draft": library.count_draft()}
 
@@ -250,6 +267,7 @@ def api_songs_delete(payload: dict):
     if not library.remove(title):
         return Response(f"未找到歌曲：{title}", status_code=404)
     _save_library()
+    append_event(EVENTS_JSON, "song_deleted", title=title)
     return {"ok": True, "title": title,
             "active": library.count_active(), "draft": library.count_draft()}
 
@@ -291,6 +309,9 @@ def api_export(theme: str, page: int = 1,
     out_path = os.path.join(out_dir, filename)
     img.save(out_path, "PNG")
 
+    append_event(EVENTS_JSON, "poster_exported", meta={
+        "theme": theme, "layout": layout, "canvas": canvas, "page": page,
+        "duration_ms": round(duration * 1000, 1)})
     return {"ok": True, "path": out_path, "filename": filename,
             "duration_ms": round(duration * 1000, 1)}
 
@@ -314,10 +335,15 @@ def _run_batch_job(job_id: str, layout_plugin, spec, out_dir: str):
                 job["files"].append({"theme": tname, "page": page, "path": out_path})
                 job["done"] += 1
         job["status"] = "done"
+        job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+        # 批量导出按任务记一条事件（14 张图一条，不刷屏）
+        append_event(EVENTS_JSON, "poster_exported", meta={
+            "batch": True, "files": len(job["files"]), "total_ms": job["total_ms"]})
     except Exception as e:  # 任务失败也要让前端能查到
         job["status"] = "error"
         job["error"] = str(e)
-    job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    if job["total_ms"] is None:
+        job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
 
 
 @app.post("/api/export/batch")
@@ -376,6 +402,20 @@ def api_export_open():
     except Exception as e:
         return Response(f"打开目录失败：{e}", status_code=500)
     return {"ok": True, "output_dir": out_dir}
+
+
+# ---- 事件流（更新记录 feed；统计聚合在 S5 阶段加 /api/stats/*）----
+@app.get("/api/events")
+def api_events(type: str = None, since: str = None, limit: int = 50):
+    """事件 feed。默认返回最近 limit 条（倒序）；带 since 时返回该日期以来的正序全量（上限 500）。"""
+    if type and type not in EVENT_TYPES:
+        return Response(f"未知事件类型：{type}", status_code=400)
+    limit = max(1, min(500, int(limit)))
+    if since:
+        events = list(iter_events(EVENTS_JSON, type=type, since=since))[:500]
+    else:
+        events = events_tail(EVENTS_JSON, n=limit, type=type)
+    return {"total": len(events), "events": events}
 
 
 # ---- 设置 ----

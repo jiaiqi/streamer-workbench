@@ -31,6 +31,8 @@ class Song:
     pinyin: str = ""
     added_at: str = ""
     notes: str = ""
+    learned_at: str = ""         # 学会日期（song_learned 事件时回填；旧 active 歌曲留空）
+    tab_files: List[str] = field(default_factory=list)  # 曲谱文件相对路径（data/tabs/ 下）
     # 分类归属（1=一字..6=六字, 7=长歌名/英文），对应旧脚本 8 个列表的 section。
     # 分组规则（2026-07-25 定案）：
     #   1. 优先用 section 标记（从旧脚本手工分组迁移，保证与金标准一致；
@@ -131,7 +133,7 @@ class SongLibrary:
         return sum(1 for s in self.songs if s.status == "draft")
 
     # ---- JSON 持久化 ----
-    CURRENT_VERSION: ClassVar[int] = 3
+    CURRENT_VERSION: ClassVar[int] = 4
 
     @staticmethod
     def _migrate_v1_to_v2(data: dict) -> dict:
@@ -150,6 +152,18 @@ class SongLibrary:
         for item in data.get("songs", []):
             if not item.get("pinyin") and item.get("title"):
                 item["pinyin"] = pinyin_initials(item["title"])
+        return data
+
+    @staticmethod
+    def _migrate_v3_to_v4(data: dict) -> dict:
+        """v3→v4：补 learned_at（学会日期）与 tab_files（曲谱附件）字段默认值。
+
+        旧 active 歌曲 learned_at 留空（统计学习周期时不参与均值，见
+        design/roadmap-data-stats.md 第 8 节口径）。
+        """
+        for item in data.get("songs", []):
+            item.setdefault("learned_at", "")
+            item.setdefault("tab_files", [])
         return data
 
     MIGRATIONS: ClassVar[dict] = {}  # {from_version: migrate_fn(data) -> data}，在类定义后注册
@@ -216,7 +230,8 @@ class SongLibrary:
 
 
 # 注册版本迁移链（类外注册，避免类体内方法引用顺序问题）
-SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2, 2: SongLibrary._migrate_v2_to_v3})
+SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2, 2: SongLibrary._migrate_v2_to_v3,
+                               3: SongLibrary._migrate_v3_to_v4})
 
 
 def pinyin_initials(title: str) -> str:

@@ -7,6 +7,8 @@ __pycache__/
 # 输出与原数据备份（可重新生成）
 output/
 data/backups/
+data/events.jsonl
+data/tabs/
 *.tmp
 
 # 编辑器

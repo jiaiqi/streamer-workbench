@@ -12,6 +12,7 @@ from core.themes.loader import load_themes, load_theme
 from core.themes.model import Theme
 from core.style import Style
 from core.data.songs import Song, SongLibrary, build_default_library
+from core.data.events import append_event, iter_events, tail as events_tail
 from core.layouts import get_layout, list_layouts
 
 THEMES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "themes")
@@ -154,6 +155,100 @@ def test_migration_chain_v1_to_v3():
     out = SongLibrary._migrate(data)
     assert out["songs"][0]["capo"] is None
     assert out["songs"][0]["pinyin"] == "zz"
+
+def test_migration_v3_to_v4_fields():
+    data = {"version": 3, "songs": [
+        {"title": "a"},                                  # 无新字段 → 补默认
+        {"title": "b", "learned_at": "2026-07-01",       # 已有值 → 保留
+         "tab_files": ["tabs/b/主歌.png"]}]}
+    out = SongLibrary._migrate(data)
+    assert out["songs"][0]["learned_at"] == ""
+    assert out["songs"][0]["tab_files"] == []
+    assert out["songs"][1]["learned_at"] == "2026-07-01"
+    assert out["songs"][1]["tab_files"] == ["tabs/b/主歌.png"]
+
+def test_migration_chain_v1_to_v4():
+    data = {"version": 1, "songs": [{"title": "知足", "capo": 0, "pinyin": ""}]}
+    out = SongLibrary._migrate(data)
+    s = out["songs"][0]
+    assert s["capo"] is None and s["pinyin"] == "zz"
+    assert s["learned_at"] == "" and s["tab_files"] == []
+
+def test_save_load_roundtrip_v4():
+    import json, tempfile
+    with tempfile.TemporaryDirectory() as d:
+        lib = SongLibrary([Song(title="知足", learned_at="2026-07-27",
+                                tab_files=["tabs/知足/chorus.png"])])
+        p = os.path.join(d, "songs.json")
+        lib.save(p)
+        with open(p, encoding="utf-8") as f:
+            assert json.load(f)["version"] == 4
+        loaded = SongLibrary.load_from_json(p)
+        s = loaded.get("知足")
+        assert s.learned_at == "2026-07-27"
+        assert s.tab_files == ["tabs/知足/chorus.png"]
+
+
+# ═══════ 事件日志（core/data/events.py）═══════
+# 注：tmp 目录用 tempfile 手写而不用 pytest tmp_path fixture，
+# 因为项目兜底 runner（python tests/test_unit.py 直跑）不支持 fixture。
+
+def _tmpevents():
+    """返回 (tmpdir 句柄, events.jsonl 路径)。调用方需持有句柄防回收。"""
+    import tempfile
+    d = tempfile.TemporaryDirectory()
+    return d, os.path.join(d.name, "events.jsonl")
+
+def test_event_append_and_read():
+    d, p = _tmpevents()
+    e1 = append_event(p, "song_added", title="知足", meta={"status": "draft"})
+    assert e1["type"] == "song_added" and e1["title"] == "知足" and "ts" in e1
+    append_event(p, "song_learned", title="知足")
+    events = list(iter_events(p))
+    assert len(events) == 2
+    assert events[1]["type"] == "song_learned"
+    d.cleanup()
+
+def test_event_type_whitelist():
+    d, p = _tmpevents()
+    try:
+        append_event(p, "song_lerned")  # 拼错的类型名必须被拦截
+        assert False, "应抛 ValueError"
+    except ValueError:
+        pass
+    d.cleanup()
+
+def test_event_iter_filters():
+    d, p = _tmpevents()
+    append_event(p, "queue_added", title="知足")
+    append_event(p, "song_sung", title="知足")
+    append_event(p, "song_sung", title="成都")
+    assert len(list(iter_events(p, type="song_sung"))) == 2
+    # since/until 前缀比较（ts 固定 ISO 格式）
+    today = events_tail(p, n=1)[0]["ts"][:10]
+    assert len(list(iter_events(p, since=today))) == 3
+    assert len(list(iter_events(p, until="2020-01-01"))) == 0
+    d.cleanup()
+
+def test_event_missing_file_and_bad_line():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "nope", "events.jsonl")
+        assert list(iter_events(p)) == []            # 文件不存在 → 空迭代
+        os.makedirs(os.path.dirname(p))
+        with open(p, "w", encoding="utf-8") as f:
+            f.write('{"ts":"2026-07-27T10:00:00","type":"song_added","title":"a"}\n')
+            f.write("{坏行（崩溃截断）\n")
+        events = list(iter_events(p))
+        assert len(events) == 1 and events[0]["title"] == "a"
+
+def test_event_tail_order():
+    d, p = _tmpevents()
+    for t in ["歌一", "歌二", "歌三"]:
+        append_event(p, "song_added", title=t)
+    recent = events_tail(p, n=2)
+    assert [e["title"] for e in recent] == ["歌三", "歌二"]  # 最新在前 + limit 生效
+    d.cleanup()
 
 def test_pinyin_initials():
     from core.data.songs import pinyin_initials
