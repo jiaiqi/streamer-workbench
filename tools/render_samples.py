@@ -11,7 +11,7 @@ from core.data.songs import build_default_library, Song
 from core.engine import render_page
 
 FONT = os.path.join(ROOT, "fonts", "MaokenAssortedSans.ttf")
-GOLD = os.path.join(ROOT, "design-docs", "歌单-排版一")
+GOLD = os.path.join(ROOT, ".archive", "design-docs", "歌单-排版一")
 OUT = os.path.join(ROOT, "output")
 os.makedirs(OUT, exist_ok=True)
 

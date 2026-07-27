@@ -27,21 +27,21 @@
 | 文档 | 位置 | 终版未覆盖的独特价值 |
 |---|---|---|
 | **项目 README** | `../../README.md` | 开发环境运行命令、目录结构、金标准测试、API 列表、git 工作流 |
-| **HANDOFF 交接文档** | `../../design-docs/歌单海报生成器-界面设计/HANDOFF.md` | 24 个坑位（终版覆盖 13 个）、开发验证命令、agent-browser 工作流、git log |
-| **设计结论** | `../../design-docs/歌单海报生成器-设计结论.md` | 5 次技术选型推翻历史、palette.json/skin.json 具体 schema 草案、移动端判断 |
-| **项目结构设计** | `../../design-docs/歌单海报生成器-项目结构设计.md` | Song 模型 17 字段完整定义、theme.json 预留字段、迁移映射表、14 条验收标准 |
-| **方案 Review** | `../../design-docs/方案-review-2026-07-25.md` | 具体代码示例、CI yaml 样板、P2 级待办清单 |
+| **HANDOFF 交接文档** | `../../.archive/design-docs/歌单海报生成器-界面设计/HANDOFF.md` | 24 个坑位（终版覆盖 13 个）、开发验证命令、agent-browser 工作流、git log |
+| **设计结论** | `../../.archive/design-docs/歌单海报生成器-设计结论.md` | 5 次技术选型推翻历史、palette.json/skin.json 具体 schema 草案、移动端判断 |
+| **项目结构设计** | `../../.archive/design-docs/歌单海报生成器-项目结构设计.md` | Song 模型 17 字段完整定义、theme.json 预留字段、迁移映射表、14 条验收标准 |
+| **方案 Review** | `../../.archive/design-docs/方案-review-2026-07-25.md` | 具体代码示例、CI yaml 样板、P2 级待办清单 |
 | **数据时间维度路线图** | `../roadmap-data-stats.md` | S4/S5 事件 Schema（9 种类型）、迁移 v4 规格、统计口径（5 项精确公式）唯一真相 |
-| **grid-wrap 像素级规格** | `../../design-docs/歌单-排版一/歌单更新提示词.md` | grid-wrap 布局的分类规则、字号/间距/标签/柔光/避让区的像素级参数 |
-| **设计系统 CSS** | `../../design-docs/歌单海报生成器-界面设计/shared.css` | 13 个 gp-* 组件类实现、暗色令牌覆盖、动效类、prefers-reduced-motion 降级 |
-| **设计系统 JS** | `../../design-docs/歌单海报生成器-界面设计/shared.js` | gp.toast/applyTheme/toggleTheme、折叠面板/分段选择器自动初始化 |
-| **设计令牌** | `../../design-docs/歌单海报生成器-界面设计/design-tokens.json` | 亮暗色板（24 语义色）、圆角、阴影、字体栈、缓动曲线——单源真值 |
-| **7 页设计稿** | `../../design-docs/歌单海报生成器-界面设计/pages/*.html` | 高保真实现级设计稿（workspace/library/learning/themes/presets/history/settings） |
+| **grid-wrap 像素级规格** | `../../.archive/design-docs/歌单-排版一/歌单更新提示词.md` | grid-wrap 布局的分类规则、字号/间距/标签/柔光/避让区的像素级参数 |
+| **设计系统 CSS** | `../../.archive/design-docs/歌单海报生成器-界面设计/shared.css` | 13 个 gp-* 组件类实现、暗色令牌覆盖、动效类、prefers-reduced-motion 降级 |
+| **设计系统 JS** | `../../.archive/design-docs/歌单海报生成器-界面设计/shared.js` | gp.toast/applyTheme/toggleTheme、折叠面板/分段选择器自动初始化 |
+| **设计令牌** | `../../.archive/design-docs/歌单海报生成器-界面设计/design-tokens.json` | 亮暗色板（24 语义色）、圆角、阴影、字体栈、缓动曲线——单源真值 |
+| **7 页设计稿** | `../../.archive/design-docs/歌单海报生成器-界面设计/pages/*.html` | 高保真实现级设计稿（workspace/library/learning/themes/presets/history/settings） |
 | **UI 重设计交互稿 v1** | `../redesign-v1.html` | 亮色 v1 方向完整 HTML/CSS/JS 实现 |
 | **UI 重设计交互稿 v2** | `../redesign-v2.html` | 暗色"演出后台"方向，含统计视图指引 |
-| **AI 生图提示词** | `../../design-docs/codex生图提示词/` | 制作新主题背景图的提示词模板 |
-| **歌单分类参考** | `../../design-docs/歌单-排版一/歌单-字数分类-不带歌手.md` | 178 首歌按字数分类的人类可读列表 |
-| **金标准预言机** | `../../design-docs/歌单-排版一/` | 独立预言机旧脚本 + 歌单数据，金标准重建来源 |
+| **AI 生图提示词** | `../../.archive/design-docs/codex生图提示词/` | 制作新主题背景图的提示词模板 |
+| **歌单分类参考** | `../../.archive/design-docs/歌单-排版一/歌单-字数分类-不带歌手.md` | 178 首歌按字数分类的人类可读列表 |
+| **金标准预言机** | `../../.archive/design-docs/歌单-排版一/` | 独立预言机旧脚本 + 歌单数据，金标准重建来源 |
 
 ## 6 类终版缺口说明
 
@@ -52,7 +52,7 @@
 3. **Song 模型完整字段**：17 字段定义，见 `项目结构设计.md` 或 `core/data/songs.py`
 4. **theme.json 预留字段**：palette_ref/source_image/featured_artists，见 `项目结构设计.md`
 5. **S4/S5 事件 Schema 与统计口径**：见 `../roadmap-data-stats.md`
-6. **grid-wrap 像素级排版规格**：见 `../../design-docs/歌单-排版一/歌单更新提示词.md`
+6. **grid-wrap 像素级排版规格**：见 `../../.archive/design-docs/歌单-排版一/歌单更新提示词.md`
 
 ## 当前代码事实快照
 

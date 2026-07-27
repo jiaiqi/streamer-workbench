@@ -9,7 +9,7 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "design-docs", "歌单-排版一")
+SRC = os.path.join(ROOT, ".archive", "design-docs", "歌单-排版一")
 DST_ROOT = os.path.join(ROOT, "themes")
 
 

@@ -40,7 +40,7 @@
 | 属性 | 值 |
 |---|---|
 | GitHub 远程 | `jiaiqi/playlist-poster-generator`（私有） |
-| 内容 | 产品本体（core/server/ui/...）+ `design-docs/`（原 playlist-poster-design 仓库全部内容与完整历史，本文档现位于 `design-docs/歌单海报生成器-界面设计/HANDOFF.md`） |
+| 内容 | 产品本体（core/server/ui/...）+ `.archive/design-docs/`（原 playlist-poster-design 仓库全部内容与完整历史，本文档现位于 `.archive/design-docs/歌单海报生成器-界面设计/HANDOFF.md`） |
 | 原设计仓库 | `jiaiqi/playlist-poster-design` 已归档只读，URL 保留可访问历史 |
 
 > 合并前为 A/B 双仓库（刻意不嵌套）。因金标准预言机跨仓依赖、状态文档多仓漂移、agent 接力双克隆摩擦，2026-07-27 以子树合并（read-tree --prefix=design-docs/）合为单仓，双方提交历史完整保留为祖先链。金标准预言机路径：`design-docs/歌单-排版一/`（原 `../歌单-排版一` 软链约定废止）。

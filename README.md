@@ -2,9 +2,9 @@
 
 把 `歌单-排版一\build_playlist.py` 的 PIL 海报能力升级为桌面 App。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-27 晚）**：引擎 100%（金标准 16/16 diff=0）；UI 工作台/歌曲库/学歌/设置/速查（/quick）可用；数据时间维度 Phase 5 进行中——事件日志、点歌双写、曲谱管理已上线（S1-S3），学歌打卡（S4）与统计视图（S5）待开发。**产品、UI/UX、架构与多布局的下一阶段唯一主规格见 `design/产品优化方案终版-0727/产品优化方案终版.md`，实施顺序见 `design/产品优化方案终版-0727/路线图.md`；三套前序方案保留为历史记录。当前数据开发请读 `design/roadmap-data-stats.md`，接手上下文请读 `design-docs/歌单海报生成器-界面设计/HANDOFF.md`。**
+> **进度快照（2026-07-27 晚）**：引擎 100%（金标准 16/16 diff=0）；UI 工作台/歌曲库/学歌/设置/速查（/quick）可用；数据时间维度 Phase 5 进行中——事件日志、点歌双写、曲谱管理已上线（S1-S3），学歌打卡（S4）与统计视图（S5）待开发。**产品、UI/UX、架构与多布局的下一阶段唯一主规格见 `design/产品优化方案终版-0727/产品优化方案终版.md`，实施顺序见 `design/产品优化方案终版-0727/路线图.md`；三套前序方案保留为历史记录。当前数据开发请读 `design/roadmap-data-stats.md`，接手上下文请读 `.archive/design-docs/歌单海报生成器-界面设计/HANDOFF.md`。**
 >
-> **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `design-docs/`（完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `design-docs/歌单-排版一/`，随仓库检出，无需软链。
+> **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `.archive/design-docs/`（原 `design-docs/`，点号开头表示已归档；完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `.archive/design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
 ## 技术栈（2026-07-25 定稿，决策过程见设计仓库《歌单海报生成器-设计结论.md》第一节）
 - **渲染引擎**：Python + PIL（纯函数，金标准：与现有成品逐像素一致，当前 16/16 diff=0）
@@ -21,7 +21,7 @@ server/      FastAPI 渲染后端
 web/         原生验证页（开发期）
 ui/          React + Vite 前端工作台
 design/      UI/UX 重设计提案交互稿（redesign-v1/v2.html）+ 数据时间维度路线图 + 产品优化方案终版-0727（下一阶段唯一主规格）
-design-docs/ 原设计仓库全部内容（设计结论/项目结构设计/HANDOFF/7 页设计稿/歌单-排版一 预言机）
+.archive/design-docs/ 原设计仓库全部内容（已归档）（设计结论/项目结构设计/HANDOFF/7 页设计稿/歌单-排版一 预言机）
 prototype/   ~~高保真 UI 原型~~（已由 themes/ 和 tests/golden/ 替代，已清理）
 themes/      主题包（从 歌单-排版一 复制背景图 + theme.json）
 fonts/       字体 MaokenAssortedSans.ttf
@@ -45,7 +45,7 @@ cd ui && npm install && npm run dev                  # http://localhost:5173，/
 ## 金标准测试
 ```bash
 # 金标准参照图（tests/golden/）随 git 提交；独立预言机（旧脚本）已并入本仓库
-# design-docs/歌单-排版一/，重建方式见 tools/regenerate_golden.py
+# .archive/design-docs/歌单-排版一/，重建方式见 tools/regenerate_golden.py
 PYTHONPATH=. python tests/test_golden.py             # 目标：16/16 逐像素 diff=0
 ```
 

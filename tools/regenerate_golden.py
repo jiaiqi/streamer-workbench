@@ -16,7 +16,7 @@
 金标准门将永远绿灯、形同虚设（2026-07-25 教训）。
 
 前提：
-  - 预言机随仓库检出（design-docs/歌单-排版一，2026-07-27 合并入库）
+  - 预言机随仓库检出（.archive/design-docs/歌单-排版一，2026-07-27 合并入库）
   - 运行环境需有 numpy（旧脚本依赖）；Pillow 必须 == 12.2.0
     （与引擎环境一致，否则字体光栅化差异会导致永久 diff）
 
@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ORACLE_DIR = os.path.join(ROOT, "design-docs", "歌单-排版一")
+ORACLE_DIR = os.path.join(ROOT, ".archive", "design-docs", "歌单-排版一")
 ORACLE_SCRIPT = os.path.join(ORACLE_DIR, "build_playlist.py")
 GOLDEN_DST = os.path.join(ROOT, "tests", "golden")
 
@@ -53,7 +53,7 @@ def main():
     if not os.path.isfile(ORACLE_SCRIPT):
         print(f"❌ 找不到独立预言机：{ORACLE_SCRIPT}")
         print("   请将设计仓库与本仓库并列放置，或在上级目录建软链：")
-        print("   （已并入本仓库 design-docs/，无需软链）")
+        print("   （已并入本仓库 .archive/design-docs/，无需软链）")
         sys.exit(1)
 
     os.makedirs(GOLDEN_DST, exist_ok=True)

@@ -5,7 +5,7 @@
 
 双源校验逻辑：
     源 1：core/data/songs.py 内置列表（178 首，含 section 标记）
-    源 2：design-docs/歌单-排版一/歌单数据.md（Markdown 导出副本，供人类校对）
+    源 2：.archive/design-docs/歌单-排版一/歌单数据.md（Markdown 导出副本，供人类校对）
 
 交叉校验：
     - 两边歌名数量必须一致
@@ -32,7 +32,7 @@ builtin_titles = {s.title for s in lib.songs}
 print(f"源 1（songs.py 内置）：{len(builtin_titles)} 首")
 
 # ── 源 2：歌单数据.md ──
-md_path = os.path.join(ROOT, "design-docs", "歌单-排版一", "歌单数据.md")
+md_path = os.path.join(ROOT, ".archive", "design-docs", "歌单-排版一", "歌单数据.md")
 md_titles = set()
 if os.path.isfile(md_path):
     with open(md_path) as f:
