@@ -1,4 +1,4 @@
-# 歌单海报生成器 · Agent 交接上下文
+# 主播工作台 / streamer-workbench · Agent 交接上下文
 
 > 写给下一位接手协作的 Agent。本文汇总项目现状、已完成工作、关键决策与坑位，读完后可直接继续开发，无需重新探索。
 > 最近更新：2026-07-27 晚 · 数据时间维度 Phase 5 进行中（S1 事件日志 / S2 点歌双写 / S3 曲谱管理 已上线，S4 学歌打卡 / S5 统计视图 待开发），核实到最新提交 `42fc392`
@@ -39,7 +39,7 @@
 
 | 属性 | 值 |
 |---|---|
-| GitHub 远程 | `jiaiqi/playlist-poster-generator`（私有） |
+| GitHub 远程 | `jiaiqi/streamer-workbench`（私有） |
 | 内容 | 产品本体（core/server/ui/...）+ `.archive/design-docs/`（原 playlist-poster-design 仓库全部内容与完整历史，本文档现位于 `.archive/design-docs/歌单海报生成器-界面设计/HANDOFF.md`） |
 | 原设计仓库 | `jiaiqi/playlist-poster-design` 已归档只读，URL 保留可访问历史 |
 
@@ -242,7 +242,7 @@ draft 未会 ── mark_active() ──→ active 已会（上海报）
 ## 7. 开发与验证命令
 
 ```bash
-# 环境（macOS，项目根 = playlist-poster-generator）
+# 环境（macOS，项目根 = streamer-workbench）
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cd ui && npm install && cd ..
@@ -260,7 +260,7 @@ cd ui && npm run dev                                                       # 前
 ### 设计稿 agent-browser 验证工作流（design-docs/）
 
 ```bash
-cd "playlist-poster-generator/design-docs/歌单海报生成器-界面设计"
+cd "streamer-workbench/design-docs/歌单海报生成器-界面设计"
 python -m http.server 8931 --bind 127.0.0.1          # 后台起静态服务
 npx agent-browser set viewport 1600 900
 npx agent-browser open "http://127.0.0.1:8931/pages/workspace.html"

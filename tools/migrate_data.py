@@ -1,6 +1,6 @@
 """数据迁移脚本：从旧脚本 (build_playlist.py) 和歌单 md 文件交叉校验，生成 songs.json。
 
-用法（在 歌单海报生成器 目录下）：
+用法（在 streamer-workbench 根目录下）：
     PYTHONPATH=. python tools/migrate_data.py
 
 双源校验逻辑：

@@ -35,7 +35,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 THEMES_DIR = os.path.join(ROOT, "themes")
 FONT = os.path.join(ROOT, "fonts", "MaokenAssortedSans.ttf")
 
-app = FastAPI(title="歌单海报生成器 · 渲染后端")
+app = FastAPI(title="主播工作台 · 渲染后端")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # 开发期放开；生产期收窄到 Electron 域名

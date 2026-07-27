@@ -20,7 +20,7 @@
   - 运行环境需有 numpy（旧脚本依赖）；Pillow 必须 == 12.2.0
     （与引擎环境一致，否则字体光栅化差异会导致永久 diff）
 
-用法（在 歌单海报生成器 目录下）：
+用法（在 streamer-workbench 根目录下）：
     PYTHONPATH=. python tools/regenerate_golden.py --confirm-rebaseline
 """
 import os

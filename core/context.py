@@ -85,7 +85,7 @@ class DrawContext:
         return positions
 
     def draw_grid_wrap(self, songs, cols, y0, x0_area):
-        """绕排版网格（同列减栏）。详见 歌单海报生成器-项目结构设计.md 6.2。
+        """绕排版网格（同列减栏）。详见 streamer-workbench 项目结构设计 §6.2。
         返回实际占用行数。"""
         st = self.style
         d = self.draw
