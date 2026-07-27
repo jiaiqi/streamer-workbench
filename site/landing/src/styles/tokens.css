@@ -1,0 +1,126 @@
+/* ═══════════════════════════════════════════════════════════════════
+   落地页 · 设计令牌
+   单源真值：../../design/design-tokens.json v2（2026-07-27）
+   双品牌：暗色舞台 Cinematic Stage × 画廊白 Art Gallery
+   每品牌含亮/暗双模 = 4 种状态
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 暗色舞台 · 暗态（产品门面默认态）── */
+:root,
+[data-brand="stage"][data-mode="dark"] {
+  --bg: #0A0F0D;
+  --surface-1: #141C18;
+  --surface-2: #1C2622;
+  --text-1: #F5F0EB;
+  --text-2: #B8B0A8;
+  --text-3: #7A746E;
+  --primary: #3BAF94;
+  --primary-strong: #4DC4A7;
+  --primary-soft: rgba(59, 175, 148, 0.12);
+  --primary-softer: rgba(59, 175, 148, 0.06);
+  --accent: #E8956E;
+  --accent-soft: rgba(232, 149, 110, 0.14);
+  --spotlight: #E8A33D;
+  --spotlight-soft: rgba(232, 163, 61, 0.18);
+  --border: #26302A;
+  --border-strong: #36423C;
+  --success: #5CC684;
+  --warning: #F0B04E;
+  --danger: #E5645A;
+  --grain-opacity: 0.04;
+  --glow-hero: 0 0 120px rgba(232, 163, 61, 0.14), 0 0 240px rgba(232, 163, 61, 0.05);
+  --glow-spot: 0 0 80px rgba(232, 163, 61, 0.22), 0 0 160px rgba(232, 163, 61, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.45), 0 24px 64px rgba(0, 0, 0, 0.6);
+  --nav-blur: rgba(10, 15, 13, 0.78);
+}
+
+/* ── 暗色舞台 · 亮态 ── */
+[data-brand="stage"][data-mode="light"] {
+  --bg: #F0EDE8;
+  --surface-1: #FFFFFF;
+  --surface-2: #E6E1DA;
+  --text-1: #0F1412;
+  --text-2: #5A625E;
+  --text-3: #8A928D;
+  --primary: #2F8F7A;
+  --primary-strong: #257A67;
+  --primary-soft: rgba(47, 143, 122, 0.10);
+  --primary-softer: rgba(47, 143, 122, 0.05);
+  --accent: #D9764F;
+  --accent-soft: rgba(217, 118, 79, 0.10);
+  --spotlight: #E8A33D;
+  --spotlight-soft: rgba(232, 163, 61, 0.12);
+  --border: #DDD7CE;
+  --border-strong: #CCC5B9;
+  --grain-opacity: 0.022;
+  --glow-hero: 0 0 80px rgba(232, 163, 61, 0.10), 0 0 160px rgba(232, 163, 61, 0.04);
+  --glow-spot: 0 0 60px rgba(47, 143, 122, 0.15), 0 0 120px rgba(47, 143, 122, 0.06);
+  --shadow-card: 0 1px 2px rgba(15, 20, 18, 0.04), 0 8px 24px rgba(15, 20, 18, 0.07);
+  --shadow-lg: 0 4px 12px rgba(15, 20, 18, 0.05), 0 24px 56px rgba(15, 20, 18, 0.10);
+  --nav-blur: rgba(240, 237, 232, 0.78);
+}
+
+/* ── 画廊白 · 亮态（日间默认）── */
+[data-brand="gallery"][data-mode="light"] {
+  --bg: #FAF8F5;
+  --surface-1: #FFFFFF;
+  --surface-2: #F0EDE8;
+  --text-1: #1A2622;
+  --text-2: #4D5752;
+  --text-3: #7D8A83;
+  --primary: #2F8F7A;
+  --primary-strong: #257A67;
+  --primary-soft: rgba(47, 143, 122, 0.10);
+  --primary-softer: rgba(47, 143, 122, 0.05);
+  --accent: #D9764F;
+  --accent-soft: rgba(217, 118, 79, 0.10);
+  --spotlight: transparent;
+  --spotlight-soft: transparent;
+  --border: #E4E1D8;
+  --border-strong: #D4D0C4;
+  --grain-opacity: 0.018;
+  --glow-hero: none;
+  --glow-spot: 0 4px 14px rgba(47, 143, 122, 0.22);
+  --shadow-card: 0 1px 3px rgba(26, 38, 34, 0.04), 0 6px 20px rgba(26, 38, 34, 0.06);
+  --shadow-lg: 0 4px 12px rgba(26, 38, 34, 0.05), 0 24px 56px rgba(26, 38, 34, 0.10);
+  --nav-blur: rgba(250, 248, 245, 0.78);
+}
+
+/* ── 画廊白 · 暗态 ── */
+[data-brand="gallery"][data-mode="dark"] {
+  --bg: #15201C;
+  --surface-1: #1E2C26;
+  --surface-2: #26352F;
+  --text-1: #E8EFEB;
+  --text-2: #A8B3AD;
+  --text-3: #6F7A74;
+  --primary: #4DBB9E;
+  --primary-strong: #63C9AE;
+  --primary-soft: rgba(77, 187, 158, 0.14);
+  --primary-softer: rgba(77, 187, 158, 0.08);
+  --accent: #E8926F;
+  --accent-soft: rgba(232, 146, 111, 0.12);
+  --spotlight: transparent;
+  --spotlight-soft: transparent;
+  --border: #2F423B;
+  --border-strong: #3D514A;
+  --grain-opacity: 0.04;
+  --glow-hero: none;
+  --glow-spot: 0 4px 14px rgba(77, 187, 158, 0.22);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.22), 0 6px 20px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.26), 0 24px 56px rgba(0, 0, 0, 0.42);
+  --nav-blur: rgba(21, 32, 28, 0.78);
+}
+
+/* ── 共享：缓动/字体/圆角 ── */
+:root {
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --nav-h: 64px;
+}

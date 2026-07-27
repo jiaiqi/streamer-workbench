@@ -15,7 +15,8 @@ class CanvasSpec:
     avoid_zones: Tuple = ()           # 禁文区列表，每个元素为 (x0, y0, x1, y1)；空=不避让
     baseline_height: int = 1920       # 内容基准高度（content_offset 计算用，代替硬编码 1920）
     margin: int = 58
-    font_song: int = 36               # avoid_zones 非空时引擎自动降为 34
+    font_song: int = 36               # 非避让模式下歌名字号
+    font_song_avoid: int = 34         # 避让模式下歌名字号（代替 engine.py 硬编码 34）
     font_label: int = 40
     row_h: int = 44
     label_h: int = 74
@@ -29,6 +30,13 @@ class CanvasSpec:
     @property
     def is_fullscreen(self) -> bool:
         return self.height > self.baseline_height
+
+
+# 全高避让区模板（server/main.py 中三处重复硬编码改为引用此模板拼接画布高度）
+# 使用方式：replace(spec, avoid_zones=((AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1, base.height),))
+AVOID_ZONES_X0 = 940
+AVOID_ZONES_Y0 = 1080
+AVOID_ZONES_X1 = 1080
 
 
 # 画布预设（UI 下拉选项，不是引擎逻辑）

@@ -23,7 +23,7 @@ from fastapi import FastAPI, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from core.spec import CANVAS_PRESETS
+from core.spec import CANVAS_PRESETS, AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1
 from core.themes.loader import load_themes
 from core.layouts import get_layout, list_layouts, layout_params
 from core.data.songs import SongLibrary, build_default_library
@@ -338,7 +338,7 @@ def api_export(theme: str, page: int = 1,
     base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["标准 9:16"])
     spec = base
     if avoid:
-        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
+        spec = replace(spec, avoid_zones=((AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1, base.height),))
     overrides = {k: v for k, v in
                  {"margin": margin, "font_song": font_song,
                   "row_h": row_h, "sec_gap": sec_gap}.items()
@@ -410,7 +410,7 @@ def api_export_batch(layout: str = "grid-wrap",
     base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["抖音全屏 9:20"])
     spec = base
     if avoid:
-        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
+        spec = replace(spec, avoid_zones=((AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1, base.height),))
 
     out_dir = settings["output_dir"]
     os.makedirs(out_dir, exist_ok=True)
@@ -518,7 +518,7 @@ def api_render(theme: str, page: int = 1,
     base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["标准 9:16"])
     spec = base
     if avoid:
-        spec = replace(spec, avoid_zones=((940, 1080, 1080, base.height),))
+        spec = replace(spec, avoid_zones=((AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1, base.height),))
     # 排版参数覆盖（对应插件 ParamSpec 的 key，未传则用预设默认值）
     overrides = {k: v for k, v in
                  {"margin": margin, "font_song": font_song,

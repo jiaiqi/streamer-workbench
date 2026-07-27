@@ -1,0 +1,72 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═════════════ 全局基调 ═════════════ */
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text-1);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.5s var(--ease-cinematic), color 0.5s var(--ease-cinematic);
+  overflow-x: hidden;
+}
+
+/* 纸张颗粒覆盖层 */
+body::after {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 环境光晕层 */
+.glow-orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+.glow-orbs::before {
+  content: ""; position: absolute;
+  top: -30%; right: -15%;
+  width: 70vw; height: 70vw;
+  background: radial-gradient(circle, var(--spotlight-soft), transparent 70%);
+  border-radius: 50%; filter: blur(80px);
+}
+.glow-orbs::after {
+  content: ""; position: absolute;
+  bottom: -20%; left: -10%;
+  width: 50vw; height: 50vw;
+  background: radial-gradient(circle, var(--primary-softer), transparent 70%);
+  border-radius: 50%; filter: blur(60px);
+}
+
+/* ═════════════ 通用组件类 ═════════════ */
+
+/* 滚动揭示 */
+.reveal {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.7s var(--ease-cinematic), transform 0.7s var(--ease-cinematic);
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal-d1 { transition-delay: 0.08s; }
+.reveal-d2 { transition-delay: 0.16s; }
+.reveal-d3 { transition-delay: 0.24s; }
+.reveal-d4 { transition-delay: 0.32s; }
+
+/* 滚动指示器 */
+@keyframes float {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%      { transform: translateX(-50%) translateY(8px); }
+}
+
+/* 降级 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+}

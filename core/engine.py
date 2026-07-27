@@ -76,7 +76,7 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
 
     img = _get_base(theme, page, spec)
 
-    font = ImageFont.truetype(font_path, spec.font_song if not AVOID else 34)
+    font = ImageFont.truetype(font_path, spec.font_song if not AVOID else spec.font_song_avoid)
     font_label = ImageFont.truetype(font_path, spec.font_label)
 
     d = ImageDraw.Draw(img)
