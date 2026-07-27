@@ -10,7 +10,7 @@
 
 这是一个「歌单海报生成器」——把 178 首中文歌曲以精美排版打印成竖版海报 PNG（抖音 9:20 全屏），7 套主题、2 页/主题、逐像素排版精度已用金标准锁死。架构是 **Python PIL 引擎 + FastAPI HTTP 后端 + React 前端 + Electron 壳（spike 已过，正式壳未做）**。
 
-**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官；Phase 3 打包 spike 完成；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手/选调回填、UI/UX 快修包、歌曲库响应式卡片网格。**Phase 5（数据时间维度）进行中**：✅ S1 事件日志地基（events.jsonl + 迁移 v4 learned_at/tab_files + 五端点埋点 + /api/events feed）→ ✅ S2 点歌双写上报（/api/events/report + QuickView localStorage 双写保序补报）→ ✅ S3 曲谱管理（data/tabs/ 附件上传/删除/预览 + 曲库/学歌/直播 T 键三触点）→ ⬜ S4 学歌打卡 → ⬜ S5 统计视图。**下一步产品升级总规格以 `产品优化方案3-0727/产品优化方案v3-详细版.md` 为准，实施依赖与阶段门见同目录 `路线图.md`；当前数据线继续按 `design/roadmap-data-stats.md` 完成 S4/S5。**其余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳、引擎魔数清理。另有 UI/UX 重设计提案 v2 交互稿（`design/redesign-v2.html`，暗色「演出后台」方向，未落地）。
+**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官；Phase 3 打包 spike 完成；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手/选调回填、UI/UX 快修包、歌曲库响应式卡片网格。**Phase 5（数据时间维度）进行中**：✅ S1 事件日志地基（events.jsonl + 迁移 v4 learned_at/tab_files + 五端点埋点 + /api/events feed）→ ✅ S2 点歌双写上报（/api/events/report + QuickView localStorage 双写保序补报）→ ✅ S3 曲谱管理（data/tabs/ 附件上传/删除/预览 + 曲库/学歌/直播 T 键三触点）→ ⬜ S4 学歌打卡 → ⬜ S5 统计视图。**下一步产品升级总规格以 `design/产品优化方案3-0727/产品优化方案v3-详细版.md` 为准，实施依赖与阶段门见 `design/产品优化方案3-0727/路线图.md`；当前数据线继续按 `design/roadmap-data-stats.md` 完成 S4/S5。**其余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳、引擎魔数清理。另有 UI/UX 重设计提案 v2 交互稿（`design/redesign-v2.html`，暗色「演出后台」方向，未落地）。
 
 ---
 
@@ -285,8 +285,8 @@ npx agent-browser eval 'localStorage.clear()'         # 测暗色前先清 gp-th
 
 ### 产品优化方案 v3：产品、UI/UX、架构与多布局升级总线
 
-> **总规格（必读）**：`产品优化方案3-0727/产品优化方案v3-详细版.md`——产品定位、目标信息架构、UI/UX、Layout/Palette/Skin/Preset、7+ 布局、主体环绕、自定义编辑器、Electron 与质量门。
-> **实施路线图**：`产品优化方案3-0727/路线图.md`——P0–P9 依赖、阶段退出条件、并行支线和发布验收。
+> **总规格（必读）**：`design/产品优化方案3-0727/产品优化方案v3-详细版.md`——产品定位、目标信息架构、UI/UX、Layout/Palette/Skin/Preset、7+ 布局、主体环绕、自定义编辑器、Electron 与质量门。
+> **实施路线图**：`design/产品优化方案3-0727/路线图.md`——P0–P9 依赖、阶段退出条件、并行支线和发布验收。
 > **执行关系**：当前数据线先继续完成下方 S4/S5；新产品主线从路线图 P0 基线冻结开始，不跳过 Schema、兼容和金标准守护。
 
 - [ ] **P0 基线与 Schema**：冻结旧输出、去魔数、确定 Canvas/Shape/Layout/Palette/Skin/Preset/WorkspaceDocument Schema
