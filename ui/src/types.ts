@@ -27,6 +27,8 @@ export interface Song {
   pinyin: string;
   added_at: string;
   notes: string;
+  learned_at: string;
+  tab_files: string[];
 }
 export interface SongsData {
   total: number;

@@ -19,7 +19,7 @@ import uuid
 from dataclasses import replace, asdict
 from datetime import datetime
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -28,6 +28,7 @@ from core.themes.loader import load_themes
 from core.layouts import get_layout, list_layouts, layout_params
 from core.data.songs import SongLibrary, build_default_library
 from core.data.events import EVENT_TYPES, append_event, iter_events, tail as events_tail
+from core.data import tabs as tabs_store
 from core.engine import render_page
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -46,6 +47,9 @@ app.mount("/bg", StaticFiles(directory=THEMES_DIR), name="theme_bg")
 SONGS_JSON = os.path.join(ROOT, "data", "songs.json")
 SETTINGS_PATH = os.path.join(ROOT, "data", "settings.json")
 EVENTS_JSON = os.path.join(ROOT, "data", "events.jsonl")
+TABS_DIR = os.path.join(ROOT, "data", "tabs")
+os.makedirs(TABS_DIR, exist_ok=True)
+app.mount("/tabs", StaticFiles(directory=TABS_DIR), name="song_tabs")
 themes = load_themes(THEMES_DIR)
 library = build_default_library(json_path=SONGS_JSON)
 
@@ -135,7 +139,8 @@ def _song_dict(s) -> dict:
             "artists": s.artists, "lyricist": s.lyricist, "composer": s.composer,
             "key": s.key, "capo": s.capo, "difficulty": s.difficulty,
             "tabs": s.tabs, "tags": s.tags, "pinyin": s.pinyin,
-            "added_at": s.added_at, "notes": s.notes}
+            "added_at": s.added_at, "notes": s.notes,
+            "learned_at": s.learned_at, "tab_files": s.tab_files}
 
 
 @app.get("/api/songs/list")
@@ -270,6 +275,50 @@ def api_songs_delete(payload: dict):
     append_event(EVENTS_JSON, "song_deleted", title=title)
     return {"ok": True, "title": title,
             "active": library.count_active(), "draft": library.count_draft()}
+
+
+# ---- 曲谱附件（data/tabs/，文件挂 /tabs 静态路由）----
+@app.post("/api/songs/{title}/tabs")
+async def api_tab_upload(title: str, file: UploadFile = File(...)):
+    """上传曲谱文件（图片/PDF，≤10MB）。落盘 data/tabs/{歌名}/ 并登记 tab_files。"""
+    song = library.get(title)
+    if song is None:
+        return Response(f"未找到歌曲：{title}", status_code=404)
+    data = await file.read()
+    try:
+        rel = tabs_store.save_tab(TABS_DIR, title, file.filename or "tab.png", data)
+    except ValueError as e:
+        return Response(str(e), status_code=400)
+    song.tab_files.append(rel)
+    _save_library()
+    append_event(EVENTS_JSON, "song_edited", title=title,
+                 meta={"changes": [{"field": "tab_files", "old": None, "new": rel}]})
+    return {"ok": True, "file": rel, "tab_files": song.tab_files}
+
+
+@app.get("/api/songs/{title}/tabs")
+def api_tab_list(title: str):
+    """列出歌曲的曲谱文件（相对路径，前端拼 / 前缀访问）。"""
+    song = library.get(title)
+    if song is None:
+        return Response(f"未找到歌曲：{title}", status_code=404)
+    return {"title": title, "tab_files": song.tab_files}
+
+
+@app.delete("/api/songs/{title}/tabs")
+def api_tab_delete(title: str, file: str):
+    """删除曲谱文件：?file=tabs/知足/主歌.png。同时清登记与磁盘文件。"""
+    song = library.get(title)
+    if song is None:
+        return Response(f"未找到歌曲：{title}", status_code=404)
+    if file not in song.tab_files:
+        return Response(f"曲谱不存在：{file}", status_code=404)
+    song.tab_files.remove(file)
+    tabs_store.delete_tab(TABS_DIR, title, file)
+    _save_library()
+    append_event(EVENTS_JSON, "song_edited", title=title,
+                 meta={"changes": [{"field": "tab_files", "old": file, "new": None}]})
+    return {"ok": True, "tab_files": song.tab_files}
 
 
 # ---- 导出 ----

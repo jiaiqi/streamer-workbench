@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
+import TabsPanel from "../components/TabsPanel";
 
 /* ---- 学歌管理视图（按设计稿 learning.html 重写）----
    设计语言：晨光纸感 · 卡片网格 · 星光难度 · 衬线标题
@@ -51,6 +52,7 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
   const [importing, setImporting] = useState(false);
   const [justLearned, setJustLearned] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Song | null>(null);
+  const [tabsOpen, setTabsOpen] = useState<string | null>(null);
 
   const refresh = async () => {
     const d: SongsData = await (await fetch("/api/songs/list?status=draft")).json();
@@ -222,8 +224,26 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
                   {s.notes || <span className="opacity-50">还没有练习备注，点「编辑」记一笔…</span>}
                 </div>
 
+                {/* 曲谱面板（可展开，S3） */}
+                {tabsOpen === s.title && (
+                  <div className={`mb-4 rounded-xl p-3 ${dark ? "bg-zinc-900/50" : "bg-muted/50"}`}>
+                    <TabsPanel title={s.title} tabFiles={s.tab_files ?? []} dark={dark}
+                      onChanged={files => setSongs(prev => prev.map(x =>
+                        x.title === s.title ? { ...x, tab_files: files } : x))} />
+                  </div>
+                )}
+
                 {/* 操作行 */}
                 <div className="flex items-center gap-2">
+                  <button onClick={() => setTabsOpen(tabsOpen === s.title ? null : s.title)}
+                    title="曲谱附件（图片/PDF）"
+                    className={`rounded-xl px-3 py-2 text-xs font-medium transition-all active:scale-95 cursor-pointer ${
+                      tabsOpen === s.title
+                        ? (dark ? "bg-emerald-900/50 text-emerald-300" : "bg-primary/15 text-primary")
+                        : (dark ? "bg-zinc-700/70 text-zinc-300 hover:bg-zinc-700" : "bg-muted text-muted-foreground hover:text-foreground")
+                    }`}>
+                    谱 {(s.tab_files ?? []).length}
+                  </button>
                   <button onClick={() => setEditTarget(s)}
                     className={`flex-1 rounded-xl py-2 text-xs font-medium transition-all active:scale-95 cursor-pointer ${
                       dark ? "bg-zinc-700/70 text-zinc-300 hover:bg-zinc-700" : "bg-muted text-foreground hover:bg-border"

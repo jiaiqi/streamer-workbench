@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
+import TabsPanel from "../components/TabsPanel";
 
 /* ================= 符号化元数据 ================= */
 // 难度 → 菱形阶（◆◆◇），一瞥可读
@@ -50,6 +51,14 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
     const d: SongsData = await (await fetch("/api/songs/list")).json();
     setSongsData(d);
     onStatsChange({ active: d.active, draft: d.draft });
+  };
+
+  /* 曲谱上传/删除后局部更新该曲的 tab_files（不必全量 refresh） */
+  const updateTabFiles = (title: string, files: string[]) => {
+    setSongsData(d => d && ({
+      ...d,
+      songs: d.songs.map(s => s.title === title ? { ...s, tab_files: files } : s),
+    }));
   };
 
   useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
@@ -378,6 +387,11 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                                     <p className={`mt-0.5 leading-relaxed ${dark ? "text-zinc-300" : ""}`}>{s.notes}</p>
                                   </div>
                                 )}
+                                <div className="md:col-span-2">
+                                  <p className={label}>曲谱附件</p>
+                                  <TabsPanel title={s.title} tabFiles={s.tab_files ?? []} dark={dark}
+                                    onChanged={files => updateTabFiles(s.title, files)} />
+                                </div>
                               </div>
 
                               {/* 操作列 */}

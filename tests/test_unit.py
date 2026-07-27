@@ -257,6 +257,50 @@ def test_event_custom_ts():
     assert e["ts"] == "2026-07-20T22:30:05"
     d.cleanup()
 
+
+# ═══════ 曲谱存储（core/data/tabs.py）═══════
+from core.data import tabs as tabs_store
+
+def test_tabs_sanitize_name():
+    assert tabs_store.sanitize_name("../etc/passwd") == "_etc_passwd"  # "/" → "_"，去开头点
+    assert tabs_store.sanitize_name("..hidden") == "hidden"
+    assert tabs_store.sanitize_name("a/b\\c") == "a_b_c"
+    assert tabs_store.sanitize_name("") == "未命名"
+
+def test_tabs_save_and_dedup():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        r1 = tabs_store.save_tab(d, "知足", "主歌.png", b"\x89PNG fake")
+        r2 = tabs_store.save_tab(d, "知足", "主歌.png", b"\x89PNG fake2")
+        assert r1 == "tabs/知足/主歌.png"
+        assert r2 == "tabs/知足/主歌-1.png"          # 重名自动加后缀
+        assert open(os.path.join(d, "知足", "主歌-1.png"), "rb").read() == b"\x89PNG fake2"
+
+def test_tabs_save_rejects_bad_ext_and_oversize():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        for bad in ("谱.exe", "谱", "谱.svg"):
+            try:
+                tabs_store.save_tab(d, "知足", bad, b"x")
+                assert False, f"{bad} 应被拦截"
+            except ValueError:
+                pass
+        try:
+            tabs_store.save_tab(d, "知足", "big.png", b"x" * (tabs_store.MAX_FILE_BYTES + 1))
+            assert False, "超尺寸应被拦截"
+        except ValueError:
+            pass
+
+def test_tabs_delete_traversal_guard():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        tabs_root = os.path.join(d, "data", "tabs")  # 与生产一致：relpath 相对 data/
+        rel = tabs_store.save_tab(tabs_root, "知足", "主歌.png", b"\x89PNG fake")
+        assert tabs_store.delete_tab(tabs_root, "知足", "tabs/知足/../songs.json") is False
+        assert tabs_store.delete_tab(tabs_root, "知足", "tabs/别的歌/x.png") is False
+        assert tabs_store.delete_tab(tabs_root, "知足", rel) is True
+        assert tabs_store.delete_tab(tabs_root, "知足", rel) is False  # 已删 → False
+
 def test_pinyin_initials():
     from core.data.songs import pinyin_initials
     assert pinyin_initials("知足") == "zz"

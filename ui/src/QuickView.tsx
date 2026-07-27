@@ -81,6 +81,7 @@ export default function QuickView() {
   const [queue, setQueue] = useState<QueueItem[]>(loadQueue);
   const [toast, setToast] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [tabsOpen, setTabsOpen] = useState(false);   // T 键看谱弹层（S3）
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<number>(0);
@@ -129,6 +130,8 @@ export default function QuickView() {
   const selRef = useRef(sel); selRef.current = sel;
   const sungRef = useRef(sungSet); sungRef.current = sungSet;
   const queuedRef = useRef(queuedSet); queuedRef.current = queuedSet;
+  const tabsOpenRef = useRef(tabsOpen); tabsOpenRef.current = tabsOpen;
+  const queryRef = useRef(query); queryRef.current = query;
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -144,9 +147,17 @@ export default function QuickView() {
     reportEvent("queue_added", title);
   };
 
-  /* 键盘：↑↓ 选择 · Enter 加入歌单 · Esc 清空 · 其他按键回流到搜索框 */
+  /* 键盘：↑↓ 选择 · Enter 加入歌单 · T 看谱 · Esc 清空 · 其他按键回流到搜索框 */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      /* 看谱弹层打开时：只吃 Esc / T 关闭，其余键不穿透 */
+      if (tabsOpenRef.current) {
+        if (e.key === "Escape" || e.key === "t" || e.key === "T") {
+          e.preventDefault();
+          setTabsOpen(false);
+        }
+        return;
+      }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         setCursor(c => e.key === "ArrowDown"
@@ -159,6 +170,14 @@ export default function QuickView() {
         e.preventDefault();
         const s = selRef.current;
         if (s) { addToQueue(s.title); setQuery(""); }
+      } else if (e.key === "t" || e.key === "T") {
+        /* 仅浏览态（搜索框为空）触发；搜索中 t 正常输入拼音首字母 */
+        if (queryRef.current) return;
+        const s = selRef.current;
+        if (!s) return;
+        if ((s.tab_files ?? []).length === 0) { showToast(`「${s.title}」还没有曲谱附件`); return; }
+        e.preventDefault();
+        setTabsOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -332,6 +351,25 @@ export default function QuickView() {
               {toast}
             </div>
           )}
+
+          {/* ===== 看谱弹层（T 键，Esc/T/点击关闭）===== */}
+          {tabsOpen && sel && (
+            <div onClick={() => setTabsOpen(false)}
+              className="absolute inset-0 z-40 bg-zinc-950/95 overflow-y-auto p-10 cursor-zoom-out">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-zinc-600 font-mono mb-6">
+                {sel.title} · 曲谱 · Esc 关闭
+              </p>
+              <div className="flex flex-col items-center gap-8">
+                {(sel.tab_files ?? []).map(rel => (
+                  rel.toLowerCase().endsWith(".pdf")
+                    ? <iframe key={rel} src={`/${rel}`} title={rel}
+                        className="w-full max-w-3xl h-[80vh] rounded-lg bg-white" />
+                    : <img key={rel} src={`/${rel}`} alt={rel}
+                        className="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain bg-white p-4" />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ===== 今晚歌单 ===== */}
@@ -370,7 +408,7 @@ export default function QuickView() {
 
       {/* ===== 底栏 ===== */}
       <div className="shrink-0 flex items-center px-5 h-8 border-t border-zinc-800 text-[11px] text-zinc-600">
-        <span>↑↓ 选择 · Enter 加入歌单 · 双击同效 · Esc 清空 · 每 {REFRESH_MS / 1000}s 自动刷新</span>
+        <span>↑↓ 选择 · Enter 加入歌单 · T 看谱 · 双击同效 · Esc 清空 · 每 {REFRESH_MS / 1000}s 自动刷新</span>
         <button onClick={refresh} className="ml-auto hover:text-zinc-300 transition-colors cursor-pointer">手动刷新</button>
       </div>
     </div>
