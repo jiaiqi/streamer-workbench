@@ -378,6 +378,87 @@ def test_default_library_178():
     assert g[1] == ["枫", "耿"]
 
 
+# ═══════ P1 新模型测试 ═══════
+
+def test_palette_from_style():
+    from core.themes.palette import Palette
+    from core.style import Style
+    s = Style(text=(43, 84, 78), label=(36, 110, 96), pill=(188, 224, 210, 130),
+              line=(232, 146, 118), mist=(255, 255, 255, 66))
+    p = Palette.from_style(1, s, "测试")
+    assert p.text == (43, 84, 78)
+    assert p.label == (36, 110, 96)
+    assert p.mist == (255, 255, 255, 66)
+    assert p.name == "测试"
+    assert p.source == "theme"
+
+def test_palette_to_style_dict():
+    from core.themes.palette import Palette
+    from core.style import Style
+    s = Style(text=(43, 84, 78), label=(36, 110, 96), pill=(188, 224, 210, 130),
+              line=(232, 146, 118), mist=(255, 255, 255, 66))
+    p = Palette.from_style(1, s)
+    d = p.to_style_dict()
+    assert d["text"] == (43, 84, 78)
+    assert set(d.keys()) == {"text", "label", "pill", "line", "mist"}
+
+def test_skin_from_theme():
+    import os
+    from core.themes.skin import Skin
+    from core.themes.loader import load_themes
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    themes = load_themes(os.path.join(_root, "themes"))
+    t = themes["海洋柔光"]
+    s = Skin.from_theme(t)
+    assert s.theme_name == "海洋柔光"
+    assert s.layout_id == "grid-wrap"
+    assert s.mist_bottom_avoid == 1498
+    assert s.mist_bottom_normal == 1410
+    assert s.compatibility == "recommended"
+    assert s.source == "theme"
+
+def test_preset_default():
+    from core.data.presets import Preset, SongQuery
+    p = Preset.default()
+    assert p.id == "_default"
+    assert p.is_default is True
+    assert p.layout_id == "grid-wrap"
+    assert p.song_query.status == "active"
+    assert p.canvas["width"] == 1080
+
+def test_preset_crud(tmp_path="/tmp/test_presets"):
+    import os, shutil
+    from core.data.presets import Preset, SongQuery, init_presets, save, load, delete, list_all, duplicate
+    path = tmp_path
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+    init_presets(path)
+    all_p = list_all()
+    assert len(all_p) == 1  # 默认预设
+    assert all_p[0]["id"] == "_default"
+
+    p = Preset(
+        id="test1",
+        name="测试预设",
+        layout_id="magazine-flow",
+        canvas={"width": 1080, "height": 1920},
+    )
+    save(p)
+    loaded = load("test1")
+    assert loaded is not None
+    assert loaded.name == "测试预设"
+    assert loaded.layout_id == "magazine-flow"
+
+    d = duplicate("test1", "test1-copy", "副本")
+    assert d is not None
+    assert d.id == "test1-copy"
+    assert "副本" in d.name
+
+    delete("test1")
+    assert load("test1") is None
+    shutil.rmtree(path)
+
+
 # ═══════ Runner ═══════
 
 if __name__ == "__main__":
