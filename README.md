@@ -22,7 +22,7 @@ web/         原生验证页（开发期）
 ui/          React + Vite 前端工作台
 design/      UI/UX 重设计提案交互稿（redesign-v1/v2.html）+ 数据时间维度路线图 + 产品优化方案终版-0727（下一阶段唯一主规格）
 design-docs/ 原设计仓库全部内容（设计结论/项目结构设计/HANDOFF/7 页设计稿/歌单-排版一 预言机）
-prototype/   高保真 UI 原型 + 7 主题背景 + 14 张成品海报
+prototype/   ~~高保真 UI 原型~~（已由 themes/ 和 tests/golden/ 替代，已清理）
 themes/      主题包（从 歌单-排版一 复制背景图 + theme.json）
 fonts/       字体 MaokenAssortedSans.ttf
 tests/       test_golden.py 金标准逐像素对比

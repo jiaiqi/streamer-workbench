@@ -77,7 +77,7 @@ design/      redesign-v1/v2.html（UI/UX 重设计交互稿）+ roadmap-data-sta
 electron/    Electron 壳 spike（main.js：spawn 后端 + 就绪轮询 + alwaysOnTop）
 packaging/   PyInstaller spike（backend_entry.py + poster-backend.spec）
 web/         原生验证页（开发期）
-prototype/   高保真原型 + 14 张成品海报 + 背景副本
+prototype/   ~~高保真原型~~（已由 themes/ 和 tests/golden/ 替代，已清理）
 themes/      7 套主题包（theme.json + 背景图 + 设计理念.md）
 fonts/       MaokenAssortedSans.ttf（猫啃糖圆体，免费可商用）
 data/        songs.json（v4，178 首，唯一数据源）+ backups/ + events.jsonl（gitignore）
