@@ -1,0 +1,280 @@
+{
+  "data": [
+    {
+      "id": "page-workspace",
+      "title": "海报工作台",
+      "type": "page",
+      "version": 2,
+      "createdAt": 1784796409000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/workspace.html",
+        "interactions": [
+          {
+            "domId": "nav-library",
+            "targetPageId": "page-library",
+            "hideEdge": true,
+            "transitionLabel": "切换到歌曲库"
+          },
+          {
+            "domId": "nav-library-entry",
+            "targetPageId": "page-library",
+            "hideEdge": true,
+            "transitionLabel": "打开歌曲库"
+          },
+          {
+            "domId": "nav-settings",
+            "targetPageId": "page-settings",
+            "hideEdge": true,
+            "transitionLabel": "打开设置"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-library",
+      "title": "歌曲库",
+      "type": "page",
+      "version": 2,
+      "createdAt": 1784796409000,
+      "canvasData": {
+        "x": 620,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/library.html",
+        "interactions": [
+          {
+            "domId": "nav-workspace",
+            "targetPageId": "page-workspace",
+            "hideEdge": true,
+            "transitionLabel": "切换到工作台"
+          },
+          {
+            "domId": "nav-settings",
+            "targetPageId": "page-settings",
+            "hideEdge": true,
+            "transitionLabel": "打开设置"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-settings",
+      "title": "设置",
+      "type": "page",
+      "version": 2,
+      "createdAt": 1784796409000,
+      "canvasData": {
+        "x": 1240,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings.html",
+        "interactions": [
+          {
+            "domId": "nav-workspace",
+            "targetPageId": "page-workspace",
+            "hideEdge": true,
+            "transitionLabel": "切换到工作台"
+          },
+          {
+            "domId": "nav-library",
+            "targetPageId": "page-library",
+            "hideEdge": true,
+            "transitionLabel": "切换到歌曲库"
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-learning",
+      "title": "学歌管理",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784796409000,
+      "canvasData": {
+        "x": 1860,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/learning.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-themes",
+      "title": "主题管理",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784796409000,
+      "canvasData": {
+        "x": 2480,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/themes.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-presets",
+      "title": "场景预设",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784796409000,
+      "canvasData": {
+        "x": 3100,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/presets.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "page-history",
+      "title": "导出历史",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1784796409000,
+      "canvasData": {
+        "x": 3720,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/history.html",
+        "interactions": []
+      }
+    },
+    {
+      "id": "image-001",
+      "title": "海报预览",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798000000,
+      "canvasData": {
+        "x": 0,
+        "y": 372
+      },
+      "devMetadata": {
+        "imageSrc": "assets/preview-poster.png"
+      }
+    },
+    {
+      "id": "image-002",
+      "title": "海洋柔光主题",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798001000,
+      "canvasData": {
+        "x": 620,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/theme-ocean.png"
+      }
+    },
+    {
+      "id": "image-003",
+      "title": "葡萄微醺主题",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798002000,
+      "canvasData": {
+        "x": 1240,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/theme-grape.png"
+      }
+    },
+    {
+      "id": "image-004",
+      "title": "奶油甜心主题",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798003000,
+      "canvasData": {
+        "x": 1860,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/theme-cream.png"
+      }
+    },
+    {
+      "id": "image-005",
+      "title": "梦幻星空主题",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798004000,
+      "canvasData": {
+        "x": 2480,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/theme-dream.png"
+      }
+    },
+    {
+      "id": "image-006",
+      "title": "音符跳跃主题",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798005000,
+      "canvasData": {
+        "x": 3100,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/theme-note.png"
+      }
+    },
+    {
+      "id": "image-007",
+      "title": "玻璃拟态主题",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798006000,
+      "canvasData": {
+        "x": 3720,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/theme-glass.png"
+      }
+    },
+    {
+      "id": "image-008",
+      "title": "复古胶片主题",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1784798007000,
+      "canvasData": {
+        "x": 4340,
+        "y": 377
+      },
+      "devMetadata": {
+        "imageSrc": "assets/theme-retro.png"
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": false,
+    "deviceType": "desktop",
+    "projectName": "歌单海报生成器",
+    "showEdge": true,
+    "visualEditorEnabled": true
+  }
+}

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歌曲库 · 歌单海报生成器</title>
+    <script>
+      (function(){var t=localStorage.getItem("gp-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");})();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="../shared.css?v=1">
+</head>
+<body class="h-screen overflow-hidden antialiased">
+    <main class="relative z-10 flex h-full">
+      <!-- ============ 侧边导航栏 ============ -->
+      <nav class="gp-stagger flex w-16 shrink-0 flex-col items-center gap-1.5 border-r py-4 bg-card border-border" data-stagger-step="45">
+        <div class="mb-5 flex h-10 w-10 items-center justify-center rounded-xl" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+          <span class="gp-icon h-5 w-5 text-primary-foreground"><i data-lucide="music"></i></span>
+        </div>
+        <a class="gp-nav-item" data-label="海报工作台" href="workspace.html"><span class="gp-icon h-5 w-5"><i data-lucide="layout-dashboard"></i></span></a>
+        <a class="gp-nav-item active" data-label="歌曲库" href="library.html"><span class="gp-icon h-5 w-5"><i data-lucide="list-music"></i></span></a>
+        <a class="gp-nav-item" data-label="学歌管理" href="learning.html"><span class="gp-icon h-5 w-5"><i data-lucide="book-open"></i></span></a>
+        <a class="gp-nav-item" data-label="主题管理" href="themes.html"><span class="gp-icon h-5 w-5"><i data-lucide="palette"></i></span></a>
+        <a class="gp-nav-item" data-label="场景预设" href="presets.html"><span class="gp-icon h-5 w-5"><i data-lucide="bookmark"></i></span></a>
+        <a class="gp-nav-item" data-label="导出历史" href="history.html"><span class="gp-icon h-5 w-5"><i data-lucide="history"></i></span></a>
+        <div class="mt-auto flex flex-col items-center gap-1.5">
+          <button class="gp-nav-item" data-label="切换亮 / 暗" data-theme-toggle><span class="gp-icon h-5 w-5" data-theme-icon></span></button>
+          <a class="gp-nav-item" data-label="设置" href="settings.html"><span class="gp-icon h-5 w-5"><i data-lucide="settings"></i></span></a>
+        </div>
+      </nav>
+
+      <!-- ============ 主区域 ============ -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <!-- 页头 -->
+        <header class="gp-rise flex shrink-0 items-end justify-between px-8 pt-7 pb-5">
+          <div>
+            <h1 class="font-serif-d text-[26px] font-bold tracking-wide">歌曲库</h1>
+            <p class="mt-1 text-[13px] text-muted-foreground">梓涵吃不饱 · 点歌歌单 · 唯一数据源 songs.json</p>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <button class="gp-btn-ghost" id="import-btn">
+              <span class="gp-icon h-4 w-4"><i data-lucide="upload"></i></span>导入
+            </button>
+            <button class="gp-btn" id="add-btn">
+              <span class="gp-icon h-4 w-4"><i data-lucide="plus"></i></span>添加歌曲
+            </button>
+          </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-8 pb-8">
+          <!-- 统计卡片 -->
+          <div class="gp-stagger-scale mb-6 grid grid-cols-4 gap-4" data-stagger-step="90" data-stagger-base="150">
+            <div class="gp-card gp-card-hover p-5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-medium tracking-widest text-muted-foreground">已会歌曲</span>
+                <span class="gp-icon h-4 w-4 text-primary"><i data-lucide="check-circle-2"></i></span>
+              </div>
+              <div class="mt-3 flex items-baseline gap-1.5">
+                <span class="tabular font-serif-d text-[34px] font-bold leading-none text-primary" data-count="177">0</span>
+                <span class="text-xs text-muted-foreground">首</span>
+              </div>
+              <p class="mt-2 text-[11px] text-muted-foreground">目标 178 · 待补「奇妙能力歌」</p>
+            </div>
+            <div class="gp-card gp-card-hover p-5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-medium tracking-widest text-muted-foreground">在学歌曲</span>
+                <span class="gp-icon h-4 w-4 text-accent"><i data-lucide="book-open"></i></span>
+              </div>
+              <div class="mt-3 flex items-baseline gap-1.5">
+                <span class="tabular font-serif-d text-[34px] font-bold leading-none text-accent" data-count="5">0</span>
+                <span class="text-xs text-muted-foreground">首</span>
+              </div>
+              <div class="gp-progress mt-3.5"><i style="width:64%"></i></div>
+            </div>
+            <div class="gp-card gp-card-hover p-5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-medium tracking-widest text-muted-foreground">字数分类</span>
+                <span class="gp-icon h-4 w-4 text-muted-foreground"><i data-lucide="layers"></i></span>
+              </div>
+              <div class="mt-3 flex items-baseline gap-1.5">
+                <span class="tabular font-serif-d text-[34px] font-bold leading-none" data-count="7">0</span>
+                <span class="text-xs text-muted-foreground">组</span>
+              </div>
+              <p class="mt-2 text-[11px] text-muted-foreground">一字 ~ 六字 · 长歌名/英文</p>
+            </div>
+            <div class="gp-card gp-card-hover p-5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-medium tracking-widest text-muted-foreground">数据校验</span>
+                <span class="gp-icon h-4 w-4 text-primary"><i data-lucide="shield-check"></i></span>
+              </div>
+              <div class="mt-3 flex items-baseline gap-1.5">
+                <span class="font-serif-d text-[22px] font-bold leading-none text-primary">通过</span>
+              </div>
+              <p class="mt-2 text-[11px] text-muted-foreground">双源校验 · 无重复歌名</p>
+            </div>
+          </div>
+
+          <!-- 搜索 + 筛选 -->
+          <div class="gp-rise mb-6 flex items-center gap-3" style="animation-delay:.3s">
+            <div class="relative w-72">
+              <span class="gp-icon pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"><i data-lucide="search"></i></span>
+              <input id="search" class="gp-input !pl-10" placeholder="搜索歌名…">
+            </div>
+            <div id="chips" class="flex flex-1 flex-wrap items-center gap-2"></div>
+          </div>
+
+          <!-- 歌曲分组列表 -->
+          <div id="song-groups" class="flex flex-col gap-7"></div>
+
+          <div id="empty" class="hidden py-20 text-center">
+            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+              <span class="gp-icon h-6 w-6 text-muted-foreground"><i data-lucide="music-4"></i></span>
+            </div>
+            <p class="text-sm text-muted-foreground">没有找到匹配的歌曲</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="songs-data.js"></script>
+    <script src="../shared.js?v=1"></script>
+    <script>
+      const SECTIONS = [
+        { sec: 0, name: "全部" },
+        { sec: 1, name: "一字" }, { sec: 2, name: "二字" }, { sec: 3, name: "三字" },
+        { sec: 4, name: "四字" }, { sec: 5, name: "五字" }, { sec: 6, name: "六字" },
+        { sec: 7, name: "长歌名 · 英文" },
+      ];
+      const SECTION_NAME = Object.fromEntries(SECTIONS.map((s) => [s.sec, s.name]));
+
+      let activeSec = 0;
+      let query = "";
+
+      /* ---- 筛选 chips ---- */
+      const chipsWrap = document.getElementById("chips");
+      function renderChips() {
+        chipsWrap.innerHTML = "";
+        SECTIONS.forEach((s) => {
+          const count = s.sec === 0 ? SONGS.length : SONGS.filter((x) => x.sec === s.sec).length;
+          const chip = document.createElement("button");
+          chip.className = "gp-chip" + (s.sec === activeSec ? " active" : "");
+          chip.innerHTML = `<span>${s.name}</span><span class="tabular text-[11px] opacity-75">${count}</span>`;
+          chip.addEventListener("click", () => {
+            activeSec = s.sec;
+            renderChips();
+            renderSongs();
+          });
+          chipsWrap.appendChild(chip);
+        });
+      }
+
+      /* ---- 歌曲列表 ---- */
+      const groupsWrap = document.getElementById("song-groups");
+      const emptyEl = document.getElementById("empty");
+
+      function renderSongs() {
+        const filtered = SONGS.filter(
+          (s) =>
+            (activeSec === 0 || s.sec === activeSec) &&
+            (!query || s.t.toLowerCase().includes(query))
+        );
+        groupsWrap.innerHTML = "";
+        emptyEl.classList.toggle("hidden", filtered.length > 0);
+
+        const bySec = {};
+        filtered.forEach((s) => (bySec[s.sec] = bySec[s.sec] || []).push(s));
+
+        Object.keys(bySec).sort((a, b) => a - b).forEach((sec, gi) => {
+          const group = document.createElement("section");
+          group.className = "gp-list-anim";
+          group.style.animationDelay = gi * 70 + "ms";
+
+          const head = document.createElement("div");
+          head.className = "mb-3 flex items-center gap-3";
+          head.innerHTML = `
+            <h2 class="font-serif-d text-[17px] font-semibold">${SECTION_NAME[sec]}歌</h2>
+            <span class="gp-badge tabular">${bySec[sec].length}</span>
+            <span class="h-px flex-1 bg-border" style="background:var(--gp-border)"></span>`;
+          group.appendChild(head);
+
+          const grid = document.createElement("div");
+          grid.className = "grid gap-2";
+          grid.style.gridTemplateColumns = "repeat(auto-fill, minmax(180px, 1fr))";
+          bySec[sec].forEach((s, i) => {
+            const item = document.createElement("div");
+            item.className = "gp-card gp-card-hover gp-list-anim flex cursor-default items-center gap-2.5 !rounded-xl px-3.5 py-2.5";
+            item.style.animationDelay = Math.min(i * 18, 400) + "ms";
+            const learning = s.st === "learning";
+            item.innerHTML = `
+              <i class="h-1.5 w-1.5 shrink-0 rounded-full" style="background:${learning ? "var(--gp-accent)" : "var(--gp-primary)"}"></i>
+              <span class="truncate text-[13.5px]">${s.t}</span>
+              ${learning ? '<span class="gp-badge gp-badge-accent ml-auto shrink-0">在学</span>' : ""}`;
+            grid.appendChild(item);
+          });
+          group.appendChild(grid);
+          groupsWrap.appendChild(group);
+        });
+      }
+
+      /* ---- 搜索（防抖） ---- */
+      let timer = null;
+      document.getElementById("search").addEventListener("input", (e) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          query = e.target.value.trim().toLowerCase();
+          renderSongs();
+        }, 160);
+      });
+
+      document.getElementById("add-btn").addEventListener("click", () =>
+        gp.toast("添加歌曲：二期功能，敬请期待", "sparkles")
+      );
+      document.getElementById("import-btn").addEventListener("click", () =>
+        gp.toast("支持从网易云 / QQ 音乐歌单链接导入", "link")
+      );
+
+      renderChips();
+      renderSongs();
+    </script>
+</body>
+</html>

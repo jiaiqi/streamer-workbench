@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 · 歌单海报生成器</title>
+    <script>
+      (function(){var t=localStorage.getItem("gp-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");})();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="../shared.css?v=1">
+</head>
+<body class="h-screen overflow-hidden antialiased">
+    <main class="relative z-10 flex h-full">
+      <!-- ============ 侧边导航栏 ============ -->
+      <nav class="gp-stagger flex w-16 shrink-0 flex-col items-center gap-1.5 border-r py-4 bg-card border-border" data-stagger-step="45">
+        <div class="mb-5 flex h-10 w-10 items-center justify-center rounded-xl" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+          <span class="gp-icon h-5 w-5 text-primary-foreground"><i data-lucide="music"></i></span>
+        </div>
+        <a class="gp-nav-item" data-label="海报工作台" href="workspace.html"><span class="gp-icon h-5 w-5"><i data-lucide="layout-dashboard"></i></span></a>
+        <a class="gp-nav-item" data-label="歌曲库" href="library.html"><span class="gp-icon h-5 w-5"><i data-lucide="list-music"></i></span></a>
+        <a class="gp-nav-item" data-label="学歌管理" href="learning.html"><span class="gp-icon h-5 w-5"><i data-lucide="book-open"></i></span></a>
+        <a class="gp-nav-item" data-label="主题管理" href="themes.html"><span class="gp-icon h-5 w-5"><i data-lucide="palette"></i></span></a>
+        <a class="gp-nav-item" data-label="场景预设" href="presets.html"><span class="gp-icon h-5 w-5"><i data-lucide="bookmark"></i></span></a>
+        <a class="gp-nav-item" data-label="导出历史" href="history.html"><span class="gp-icon h-5 w-5"><i data-lucide="history"></i></span></a>
+        <div class="mt-auto flex flex-col items-center gap-1.5">
+          <button class="gp-nav-item" data-label="切换亮 / 暗" data-theme-toggle><span class="gp-icon h-5 w-5" data-theme-icon></span></button>
+          <a class="gp-nav-item active" data-label="设置" href="settings.html"><span class="gp-icon h-5 w-5"><i data-lucide="settings"></i></span></a>
+        </div>
+      </nav>
+
+      <!-- ============ 主区域 ============ -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <header class="gp-rise shrink-0 px-8 pt-7 pb-5">
+          <h1 class="font-serif-d text-[26px] font-bold tracking-wide">设置</h1>
+          <p class="mt-1 text-[13px] text-muted-foreground">外观、渲染默认值与输出偏好 · 改动即时生效</p>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-8 pb-10">
+          <div class="gp-stagger mx-auto flex max-w-3xl flex-col gap-5" data-stagger-step="100" data-stagger-base="150">
+
+            <!-- 外观 -->
+            <section class="gp-card p-6">
+              <div class="mb-5 flex items-center gap-3">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background:var(--gp-primary-soft)">
+                  <span class="gp-icon h-4.5 w-4.5 text-primary" style="height:18px;width:18px"><i data-lucide="sun-medium"></i></span>
+                </span>
+                <div>
+                  <h2 class="font-serif-d text-[16px] font-semibold">外观</h2>
+                  <p class="text-xs text-muted-foreground">晨光纸感 · 清新文艺</p>
+                </div>
+              </div>
+
+              <div class="mb-5">
+                <span class="mb-2 block text-[13px] text-muted-foreground">界面模式</span>
+                <div class="gp-segment max-w-sm" data-role="theme-mode">
+                  <button data-value="light" class="active"><span class="gp-icon h-3.5 w-3.5"><i data-lucide="sun"></i></span>亮色</button>
+                  <button data-value="dark"><span class="gp-icon h-3.5 w-3.5"><i data-lucide="moon"></i></span>暗色</button>
+                  <button data-value="system"><span class="gp-icon h-3.5 w-3.5"><i data-lucide="monitor"></i></span>跟随系统</button>
+                </div>
+              </div>
+
+              <div>
+                <span class="mb-2 block text-[13px] text-muted-foreground">强调色</span>
+                <div id="accents" class="flex items-center gap-3"></div>
+              </div>
+            </section>
+
+            <!-- 渲染默认值 -->
+            <section class="gp-card p-6">
+              <div class="mb-5 flex items-center gap-3">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background:var(--gp-primary-soft)">
+                  <span class="gp-icon text-primary" style="height:18px;width:18px"><i data-lucide="image"></i></span>
+                </span>
+                <div>
+                  <h2 class="font-serif-d text-[16px] font-semibold">渲染默认值</h2>
+                  <p class="text-xs text-muted-foreground">新会话的初始画布与排版</p>
+                </div>
+              </div>
+
+              <div class="mb-5 grid grid-cols-2 gap-3" id="canvas-cards">
+                <button class="canvas-card gp-card !rounded-xl p-4 text-left transition-all duration-300" data-canvas="9:20">
+                  <div class="mb-2 flex items-center justify-between">
+                    <span class="gp-icon text-muted-foreground" style="height:18px;width:18px"><i data-lucide="smartphone"></i></span>
+                    <span class="canvas-check gp-icon h-4 w-4 text-primary" style="opacity:0;transform:scale(.5);transition:all .3s var(--gp-ease-spring)"><i data-lucide="check-circle-2"></i></span>
+                  </div>
+                  <div class="text-sm font-medium">抖音全屏 9:20</div>
+                  <div class="mt-0.5 text-xs tabular text-muted-foreground">1080 × 2400 · 含禁文区</div>
+                </button>
+                <button class="canvas-card gp-card !rounded-xl p-4 text-left transition-all duration-300" data-canvas="9:16">
+                  <div class="mb-2 flex items-center justify-between">
+                    <span class="gp-icon text-muted-foreground" style="height:18px;width:18px"><i data-lucide="rectangle-vertical"></i></span>
+                    <span class="canvas-check gp-icon h-4 w-4 text-primary" style="opacity:0;transform:scale(.5);transition:all .3s var(--gp-ease-spring)"><i data-lucide="check-circle-2"></i></span>
+                  </div>
+                  <div class="text-sm font-medium">标准 9:16</div>
+                  <div class="mt-0.5 text-xs tabular text-muted-foreground">1080 × 1920 · 通用分享</div>
+                </button>
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <div class="text-sm">禁文区避让</div>
+                    <div class="mt-0.5 text-xs text-muted-foreground">歌词区自动避开右下角贴纸/水印区</div>
+                  </div>
+                  <span class="gp-switch on"></span>
+                </div>
+                <div class="h-px" style="background:var(--gp-border)"></div>
+                <div class="flex items-center justify-between">
+                  <div>
+                    <div class="text-sm">默认主题</div>
+                    <div class="mt-0.5 text-xs text-muted-foreground">启动时选中的海报主题</div>
+                  </div>
+                  <button class="gp-btn-ghost !py-1.5" id="default-theme">
+                    <img src="../assets/theme-ocean.png" class="h-5 w-5 rounded object-cover object-bottom" alt="">
+                    <span>海洋柔光</span>
+                    <span class="gp-icon h-3.5 w-3.5"><i data-lucide="chevron-down"></i></span>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <!-- 输出 -->
+            <section class="gp-card p-6">
+              <div class="mb-5 flex items-center gap-3">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background:var(--gp-primary-soft)">
+                  <span class="gp-icon text-primary" style="height:18px;width:18px"><i data-lucide="folder-output"></i></span>
+                </span>
+                <div>
+                  <h2 class="font-serif-d text-[16px] font-semibold">输出</h2>
+                  <p class="text-xs text-muted-foreground">导出位置与文件命名</p>
+                </div>
+              </div>
+
+              <div class="mb-4">
+                <span class="mb-1.5 block text-[13px] text-muted-foreground">输出目录</span>
+                <div class="flex items-center gap-2">
+                  <div class="gp-input flex flex-1 items-center gap-2 !py-2">
+                    <span class="gp-icon h-4 w-4 shrink-0 text-muted-foreground"><i data-lucide="folder"></i></span>
+                    <span class="truncate text-sm tabular">output\</span>
+                  </div>
+                  <button class="gp-btn-ghost" id="browse-btn"><span class="gp-icon h-4 w-4"><i data-lucide="folder-open"></i></span>浏览</button>
+                </div>
+              </div>
+
+              <div class="mb-4">
+                <span class="mb-1.5 block text-[13px] text-muted-foreground">文件命名前缀</span>
+                <input class="gp-input" value="梓涵吃不饱-AI海洋歌单-柔光UI版">
+                <p class="mt-1.5 text-[11px] text-muted-foreground">导出文件：{前缀}-p{页码}.png</p>
+              </div>
+
+              <div>
+                <span class="mb-2 block text-[13px] text-muted-foreground">导出格式</span>
+                <div class="gp-segment max-w-xs">
+                  <button data-value="png" class="active">PNG 无损</button>
+                  <button data-value="jpg">JPG 小体积</button>
+                </div>
+              </div>
+            </section>
+
+            <!-- 数据 -->
+            <section class="gp-card p-6">
+              <div class="mb-5 flex items-center gap-3">
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl" style="background:var(--gp-primary-soft)">
+                  <span class="gp-icon text-primary" style="height:18px;width:18px"><i data-lucide="database"></i></span>
+                </span>
+                <div>
+                  <h2 class="font-serif-d text-[16px] font-semibold">数据</h2>
+                  <p class="text-xs text-muted-foreground">歌曲库与主题包状态</p>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <span class="gp-icon h-4 w-4 text-primary"><i data-lucide="list-music"></i></span>
+                    <div>
+                      <div class="text-sm">歌曲库 <span class="tabular text-muted-foreground">177 首</span></div>
+                      <div class="mt-0.5 text-xs text-muted-foreground">目标 178 · 缺「奇妙能力歌」待补</div>
+                    </div>
+                  </div>
+                  <span class="gp-badge gp-badge-accent">待补 1 首</span>
+                </div>
+                <div class="h-px" style="background:var(--gp-border)"></div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <span class="gp-icon h-4 w-4 text-primary"><i data-lucide="palette"></i></span>
+                    <div>
+                      <div class="text-sm">主题包 <span class="tabular text-muted-foreground">7 套</span></div>
+                      <div class="mt-0.5 text-xs text-muted-foreground">全部通过样式校验（双页配色完整）</div>
+                    </div>
+                  </div>
+                  <span class="gp-badge">正常</span>
+                </div>
+                <div class="h-px" style="background:var(--gp-border)"></div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <span class="gp-icon h-4 w-4 text-primary"><i data-lucide="shield-check"></i></span>
+                    <div>
+                      <div class="text-sm">金标准测试</div>
+                      <div class="mt-0.5 text-xs text-muted-foreground">新引擎 vs 14 张成品逐像素 diff</div>
+                    </div>
+                  </div>
+                  <button class="gp-btn-ghost !py-1.5" id="golden-btn"><span class="gp-icon h-3.5 w-3.5"><i data-lucide="play"></i></span>运行</button>
+                </div>
+              </div>
+            </section>
+
+            <!-- 关于 -->
+            <section class="gp-card p-6">
+              <div class="flex items-center gap-4">
+                <span class="flex h-12 w-12 items-center justify-center rounded-2xl" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+                  <span class="gp-icon h-6 w-6 text-primary-foreground"><i data-lucide="music"></i></span>
+                </span>
+                <div class="flex-1">
+                  <h2 class="font-serif-d text-[16px] font-semibold">歌单海报生成器</h2>
+                  <p class="mt-0.5 text-xs text-muted-foreground">v0.1.0 MVP · 渲染引擎 Python + PIL · 本地 FastAPI 服务</p>
+                </div>
+                <span class="gp-badge">开发版</span>
+              </div>
+              <p class="mt-4 rounded-xl p-3.5 text-xs leading-relaxed text-muted-foreground" style="background:var(--gp-primary-softer)">
+                铁律：core/ 禁止 import 任何 UI 框架，UI 只通过 engine.render_page() 拿 PIL.Image —— 先可用、后惊艳。
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="../shared.js?v=1"></script>
+    <script>
+      /* ---- 强调色 ---- */
+      const ACCENTS = [
+        { name: "海洋青", value: "#2f8f7a", dark: "#4dbb9e" },
+        { name: "暖珊瑚", value: "#d9764f", dark: "#e8926f" },
+        { name: "雾蓝",   value: "#4a7fa5", dark: "#6ba3c7" },
+        { name: "葡萄紫", value: "#8a6fae", dark: "#a78ec9" },
+      ];
+      const accentsWrap = document.getElementById("accents");
+      let activeAccent = 0;
+
+      function renderAccents() {
+        accentsWrap.innerHTML = "";
+        ACCENTS.forEach((a, i) => {
+          const on = i === activeAccent;
+          const btn = document.createElement("button");
+          btn.className = "relative flex h-9 w-9 items-center justify-center rounded-full transition-transform duration-300";
+          btn.style.background = a.value;
+          btn.style.transform = on ? "scale(1.1)" : "scale(1)";
+          btn.title = a.name;
+          btn.innerHTML = on
+            ? '<span class="gp-icon h-4 w-4" style="color:#fff;animation:gp-pop .35s var(--gp-ease-spring)"><i data-lucide="check"></i></span>'
+            : "";
+          if (on) btn.style.boxShadow = `0 0 0 3px var(--gp-card), 0 0 0 5px ${a.value}`;
+          btn.addEventListener("click", () => {
+            activeAccent = i;
+            applyAccent(a);
+            renderAccents();
+          });
+          accentsWrap.appendChild(btn);
+        });
+        lucide.createIcons();
+      }
+
+      function applyAccent(a) {
+        const dark = document.documentElement.classList.contains("dark");
+        const root = document.documentElement.style;
+        root.setProperty("--gp-primary", dark ? a.dark : a.value);
+        root.setProperty("--gp-ring", dark ? a.dark : a.value);
+      }
+
+      /* ---- 默认画布卡片 ---- */
+      const cards = Array.from(document.querySelectorAll(".canvas-card"));
+      function selectCanvas(value) {
+        cards.forEach((c) => {
+          const on = c.dataset.canvas === value;
+          c.style.borderColor = on ? "var(--gp-primary)" : "var(--gp-border)";
+          c.style.background = on ? "var(--gp-primary-softer)" : "var(--gp-card)";
+          const check = c.querySelector(".canvas-check");
+          check.style.opacity = on ? "1" : "0";
+          check.style.transform = on ? "scale(1)" : "scale(.5)";
+        });
+      }
+      cards.forEach((c) => c.addEventListener("click", () => selectCanvas(c.dataset.canvas)));
+      selectCanvas("9:20");
+
+      document.getElementById("browse-btn").addEventListener("click", () => gp.toast("已选择输出目录 output\\", "folder-check"));
+      document.getElementById("golden-btn").addEventListener("click", () => gp.toast("金标准测试：14 张成品 diff = 0", "shield-check"));
+      document.getElementById("default-theme").addEventListener("click", () => gp.toast("默认主题：海洋柔光", "palette"));
+
+      renderAccents();
+    </script>
+</body>
+</html>

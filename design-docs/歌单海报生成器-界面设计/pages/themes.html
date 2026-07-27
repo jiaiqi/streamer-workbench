@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主题管理 · 歌单海报生成器</title>
+    <script>
+      (function(){var t=localStorage.getItem("gp-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");})();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="../shared.css?v=1">
+</head>
+<body class="h-screen overflow-hidden antialiased">
+    <main class="relative z-10 flex h-full">
+      <!-- ============ 侧边导航栏 ============ -->
+      <nav class="gp-stagger flex w-16 shrink-0 flex-col items-center gap-1.5 border-r py-4 bg-card border-border" data-stagger-step="45">
+        <div class="mb-5 flex h-10 w-10 items-center justify-center rounded-xl" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+          <span class="gp-icon h-5 w-5 text-primary-foreground"><i data-lucide="music"></i></span>
+        </div>
+        <a class="gp-nav-item" data-label="海报工作台" href="workspace.html"><span class="gp-icon h-5 w-5"><i data-lucide="layout-dashboard"></i></span></a>
+        <a class="gp-nav-item" data-label="歌曲库" href="library.html"><span class="gp-icon h-5 w-5"><i data-lucide="list-music"></i></span></a>
+        <a class="gp-nav-item" data-label="学歌管理" href="learning.html"><span class="gp-icon h-5 w-5"><i data-lucide="book-open"></i></span></a>
+        <a class="gp-nav-item active" data-label="主题管理" href="themes.html"><span class="gp-icon h-5 w-5"><i data-lucide="palette"></i></span></a>
+        <a class="gp-nav-item" data-label="场景预设" href="presets.html"><span class="gp-icon h-5 w-5"><i data-lucide="bookmark"></i></span></a>
+        <a class="gp-nav-item" data-label="导出历史" href="history.html"><span class="gp-icon h-5 w-5"><i data-lucide="history"></i></span></a>
+        <div class="mt-auto flex flex-col items-center gap-1.5">
+          <button class="gp-nav-item" data-label="切换亮 / 暗" data-theme-toggle><span class="gp-icon h-5 w-5" data-theme-icon></span></button>
+          <a class="gp-nav-item" data-label="设置" href="settings.html"><span class="gp-icon h-5 w-5"><i data-lucide="settings"></i></span></a>
+        </div>
+      </nav>
+
+      <!-- ============ 主区域 ============ -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <header class="gp-rise flex shrink-0 items-end justify-between px-8 pt-7 pb-5">
+          <div>
+            <h1 class="font-serif-d text-[26px] font-bold tracking-wide">主题管理</h1>
+            <p class="mt-1 text-[13px] text-muted-foreground"><span class="tabular">7</span> 套主题包 · 每套含双页背景 + 五角色配色 · 全部通过样式校验</p>
+          </div>
+          <button class="gp-btn" id="new-theme-btn">
+            <span class="gp-icon h-4 w-4"><i data-lucide="plus"></i></span>新建主题
+          </button>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-8 pb-10">
+          <div id="theme-grid" class="gp-stagger-scale grid grid-cols-3 gap-5" data-stagger-step="90" data-stagger-base="150"></div>
+        </div>
+      </div>
+    </main>
+
+    <script src="../shared.js?v=1"></script>
+    <script>
+      /* 真实数据：themes/ 下各主题包的 theme.json */
+      const THEMES = [
+        { name: "海洋柔光", img: "../assets/theme-ocean.png", prefix: "梓涵吃不饱-AI海洋歌单-柔光UI版", fix: false, active: true,
+          style: { text: [43,84,78], label: [36,110,96], pill: [188,224,210], line: [232,146,118], mist: [255,255,255] } },
+        { name: "青提气泡", img: "../assets/theme-grape.png", prefix: "梓涵吃不饱-AI歌单-青提气泡版", fix: true,
+          style: { text: [46,82,69], label: [30,104,76], pill: [198,233,210], line: [232,146,118], mist: [255,255,255] } },
+        { name: "奶油花园", img: "../assets/theme-cream.png", prefix: "梓涵吃不饱-AI歌单-奶油花园版", fix: true,
+          style: { text: [107,74,63], label: [138,74,56], pill: [247,199,178], line: [232,146,118], mist: [255,252,248] } },
+        { name: "梦幻海洋", img: "../assets/theme-dream.png", prefix: "梓涵吃不饱-AI歌单-梦幻海洋版", fix: true,
+          style: { text: [43,84,78], label: [36,110,96], pill: [188,224,210], line: [232,146,118], mist: [255,255,255] } },
+        { name: "卡通音符", img: "../assets/theme-note.png", prefix: "梓涵吃不饱-AI歌单-卡通音符版", fix: true,
+          style: { text: [46,82,69], label: [30,104,76], pill: [198,233,210], line: [232,146,118], mist: [255,255,255] } },
+        { name: "奶油玻璃", img: "../assets/theme-glass.png", prefix: "梓涵吃不饱-AI歌单-奶油玻璃版", fix: false,
+          style: { text: [70,80,100], label: [64,106,148], pill: [228,238,246], line: [230,158,148], mist: [255,255,255] } },
+        { name: "轻复古唱片", img: "../assets/theme-retro.png", prefix: "梓涵吃不饱-AI歌单-轻复古唱片版", fix: false,
+          style: { text: [96,70,58], label: [148,74,50], pill: [250,222,190], line: [196,96,66], mist: [255,252,246] } },
+      ];
+
+      const ROLE_NAMES = { text: "文字", label: "标签", pill: "色块", line: "点缀", mist: "雾面" };
+      const rgb = (a) => `rgb(${a[0]},${a[1]},${a[2]})`;
+      const grid = document.getElementById("theme-grid");
+
+      THEMES.forEach((t) => {
+        const card = document.createElement("article");
+        card.className = "gp-card gp-card-hover group overflow-hidden !p-0";
+        card.innerHTML = `
+          <div class="relative h-44 overflow-hidden">
+            <img src="${t.img}" alt="${t.name}" loading="lazy"
+                 class="h-full w-full object-cover object-bottom transition-transform duration-700 ease-out group-hover:scale-[1.06]">
+            <div class="absolute inset-0" style="background:linear-gradient(to top, rgba(20,32,28,.45), transparent 55%)"></div>
+            ${t.active ? '<span class="gp-badge absolute left-3 top-3" style="background:rgba(255,255,255,.88);color:#2f8f7a">使用中</span>' : ""}
+            ${t.fix ? '<span class="gp-badge gp-badge-muted absolute right-3 top-3 backdrop-blur-sm" style="background:rgba(255,255,255,.75);color:#5a6a63">水印修正</span>' : ""}
+            <button class="apply-btn absolute bottom-3 right-3 flex translate-y-2 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100"
+                    style="background:rgba(255,255,255,.92);color:#2f8f7a;backdrop-filter:blur(4px)" data-name="${t.name}">
+              <span class="gp-icon h-3.5 w-3.5"><i data-lucide="check"></i></span>应用主题
+            </button>
+          </div>
+          <div class="p-4">
+            <div class="mb-1 flex items-center justify-between">
+              <h3 class="font-serif-d text-[15.5px] font-semibold">${t.name}</h3>
+              <button class="gp-icon h-7 w-7 rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-primary edit-btn" data-name="${t.name}">
+                <span class="gp-icon h-3.5 w-3.5"><i data-lucide="more-horizontal"></i></span>
+              </button>
+            </div>
+            <p class="mb-3 truncate text-[11px] text-muted-foreground">${t.prefix}</p>
+            <div class="flex items-center gap-2">
+              <div class="flex flex-1 items-center gap-1">
+                ${Object.entries(t.style).map(([role, c]) =>
+                  `<span class="h-4 flex-1 rounded-full transition-transform duration-300 hover:scale-y-125" title="${ROLE_NAMES[role]}"
+                         style="background:${rgb(c)};border:1px solid rgba(0,0,0,.06)"></span>`).join("")}
+              </div>
+              <span class="text-[10px] text-muted-foreground">五角色</span>
+            </div>
+          </div>`;
+        grid.appendChild(card);
+      });
+
+      grid.addEventListener("click", (e) => {
+        const apply = e.target.closest(".apply-btn");
+        const edit = e.target.closest(".edit-btn");
+        if (apply) gp.toast(`已切换到「${apply.dataset.name}」· 工作台预览已更新`, "palette");
+        if (edit) gp.toast(`「${edit.dataset.name}」样式编辑器：二期功能`, "sliders-horizontal");
+      });
+
+      document.getElementById("new-theme-btn").addEventListener("click", () =>
+        gp.toast("新建主题：放入背景图 + theme.json 即可被引擎加载", "folder-plus")
+      );
+    </script>
+</body>
+</html>

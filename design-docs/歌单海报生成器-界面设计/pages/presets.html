@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>场景预设 · 歌单海报生成器</title>
+    <script>
+      (function(){var t=localStorage.getItem("gp-theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark");})();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="../shared.css?v=1">
+</head>
+<body class="h-screen overflow-hidden antialiased">
+    <main class="relative z-10 flex h-full">
+      <!-- ============ 侧边导航栏 ============ -->
+      <nav class="gp-stagger flex w-16 shrink-0 flex-col items-center gap-1.5 border-r py-4 bg-card border-border" data-stagger-step="45">
+        <div class="mb-5 flex h-10 w-10 items-center justify-center rounded-xl" style="background:linear-gradient(150deg,var(--gp-primary),var(--gp-primary-strong));box-shadow:var(--gp-shadow-primary)">
+          <span class="gp-icon h-5 w-5 text-primary-foreground"><i data-lucide="music"></i></span>
+        </div>
+        <a class="gp-nav-item" data-label="海报工作台" href="workspace.html"><span class="gp-icon h-5 w-5"><i data-lucide="layout-dashboard"></i></span></a>
+        <a class="gp-nav-item" data-label="歌曲库" href="library.html"><span class="gp-icon h-5 w-5"><i data-lucide="list-music"></i></span></a>
+        <a class="gp-nav-item" data-label="学歌管理" href="learning.html"><span class="gp-icon h-5 w-5"><i data-lucide="book-open"></i></span></a>
+        <a class="gp-nav-item" data-label="主题管理" href="themes.html"><span class="gp-icon h-5 w-5"><i data-lucide="palette"></i></span></a>
+        <a class="gp-nav-item active" data-label="场景预设" href="presets.html"><span class="gp-icon h-5 w-5"><i data-lucide="bookmark"></i></span></a>
+        <a class="gp-nav-item" data-label="导出历史" href="history.html"><span class="gp-icon h-5 w-5"><i data-lucide="history"></i></span></a>
+        <div class="mt-auto flex flex-col items-center gap-1.5">
+          <button class="gp-nav-item" data-label="切换亮 / 暗" data-theme-toggle><span class="gp-icon h-5 w-5" data-theme-icon></span></button>
+          <a class="gp-nav-item" data-label="设置" href="settings.html"><span class="gp-icon h-5 w-5"><i data-lucide="settings"></i></span></a>
+        </div>
+      </nav>
+
+      <!-- ============ 主区域 ============ -->
+      <div class="flex flex-1 flex-col overflow-hidden">
+        <header class="gp-rise flex shrink-0 items-end justify-between px-8 pt-7 pb-5">
+          <div>
+            <h1 class="font-serif-d text-[26px] font-bold tracking-wide">场景预设</h1>
+            <p class="mt-1 text-[13px] text-muted-foreground">一键套用「画布 + 排版 + 主题 + 参数」组合，不同平台不同配方</p>
+          </div>
+          <button class="gp-btn" id="new-preset-btn">
+            <span class="gp-icon h-4 w-4"><i data-lucide="plus"></i></span>保存当前为预设
+          </button>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-8 pb-10">
+          <div id="preset-grid" class="gp-stagger-scale grid grid-cols-3 gap-5" data-stagger-step="100" data-stagger-base="150"></div>
+
+          <!-- 新建虚线卡 -->
+          <button id="dashed-new" class="gp-rise mt-5 flex w-full items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed py-6 text-sm text-muted-foreground transition-all duration-300 hover:text-primary" style="border-color:var(--gp-border)" onmouseover="this.style.borderColor='var(--gp-primary)'" onmouseout="this.style.borderColor='var(--gp-border)'">
+            <span class="gp-icon h-4 w-4"><i data-lucide="plus-circle"></i></span>
+            把工作台当前配置存为新预设
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <script src="../shared.js?v=1"></script>
+    <script>
+      const PRESETS = [
+        {
+          name: "抖音歌单", desc: "直播公告专用 · 全屏画布自动避让贴纸区", icon: "music-4",
+          isDefault: true,
+          chips: [
+            ["smartphone", "抖音全屏 9:20"], ["grid-3x3", "网格绕排"], ["palette", "海洋柔光"],
+            ["shield", "避让 开"], ["type", "36px"],
+          ],
+        },
+        {
+          name: "标准分享", desc: "朋友圈 / 粉丝群通用比例，任何手机都看得全", icon: "share-2",
+          chips: [
+            ["rectangle-vertical", "标准 9:16"], ["grid-3x3", "网格绕排"], ["palette", "奶油花园"],
+            ["shield", "避让 关"], ["type", "36px"],
+          ],
+        },
+        {
+          name: "直播预告", desc: "字号加大、行距放宽，手机小屏一眼看清", icon: "radio",
+          chips: [
+            ["smartphone", "抖音全屏 9:20"], ["grid-3x3", "网格绕排"], ["palette", "青提气泡"],
+            ["shield", "避让 开"], ["type", "42px"],
+          ],
+        },
+        {
+          name: "复古专场", desc: "老歌怀旧场 · 配轻复古唱片主题仪式感拉满", icon: "disc-3",
+          chips: [
+            ["rectangle-vertical", "标准 9:16"], ["grid-3x3", "网格绕排"], ["palette", "轻复古唱片"],
+            ["shield", "避让 关"], ["type", "38px"],
+          ],
+        },
+        {
+          name: "梦幻夜场", desc: "晚安场氛围感 · 梦幻海洋 + 柔光雾面拉满", icon: "moon-star",
+          chips: [
+            ["smartphone", "抖音全屏 9:20"], ["grid-3x3", "网格绕排"], ["palette", "梦幻海洋"],
+            ["shield", "避让 开"], ["sparkles", "雾面 80%"],
+          ],
+        },
+        {
+          name: "极简公告", desc: "去掉一切装饰 · 信息密度优先的实用主义", icon: "minus-square",
+          chips: [
+            ["rectangle-vertical", "标准 9:16"], ["grid-3x3", "网格绕排"], ["palette", "奶油玻璃"],
+            ["shield", "避让 关"], ["sparkles", "雾面 0%"],
+          ],
+        },
+      ];
+
+      const grid = document.getElementById("preset-grid");
+
+      PRESETS.forEach((p) => {
+        const card = document.createElement("article");
+        card.className = "gp-card gp-card-hover flex flex-col p-5";
+        card.innerHTML = `
+          <div class="mb-3 flex items-start justify-between">
+            <span class="flex h-11 w-11 items-center justify-center rounded-xl" style="background:var(--gp-primary-soft)">
+              <span class="gp-icon h-5 w-5 text-primary"><i data-lucide="${p.icon}"></i></span>
+            </span>
+            ${p.isDefault ? '<span class="gp-badge">默认</span>' : ""}
+          </div>
+          <h3 class="font-serif-d text-[16.5px] font-semibold">${p.name}</h3>
+          <p class="mt-1 mb-4 flex-1 text-xs leading-relaxed text-muted-foreground">${p.desc}</p>
+          <div class="mb-4 flex flex-wrap gap-1.5">
+            ${p.chips.map(([icon, text]) =>
+              `<span class="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground" style="background:var(--gp-muted)">
+                 <span class="gp-icon h-3 w-3"><i data-lucide="${icon}"></i></span>${text}</span>`).join("")}
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="gp-btn flex-1 justify-center !py-2 use-btn" data-name="${p.name}">
+              <span class="gp-icon h-4 w-4"><i data-lucide="wand-2"></i></span>应用预设
+            </button>
+            <button class="gp-btn-ghost !px-2.5 !py-2 edit-btn" data-name="${p.name}">
+              <span class="gp-icon h-4 w-4"><i data-lucide="pencil"></i></span>
+            </button>
+          </div>`;
+        grid.appendChild(card);
+      });
+
+      grid.addEventListener("click", (e) => {
+        const use = e.target.closest(".use-btn");
+        const edit = e.target.closest(".edit-btn");
+        if (use) {
+          gp.toast(`已应用预设「${use.dataset.name}」，正在跳转工作台…`, "wand-2");
+          setTimeout(() => (location.href = "workspace.html"), 900);
+        }
+        if (edit) gp.toast(`编辑预设「${edit.dataset.name}」：二期功能`, "pencil");
+      });
+
+      document.getElementById("new-preset-btn").addEventListener("click", () =>
+        gp.toast("已把当前工作台配置存为预设", "bookmark-check")
+      );
+      document.getElementById("dashed-new").addEventListener("click", () =>
+        gp.toast("已把当前工作台配置存为预设", "bookmark-check")
+      );
+    </script>
+</body>
+</html>

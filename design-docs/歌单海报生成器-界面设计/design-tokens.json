@@ -1,0 +1,89 @@
+{
+  "_comment": "歌单海报生成器 · 设计令牌单源真值。shared.css 和 React/Tailwind @theme 均由此衍生。改颜色/间距/字体/圆角只需改这一个文件，然后重新生成下游文件。",
+  "_version": 1,
+  "_updated": "2026-07-25",
+
+  "colors": {
+    "light": {
+      "primary": "#2f8f7a",
+      "primaryStrong": "#257a67",
+      "primaryForeground": "#ffffff",
+      "primarySoft": "rgba(47, 143, 122, 0.1)",
+      "primarySofter": "rgba(47, 143, 122, 0.06)",
+      "accent": "#d9764f",
+      "accentSoft": "rgba(217, 118, 79, 0.12)",
+      "background": "#f7f6f2",
+      "foreground": "#233730",
+      "card": "#ffffff",
+      "cardForeground": "#233730",
+      "popover": "#ffffff",
+      "popoverForeground": "#233730",
+      "muted": "#eeece6",
+      "mutedForeground": "#7d8a83",
+      "border": "#e4e1d8",
+      "input": "#e4e1d8",
+      "ring": "#2f8f7a",
+      "success": "#3d9d63",
+      "warning": "#d9a03f",
+      "danger": "#d05555"
+    },
+    "dark": {
+      "primary": "#4dbb9e",
+      "primaryStrong": "#63c9ae",
+      "primaryForeground": "#0e1f1a",
+      "primarySoft": "rgba(77, 187, 158, 0.14)",
+      "primarySofter": "rgba(77, 187, 158, 0.08)",
+      "accent": "#e8926f",
+      "accentSoft": "rgba(232, 146, 111, 0.14)",
+      "background": "#15201c",
+      "foreground": "#e8efeb",
+      "card": "#1e2c26",
+      "cardForeground": "#e8efeb",
+      "popover": "#22332c",
+      "popoverForeground": "#e8efeb",
+      "muted": "#26352f",
+      "mutedForeground": "#8ba096",
+      "border": "#2f423b",
+      "input": "#2f423b",
+      "ring": "#4dbb9e"
+    }
+  },
+
+  "radius": {
+    "sm": "8px",
+    "md": "12px",
+    "lg": "18px",
+    "xl": "24px"
+  },
+
+  "font": {
+    "sans": "\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif",
+    "serif": "\"Noto Serif SC\", \"Source Han Serif SC\", \"Songti SC\", \"STSong\", \"SimSun\", serif"
+  },
+
+  "shadow": {
+    "light": {
+      "sm": "0 1px 2px rgba(35, 55, 48, 0.04), 0 2px 8px rgba(35, 55, 48, 0.05)",
+      "md": "0 2px 6px rgba(35, 55, 48, 0.05), 0 10px 28px rgba(35, 55, 48, 0.08)",
+      "lg": "0 4px 12px rgba(35, 55, 48, 0.06), 0 24px 56px rgba(35, 55, 48, 0.13)",
+      "primary": "0 4px 14px rgba(47, 143, 122, 0.32)"
+    },
+    "dark": {
+      "sm": "0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.22)",
+      "md": "0 2px 6px rgba(0, 0, 0, 0.22), 0 10px 28px rgba(0, 0, 0, 0.3)",
+      "lg": "0 4px 12px rgba(0, 0, 0, 0.26), 0 24px 56px rgba(0, 0, 0, 0.42)",
+      "primary": "0 4px 14px rgba(77, 187, 158, 0.28)"
+    }
+  },
+
+  "grain": {
+    "light": 0.028,
+    "dark": 0.05
+  },
+
+  "easing": {
+    "out": "cubic-bezier(0.22, 1, 0.36, 1)",
+    "spring": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    "inout": "cubic-bezier(0.65, 0, 0.35, 1)"
+  }
+}
