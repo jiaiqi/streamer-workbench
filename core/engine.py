@@ -30,7 +30,7 @@ def _compose_base(theme: Theme, page: int, spec: CanvasSpec) -> Image.Image:
     bg_path = theme.background_path(page)
     AVOID = bool(spec.avoid_zones)
     CH = spec.height
-    OFF = (CH - 1920) // 2
+    OFF = spec.content_offset
     FULL = spec.is_fullscreen
     W = spec.width
 

@@ -13,6 +13,7 @@ class CanvasSpec:
     width: int = 1080
     height: int = 1920                 # 自由参数，不再由 bool 推导
     avoid_zones: Tuple = ()           # 禁文区列表，每个元素为 (x0, y0, x1, y1)；空=不避让
+    baseline_height: int = 1920       # 内容基准高度（content_offset 计算用，代替硬编码 1920）
     margin: int = 58
     font_song: int = 36               # avoid_zones 非空时引擎自动降为 34
     font_label: int = 40
@@ -22,12 +23,12 @@ class CanvasSpec:
 
     @property
     def content_offset(self) -> int:
-        """内容居中偏移：height > 1920 时下移居中，等于旧脚本的 OFF。"""
-        return max(0, (self.height - 1920) // 2)
+        """内容居中偏移：height > baseline_height 时下移居中，等于旧脚本的 OFF。"""
+        return max(0, (self.height - self.baseline_height) // 2)
 
     @property
     def is_fullscreen(self) -> bool:
-        return self.height > 1920
+        return self.height > self.baseline_height
 
 
 # 画布预设（UI 下拉选项，不是引擎逻辑）
