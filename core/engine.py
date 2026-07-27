@@ -8,6 +8,7 @@
 5. 返回 RGB 图（保存/预览由调用方决定）
 """
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from functools import lru_cache
 
 from .spec import CanvasSpec
 from .style import Style
@@ -18,11 +19,17 @@ from .themes.model import Theme
 from .layouts.base import LayoutPlugin
 
 
-# ---- 背景预处理缓存（设计文档 §9.2）----
+# ---- 背景预处理缓存 ----
 # key: (theme_name, page, canvas_width, canvas_height)
 # value: 合成后的 RGBA 底版（背景+水印+延展+柔光）
 # 参数调整（字号/边距/栏数）时底版完全不变，只重排文字层。
 _BG_CACHE: dict = {}
+
+
+@lru_cache(maxsize=32)
+def _load_font(font_path: str, size: int) -> ImageFont.FreeTypeFont:
+    """字体实例缓存（LRU，32 个活跃条目）。ImageFont.truetype 是 I/O 密集型操作。"""
+    return ImageFont.truetype(font_path, size)
 
 
 def _compose_base(theme: Theme, page: int, spec: CanvasSpec) -> Image.Image:
@@ -76,8 +83,8 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
 
     img = _get_base(theme, page, spec)
 
-    font = ImageFont.truetype(font_path, spec.font_song if not AVOID else spec.font_song_avoid)
-    font_label = ImageFont.truetype(font_path, spec.font_label)
+    font = _load_font(font_path, spec.font_song if not AVOID else spec.font_song_avoid)
+    font_label = _load_font(font_path, spec.font_label)
 
     d = ImageDraw.Draw(img)
     ctx = DrawContext(draw=d, spec=spec, style=st,
