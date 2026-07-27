@@ -1,31 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════════
    歌单海报生成器 · React 前端样式（Tailwind 4 @theme）
 
-   设计令牌源：../../歌单海报生成器-界面设计/design-tokens.json
-   本文件从 design-tokens.json 的 light 色板手动同步生成。
+   设计令牌源：design-tokens.json v2（2026-07-27）
+   品牌：画廊白 Art Gallery（工具界面使用） / 暗色舞台 Cinematic Stage（落地页使用）
+   本文件从 design-tokens.json v2 的 gallery.light 色板手动同步生成。
    改色板/间距/字体请先改 design-tokens.json。
    ═══════════════════════════════════════════════════════════════════ */
 @import "tailwindcss";
 
 @theme {
-  /* ── 品牌色（海洋青 · 晨光纸感）── */
+  /* ── 品牌色（画廊白 Art Gallery · 海洋青）── */
   --color-primary: #2f8f7a;
   --color-primary-strong: #257a67;
-  --color-primary-soft: rgba(47, 143, 122, 0.1);
-  --color-primary-softer: rgba(47, 143, 122, 0.06);
+  --color-primary-soft: rgba(47, 143, 122, 0.10);
+  --color-primary-softer: rgba(47, 143, 122, 0.05);
 
   /* ── 辅助点缀（暖珊瑚）── */
   --color-accent: #d9764f;
-  --color-accent-soft: rgba(217, 118, 79, 0.12);
+  --color-accent-soft: rgba(217, 118, 79, 0.10);
 
-  /* ── 中性表面 ── */
-  --color-background: #f7f6f2;
-  --color-foreground: #233730;
+  /* ── 中性表面 · 画廊白 ── */
+  --color-background: #faf8f5;
+  --color-foreground: #1a2622;
   --color-card: #ffffff;
-  --color-card-foreground: #233730;
+  --color-card-foreground: #1a2622;
   --color-popover: #ffffff;
-  --color-popover-foreground: #233730;
-  --color-muted: #eeece6;
+  --color-popover-foreground: #1a2622;
+  --color-muted: #f0ede8;
   --color-muted-foreground: #7d8a83;
   --color-border: #e4e1d8;
   --color-input: #e4e1d8;

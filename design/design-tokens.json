@@ -1,0 +1,189 @@
+{
+  "_comment": "歌单海报生成器 · 设计令牌单源真值（v2 — 双品牌体系）。2026-07-27 从晨光纸感单品牌升级为「暗色舞台 Cinematic Stage × 画廊白 Art Gallery」双品牌。shared.css / React Tailwind @theme / 落地页 tokens.css 均由此派生。",
+  "_version": 2,
+  "_updated": "2026-07-27",
+
+  "brands": {
+    "stage": {
+      "label": "暗色舞台",
+      "description": "演出后台品牌——深暖黑 OLED 底，舞台金 accent，聚光灯美学，大气克制"
+    },
+    "gallery": {
+      "label": "画廊白",
+      "description": "日间品牌——暖纸白底，海洋青 accent，博物馆留白，干净专业"
+    }
+  },
+
+  "colors": {
+    "stage": {
+      "light": {
+        "_description": "暗色舞台品牌的亮态变体（白天/演示场景）",
+        "primary": "#2F8F7A",
+        "primaryStrong": "#257A67",
+        "primaryForeground": "#FFFFFF",
+        "primarySoft": "rgba(47,143,122,0.12)",
+        "primarySofter": "rgba(47,143,122,0.06)",
+        "accent": "#E8956E",
+        "accentSoft": "rgba(232,149,110,0.14)",
+        "spotlight": "#E8A33D",
+        "spotlightSoft": "rgba(232,163,61,0.18)",
+        "background": "#F0EDE8",
+        "foreground": "#0F1412",
+        "card": "#FFFFFF",
+        "cardForeground": "#0F1412",
+        "popover": "#FFFFFF",
+        "popoverForeground": "#0F1412",
+        "muted": "#E6E1DA",
+        "mutedForeground": "#6B736D",
+        "border": "#DDD7CE",
+        "input": "#DDD7CE",
+        "ring": "#2F8F7A",
+        "success": "#3D9D63",
+        "warning": "#E8A33D",
+        "danger": "#D05555"
+      },
+      "dark": {
+        "_description": "暗色舞台品牌默认态——演出后台，OLED 优化深暖黑",
+        "primary": "#3BAF94",
+        "primaryStrong": "#4DC4A7",
+        "primaryForeground": "#0A0F0D",
+        "primarySoft": "rgba(59,175,148,0.14)",
+        "primarySofter": "rgba(59,175,148,0.08)",
+        "accent": "#E8956E",
+        "accentSoft": "rgba(232,149,110,0.14)",
+        "spotlight": "#E8A33D",
+        "spotlightSoft": "rgba(232,163,61,0.22)",
+        "background": "#0A0F0D",
+        "foreground": "#F5F0EB",
+        "card": "#141C18",
+        "cardForeground": "#F5F0EB",
+        "popover": "#1A2320",
+        "popoverForeground": "#F5F0EB",
+        "muted": "#1C2622",
+        "mutedForeground": "#8B958F",
+        "border": "#26302A",
+        "input": "#26302A",
+        "ring": "#3BAF94",
+        "success": "#5CC684",
+        "warning": "#F0B04E",
+        "danger": "#E5645A"
+      }
+    },
+    "gallery": {
+      "light": {
+        "_description": "画廊白品牌默认态——日间/长时间阅读",
+        "primary": "#2F8F7A",
+        "primaryStrong": "#257A67",
+        "primaryForeground": "#FFFFFF",
+        "primarySoft": "rgba(47,143,122,0.10)",
+        "primarySofter": "rgba(47,143,122,0.05)",
+        "accent": "#D9764F",
+        "accentSoft": "rgba(217,118,79,0.10)",
+        "spotlight": null,
+        "spotlightSoft": null,
+        "background": "#FAF8F5",
+        "foreground": "#1A2622",
+        "card": "#FFFFFF",
+        "cardForeground": "#1A2622",
+        "popover": "#FFFFFF",
+        "popoverForeground": "#1A2622",
+        "muted": "#F0EDE8",
+        "mutedForeground": "#7D8A83",
+        "border": "#E4E1D8",
+        "input": "#E4E1D8",
+        "ring": "#2F8F7A",
+        "success": "#3D9D63",
+        "warning": "#D9A03F",
+        "danger": "#D05555"
+      },
+      "dark": {
+        "_description": "画廊白品牌暗态变体（夜间/暗环境）",
+        "primary": "#4DBB9E",
+        "primaryStrong": "#63C9AE",
+        "primaryForeground": "#0E1F1A",
+        "primarySoft": "rgba(77,187,158,0.14)",
+        "primarySofter": "rgba(77,187,158,0.08)",
+        "accent": "#E8926F",
+        "accentSoft": "rgba(232,146,111,0.14)",
+        "spotlight": null,
+        "spotlightSoft": null,
+        "background": "#15201C",
+        "foreground": "#E8EFEB",
+        "card": "#1E2C26",
+        "cardForeground": "#E8EFEB",
+        "popover": "#22332C",
+        "popoverForeground": "#E8EFEB",
+        "muted": "#26352F",
+        "mutedForeground": "#8BA096",
+        "border": "#2F423B",
+        "input": "#2F423B",
+        "ring": "#4DBB9E"
+      }
+    }
+  },
+
+  "radius": {
+    "sm": "8px",
+    "md": "12px",
+    "lg": "18px",
+    "xl": "24px"
+  },
+
+  "font": {
+    "sans": "\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif",
+    "serif": "\"Noto Serif SC\", \"Source Han Serif SC\", \"Songti SC\", \"STSong\", \"SimSun\", serif",
+    "mono": "\"JetBrains Mono\", \"SF Mono\", \"Cascadia Code\", ui-monospace, monospace"
+  },
+
+  "shadow": {
+    "stage": {
+      "light": {
+        "sm": "0 1px 2px rgba(15,20,18,0.04), 0 2px 8px rgba(15,20,18,0.05)",
+        "md": "0 2px 6px rgba(15,20,18,0.05), 0 10px 28px rgba(15,20,18,0.08)",
+        "lg": "0 4px 12px rgba(15,20,18,0.06), 0 24px 56px rgba(15,20,18,0.13)",
+        "primary": "0 4px 18px rgba(47,143,122,0.30)",
+        "spotlight": "0 0 80px rgba(232,163,61,0.25), 0 0 160px rgba(232,163,61,0.10)"
+      },
+      "dark": {
+        "sm": "0 1px 2px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.28)",
+        "md": "0 2px 6px rgba(0,0,0,0.32), 0 10px 28px rgba(0,0,0,0.40)",
+        "lg": "0 4px 12px rgba(0,0,0,0.36), 0 24px 56px rgba(0,0,0,0.55)",
+        "primary": "0 4px 18px rgba(59,175,148,0.28)",
+        "spotlight": "0 0 100px rgba(232,163,61,0.30), 0 0 200px rgba(232,163,61,0.12)"
+      }
+    },
+    "gallery": {
+      "light": {
+        "sm": "0 1px 2px rgba(26,38,34,0.03), 0 2px 8px rgba(26,38,34,0.04)",
+        "md": "0 2px 6px rgba(26,38,34,0.04), 0 10px 28px rgba(26,38,34,0.06)",
+        "lg": "0 4px 12px rgba(26,38,34,0.05), 0 24px 56px rgba(26,38,34,0.10)",
+        "primary": "0 4px 14px rgba(47,143,122,0.28)"
+      },
+      "dark": {
+        "sm": "0 1px 2px rgba(0,0,0,0.20), 0 2px 8px rgba(0,0,0,0.22)",
+        "md": "0 2px 6px rgba(0,0,0,0.22), 0 10px 28px rgba(0,0,0,0.30)",
+        "lg": "0 4px 12px rgba(0,0,0,0.26), 0 24px 56px rgba(0,0,0,0.42)",
+        "primary": "0 4px 14px rgba(77,187,158,0.28)"
+      }
+    }
+  },
+
+  "glow": {
+    "_description": "舞台品牌特有的聚光灯光效——画廊白品牌不使用。Hero 标题、海报 spotlight、CTA 按钮 hover 时使用。",
+    "spotlight": "0 0 80px var(--glow-spotlight), 0 0 160px var(--glow-spotlight-ambient)",
+    "hero": "0 0 120px rgba(232,163,61,0.18), 0 0 240px rgba(232,163,61,0.06)"
+  },
+
+  "grain": {
+    "light": 0.022,
+    "dark": 0.045
+  },
+
+  "easing": {
+    "out": "cubic-bezier(0.22, 1, 0.36, 1)",
+    "spring": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    "inout": "cubic-bezier(0.65, 0, 0.35, 1)",
+    "cinematic": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "drift": "cubic-bezier(0.45, 0, 0.55, 1)"
+  }
+}
