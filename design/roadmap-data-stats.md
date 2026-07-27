@@ -1,7 +1,7 @@
 # 数据时间维度路线图：事件日志 · 曲谱管理 · 学歌记录 · 数据统计
 
 > **状态**：进行中（2026-07-27 晚更新）——S1 ✅ S2 ✅ S3 ✅ 已上线，S4 / S5 待开发
-> **关联文档**：`design/redesign-v2.html`（UI/UX 重设计提案 v2 交互稿）、`design-docs/歌单海报生成器-界面设计/HANDOFF.md` §9
+> **关联文档**：`design/redesign-v2.html`（UI/UX 重设计提案 v2 交互稿）、`design-docs/歌单海报生成器-界面设计/HANDOFF.md` §9、`design/产品优化方案终版-0727/路线图.md` P6（S4/S5 产品合流；事件 Schema 与统计口径仍以本文为唯一真相）
 > **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`server/main.py`（API 现状）
 
 ---
