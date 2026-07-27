@@ -27,14 +27,15 @@ EVENT_TYPES = (
 
 
 def append_event(path: str, type: str, title: Optional[str] = None,
-                 meta: Optional[dict] = None) -> dict:
+                 meta: Optional[dict] = None, ts: Optional[str] = None) -> dict:
     """向 events.jsonl 追加一个事件，返回写入的事件对象。
 
     type 必须在 EVENT_TYPES 白名单内（防手滑写出无法统计的类型名）。
+    ts 缺省为当前时间；客户端补报离线事件时可传原始时间（保留真实发生时刻）。
     """
     if type not in EVENT_TYPES:
         raise ValueError(f"未知事件类型：{type}（白名单见 EVENT_TYPES）")
-    event = {"ts": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"), "type": type}
+    event = {"ts": ts or datetime.now().strftime("%Y-%m-%dT%H:%M:%S"), "type": type}
     if title is not None:
         event["title"] = title
     if meta:

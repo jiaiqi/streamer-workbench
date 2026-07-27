@@ -418,6 +418,29 @@ def api_events(type: str = None, since: str = None, limit: int = 50):
     return {"total": len(events), "events": events}
 
 
+# 客户端可上报的事件类型（曲库/导出事件由服务端自己写，不开放上报防伪造）
+CLIENT_REPORTABLE = ("queue_added", "song_sung", "practice_logged")
+
+
+@app.post("/api/events/report")
+def api_events_report(payload: dict):
+    """客户端行为上报（直播点歌/学歌打卡）：{"type": "song_sung", "title": "知足", "meta": {...}, "ts": 可选}。
+
+    ts 用于离线补报时保留原始发生时刻；缺省为服务器当前时间。
+    """
+    etype = (payload.get("type") or "").strip()
+    if etype not in CLIENT_REPORTABLE:
+        return Response(f"不可上报的事件类型：{etype}（允许 {CLIENT_REPORTABLE}）", status_code=400)
+    title = payload.get("title")
+    if title is not None:
+        title = str(title).strip() or None
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
+    ts = payload.get("ts")
+    ts = str(ts)[:19] if ts else None
+    event = append_event(EVENTS_JSON, etype, title=title, meta=meta, ts=ts)
+    return {"ok": True, "event": event}
+
+
 # ---- 设置 ----
 @app.get("/api/settings")
 def api_settings_get():

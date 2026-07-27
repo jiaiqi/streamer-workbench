@@ -7,10 +7,55 @@ import type { Song, SongsData } from "./types";
    交互：输入即搜（歌名/歌手/拼音首字母），↑↓ 选择，Enter 加入今晚歌单，
         Esc 清空，30s 自动刷新；歌单 localStorage 持久化，刷新不丢。
    今晚歌单：待唱按加入序，✓ 唱完沉底，重复点歌给「已唱过」提醒。
+   数据：点歌/唱完双写后端事件流（/api/events/report），失败本地保序补报。
    后续 Electron 壳把本页装进 alwaysOnTop 小窗 + 全局热键。 */
 
 const REFRESH_MS = 30_000;
 const QUEUE_KEY = "tonight-queue-v1";
+
+/* ---- 事件上报（S2：localStorage 缓存 + 后端事件流 双写）----
+   队列的"现场真相"仍是 localStorage（后端挂了直播照常进行）；
+   点歌/唱完同时上报 /api/events/report 沉淀统计数据。
+   上报失败进待补队列（localStorage），下次上报成功或定时刷新时保序补报，
+   ts 为事件发生时的本地时间（与后端 ts 格式一致）。 */
+const PENDING_KEY = "quick-events-pending-v1";
+
+interface PendingEvent { type: string; title: string; ts: string }
+
+function localTs(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function loadPendingEvents(): PendingEvent[] {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) ?? "[]"); }
+  catch { return []; }
+}
+async function postEvent(e: PendingEvent): Promise<boolean> {
+  try {
+    const r = await fetch("/api/events/report", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(e),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+/* 保序补报：首个失败即停，后续留在 localStorage 等下一轮 */
+async function flushPendingEvents() {
+  const pending = loadPendingEvents();
+  let i = 0;
+  for (; i < pending.length; i++) {
+    if (!(await postEvent(pending[i]))) break;
+  }
+  if (i > 0) localStorage.setItem(PENDING_KEY, JSON.stringify(pending.slice(i)));
+}
+function reportEvent(type: "queue_added" | "song_sung", title: string) {
+  const e: PendingEvent = { type, title, ts: localTs() };
+  postEvent(e).then(ok => {
+    if (ok) flushPendingEvents();
+    else localStorage.setItem(PENDING_KEY, JSON.stringify([...loadPendingEvents(), e]));
+  });
+}
 
 interface QueueItem { title: string; sung: boolean; addedAt: number }
 
@@ -44,6 +89,7 @@ export default function QuickView() {
     try {
       const d: SongsData = await (await fetch("/api/songs/list")).json();
       setSongs(d.songs);
+      flushPendingEvents();  // 后端可达，顺带补报离线事件
     } catch { /* 后端没起时保持旧数据 */ }
   };
   useEffect(() => {
@@ -95,6 +141,7 @@ export default function QuickView() {
     if (sungRef.current.has(title)) showToast(`注意：「${title}」今晚已唱过`);
     else showToast(`已加入今晚歌单：${title}`);
     setQueue(q => [...q, { title, sung: false, addedAt: Date.now() }]);
+    reportEvent("queue_added", title);
   };
 
   /* 键盘：↑↓ 选择 · Enter 加入歌单 · Esc 清空 · 其他按键回流到搜索框 */
@@ -139,8 +186,11 @@ export default function QuickView() {
     [next[idx], next[target]] = [next[target], next[idx]];
     return next;
   });
-  const toggleSung = (title: string) => setQueue(q =>
-    q.map(i => i.title === title ? { ...i, sung: !i.sung } : i));
+  const toggleSung = (title: string) => {
+    const wasSung = queue.find(i => i.title === title)?.sung;
+    setQueue(q => q.map(i => i.title === title ? { ...i, sung: !i.sung } : i));
+    if (!wasSung) reportEvent("song_sung", title);  // 撤销已唱不上报（统计容忍）
+  };
   const removeItem = (title: string) => setQueue(q => q.filter(i => i.title !== title));
 
   const popout = () => {

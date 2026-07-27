@@ -250,6 +250,13 @@ def test_event_tail_order():
     assert [e["title"] for e in recent] == ["歌三", "歌二"]  # 最新在前 + limit 生效
     d.cleanup()
 
+def test_event_custom_ts():
+    """客户端补报离线事件时可传原始时刻（S2 QuickView 双写用）。"""
+    d, p = _tmpevents()
+    e = append_event(p, "song_sung", title="知足", ts="2026-07-20T22:30:05")
+    assert e["ts"] == "2026-07-20T22:30:05"
+    d.cleanup()
+
 def test_pinyin_initials():
     from core.data.songs import pinyin_initials
     assert pinyin_initials("知足") == "zz"
