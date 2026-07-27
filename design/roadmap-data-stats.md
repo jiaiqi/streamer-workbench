@@ -1,7 +1,7 @@
 # 数据时间维度路线图：事件日志 · 曲谱管理 · 学歌记录 · 数据统计
 
-> **状态**：已确认方向（2026-07-27），待实施
-> **关联文档**：`design/redesign-v2.html`（UI/UX 重设计提案 v2 交互稿）、根目录 `agent-handoff-2026-07-25.md`
+> **状态**：进行中（2026-07-27 晚更新）——S1 ✅ S2 ✅ S3 ✅ 已上线，S4 / S5 待开发
+> **关联文档**：`design/redesign-v2.html`（UI/UX 重设计提案 v2 交互稿）、设计仓库《HANDOFF.md》§9
 > **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`server/main.py`（API 现状）
 
 ---
@@ -132,15 +132,26 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 
 ## 9. 分期实施（S1→S5）
 
-| 阶段 | 内容 | 风险 | 验收 |
+| 阶段 | 内容 | 状态 | 验收 |
 |---|---|---|---|
-| **S1 地基** | events.py + 五端点埋点 + 迁移 v4（learned_at/tab_files）+ /api/events feed | 低（只加不改） | 单元测试覆盖事件写入/扫描/迁移；手工触发五个动作，events.jsonl 逐行正确 |
-| **S2 点歌上报** | QuickView 双写（localStorage + 上报）+ 失败补报 | 低 | 断后端时队列不丢；恢复后事件补齐 |
-| **S3 曲谱** | tabs 上传/列表/删除/静态访问 + 曲库/学歌/直播三触点 UI | 中（文件处理） | 上传图片可在曲库 lightbox 与直播 T 键弹层查看 |
-| **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | 低 | 打卡 → 时间线可见；学会后周期正确 |
-| **S5 统计视图** | /api/stats/* 三端点 + 第五导航视图 | 低 | 口径与第 8 节一致；截图回归 |
+| **S1 地基** | events.py + 五端点埋点 + 迁移 v4（learned_at/tab_files）+ /api/events feed | ✅ `05ac6e7` | 单元测试 27→37 通过；五动作逐行落 events.jsonl |
+| **S2 点歌上报** | QuickView 双写（localStorage + 上报）+ 失败补报 | ✅ `403165c` | /api/events/report（仅三类可上报）；断网队列不丢、恢复保序补报 |
+| **S3 曲谱** | tabs 上传/列表/删除/静态访问 + 曲库/学歌/直播三触点 | ✅ `42fc392` | core/data/tabs.py；TabsPanel 共享组件；直播 T 键看谱；42/42 测试 |
+| **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | ⬜ 待开发 | 打卡 → 时间线可见；学会后周期正确 |
+| **S5 统计视图** | /api/stats/* 三端点 + 第五导航视图 | ⬜ 待开发 | 口径与第 8 节一致；截图回归 |
 
-**排序理由**：S1 解锁更新记录且让之后所有功能"白拿"历史数据；S2 尽早开始沉淀直播数据（最有直播价值、正在流失）；S3 是高频刚需但工程量最大，放中间；S5 是全部数据的兑现，收尾。
+**S4 开工提示**（下一任 agent 直接可用）：
+- `/api/events/report` 已预留 `practice_logged` 类型（S2 时开放），后端只需加专用端点或直接复用 report；
+- `Song.learned_at` 已在「标记学会」时回填（S1），学习周期 = learned_at − added_at；
+- 打卡 UI 落在 `ui/src/views/LearningView.tsx` 卡片（参照 S3「谱 n」按钮的展开面板模式）；
+- 事件 meta 建议：`{note, minutes?, self_rating?}`（第 4 节）。
+
+**S5 开工提示**：
+- 统计全部从 `core/data/events.py` 的 `iter_events()` 现算，**只算不存**（第 10 节纪律）；
+- 导航第五视图直接按 `design/redesign-v2.html` 的 token 新写（surface 阶梯/语义色/◆◆◇/三档按钮）；
+- 排行榜口径：点歌 TOP10 = song_sung 按 title 计数（全时段/近30天两档）。
+
+**已完成阶段排序回顾**：S1 解锁更新记录且让之后所有功能"白拿"历史数据；S2 尽早沉淀直播数据；S3 高频刚需但工程量最大放中间；S5 是全部数据的兑现，收尾。
 
 ## 10. 工程纪律（沿用项目既有约定）
 
