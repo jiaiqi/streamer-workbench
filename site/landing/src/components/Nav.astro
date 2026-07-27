@@ -1,0 +1,40 @@
+---
+// 导航条 + 主题切换按钮
+---
+<nav class="fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-8 backdrop-blur-md border-b transition-colors duration-500"
+  style="background: var(--nav-blur); border-color: var(--border);">
+  <a href={import.meta.env.BASE_URL} class="flex items-center gap-2.5">
+    <span class="w-8 h-8 rounded-lg grid place-items-center text-white font-serif font-bold text-sm"
+      style="background: linear-gradient(135deg, var(--primary), var(--primary-strong));">歌</span>
+    <span class="font-serif text-[17px] font-semibold tracking-wide">歌单海报生成器</span>
+  </a>
+
+  <div class="flex items-center gap-1.5">
+    <button onclick="window.gp.theme.cycleBrand()"
+      class="px-3.5 py-1.5 rounded-lg text-[13px] font-medium border transition-colors cursor-pointer"
+      style="border-color: var(--border); background: var(--surface-1); color: var(--text-1);">
+      <span id="brand-label">暗色舞台</span> <span style="opacity: 0.5;">▾</span>
+    </button>
+    <span class="w-px h-5 mx-1" style="background: var(--border);"></span>
+    <button onclick="window.gp.theme.toggleMode()" title="切换亮/暗" id="mode-btn"
+      class="px-3 py-1.5 rounded-lg text-[13px] border transition-colors cursor-pointer"
+      style="border-color: var(--border); background: var(--surface-1); color: var(--text-1);">☾</button>
+    <a href="https://github.com/jiaiqi/playlist-poster-generator" target="_blank" rel="noopener"
+      class="px-3.5 py-1.5 rounded-lg text-[13px] font-semibold text-white transition-all hover:-translate-y-px"
+      style="background: var(--primary);">★ Star</a>
+  </div>
+</nav>
+
+<script is:inline>
+  // 同步主题切换按钮显示
+  function syncThemeButtons() {
+    var b = document.documentElement.getAttribute('data-brand');
+    var m = document.documentElement.getAttribute('data-mode');
+    var lbl = document.getElementById('brand-label');
+    var mb  = document.getElementById('mode-btn');
+    if (lbl) lbl.textContent = window.gp.theme.LABELS[b + '-' + m] || (b + ' / ' + m);
+    if (mb)  mb.textContent  = m === 'dark' ? '☾' : '☀';
+  }
+  syncThemeButtons();
+  document.addEventListener('gp:theme', syncThemeButtons);
+</script>

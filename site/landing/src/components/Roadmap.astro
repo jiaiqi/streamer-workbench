@@ -1,0 +1,88 @@
+---
+// 产品演进时间线
+const items = [
+  {
+    title: 'v1 · 海报生成 + 歌曲库',
+    status: 'done',
+    label: '✅ 已上线',
+    desc: 'PIL 纯函数引擎 + 7 主题 + 金标准 16/16 diff=0。歌曲库、学歌管理、直播速查 /quick。',
+  },
+  {
+    title: 'v2 · 布局子系统',
+    status: 'wip',
+    label: '⏳ 进行中',
+    desc: '6 套内置布局 + 自定义布局编辑器。避让区形状化 + 声明式 Schema，让新布局从"写代码"变成"写配置"。',
+  },
+  {
+    title: 'v3 · 数据驱动布局',
+    status: 'next',
+    label: '📋 规划中',
+    desc: '点歌数据反哺海报——词云版、TOP 榜版。直播越多，海报越好看。消费 events.jsonl 事件流，不做额外存储。',
+  },
+];
+---
+<section class="reveal max-w-container mx-auto px-16 py-20">
+  <div class="font-mono text-[11px] font-semibold uppercase tracking-[2px] mb-3"
+    style="color: var(--spotlight);">产品演进</div>
+  <h2 class="font-serif text-4xl md:text-5xl font-bold tracking-tight leading-tight mb-4">
+    一个工具，慢慢长成<br />主播的工作台
+  </h2>
+  <p class="text-base max-w-[560px] mb-10 leading-relaxed" style="color: var(--text-2);">
+    从海报生成器出发，沿着"直播场景真实需求"生长。每条线都来自实际使用中的痛点。
+  </p>
+
+  <div class="roadmap">
+    {items.map((it) => (
+      <div class="roadmap-item">
+        <div class="roadmap-node"></div>
+        <h3 class="font-serif text-[22px] font-semibold mb-1">{it.title}</h3>
+        <div class={`rstatus ${it.status}`}>{it.label}</div>
+        <p class="text-[14px] leading-relaxed" style="color: var(--text-2);">{it.desc}</p>
+      </div>
+    ))}
+  </div>
+</section>
+
+<style>
+  .roadmap {
+    position: relative;
+    padding-left: 40px;
+  }
+  .roadmap::before {
+    content: "";
+    position: absolute;
+    left: 15px;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .roadmap-item {
+    position: relative;
+    margin-bottom: 40px;
+  }
+  .roadmap-node {
+    position: absolute;
+    left: -31px;
+    top: 4px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    background: var(--bg);
+    z-index: 1;
+    transition: all 0.4s;
+  }
+  .roadmap-item.visible .roadmap-node {
+    background: var(--spotlight);
+    border-color: var(--spotlight);
+    box-shadow: var(--glow-spot);
+  }
+  .rstatus {
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    margin-bottom: 8px;
+  }
+  .rstatus.done { color: var(--success); }
+  .rstatus.wip  { color: var(--spotlight); }
+  .rstatus.next { color: var(--text-3); }
+</style>

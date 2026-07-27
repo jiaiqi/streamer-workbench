@@ -1,0 +1,55 @@
+---
+// 直播伴侣三件套
+const items = [
+  { icon: '🎤', title: '点歌队列', desc: '今晚唱过的，一键进历史。点歌双写事件流，排行数据不丢失，跨设备可回溯。' },
+  { icon: '⚡', title: '速查 /quick', desc: '大字歌名 + 等宽选调，3 米外都能读。↑↓ 选歌，Enter 进队列，Esc 清空。' },
+  { icon: '🎼', title: 'T 键看谱', desc: '曲谱附件随叫随到，和弦谱、六线谱图片/PDF 即传即看，不切窗口不打断直播。' },
+];
+---
+<section class="reveal max-w-container mx-auto px-16 py-20">
+  <div class="font-mono text-[11px] font-semibold uppercase tracking-[2px] mb-3"
+    style="color: var(--spotlight);">直播伴侣</div>
+  <h2 class="font-serif text-4xl md:text-5xl font-bold tracking-tight leading-tight mb-4">
+    直播里三件事，<br />键盘就能搞定
+  </h2>
+  <p class="text-base max-w-[560px] mb-10 leading-relaxed" style="color: var(--text-2);">
+    手机直播，电脑运行。全键盘操作，不切窗口、不看屏幕，音乐主播的全流程工作台。
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    {items.map((it, i) => (
+      <div class={`feature-card reveal reveal-d${i + 1}`}>
+        <div class="w-12 h-12 rounded-xl grid place-items-center text-[22px] mb-5"
+          style="background: var(--primary-soft);">{it.icon}</div>
+        <h3 class="font-serif text-xl font-semibold mb-2.5">{it.title}</h3>
+        <p class="text-[14px] leading-relaxed" style="color: var(--text-2);">{it.desc}</p>
+      </div>
+    ))}
+  </div>
+</section>
+
+<style>
+  .feature-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 36px;
+    transition: all 0.35s var(--ease-out);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .feature-card::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--spotlight), transparent);
+    opacity: 0;
+    transition: opacity 0.35s;
+  }
+  .feature-card:hover {
+    border-color: var(--spotlight);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+  }
+  .feature-card:hover::before { opacity: 1; }
+</style>

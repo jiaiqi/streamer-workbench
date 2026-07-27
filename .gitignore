@@ -28,3 +28,10 @@ node_modules/
 # 打包 spike 产物（可重新构建）
 packaging/dist/
 packaging/build/
+
+# Astro 构建产物与依赖（site/landing/）
+site/landing/dist/
+site/landing/node_modules/
+site/landing/.astro/
+site/landing/public/posters/
+site/landing/public/og-image.png

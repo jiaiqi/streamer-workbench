@@ -1,0 +1,108 @@
+---
+import '~/styles/global.css';
+
+export interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = '歌单海报生成器 — 把歌单变成海报',
+  description = '7 主题 × 多布局 · 逐像素金标准 · 主播的全流程工作台。开源音乐主播桌面工具。',
+} = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="zh-CN" data-brand="stage" data-mode="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{title}</title>
+<meta name="description" content={description} />
+
+<!-- 防 FOUC：在 CSS 解析前根据 localStorage 设置主题 -->
+<script is:inline>
+  (function () {
+    try {
+      var saved = JSON.parse(localStorage.getItem('gp-landing-theme') || '{}');
+      var brand = saved.brand || 'stage';
+      var mode  = saved.mode  || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-brand', brand);
+      document.documentElement.setAttribute('data-mode', mode);
+    } catch (_) {}
+  })();
+</script>
+
+<!-- 字体 -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<!-- OG / Twitter -->
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="/og-image.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+</head>
+
+<body>
+  <div class="glow-orbs"></div>
+  <slot />
+
+  <!-- 全局滚动揭示 + 主题切换脚本（约 800B inline） -->
+  <script is:inline>
+    // 滚动揭示
+    (function () {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) e.target.classList.add('visible');
+        });
+      }, { threshold: 0.15 });
+      document.querySelectorAll('.reveal').forEach(function (el) { observer.observe(el); });
+    })();
+
+    // 主题切换（暴露到 window.gp）
+    window.gp = window.gp || {};
+    window.gp.theme = {
+      BRANDS: ['stage', 'gallery'],
+      MODES: ['dark', 'light'],
+      LABELS: {
+        'stage-dark': '暗色舞台',
+        'stage-light': '暗色舞台·亮',
+        'gallery-light': '画廊白',
+        'gallery-dark': '画廊白·暗',
+      },
+      get: function () {
+        try { return JSON.parse(localStorage.getItem('gp-landing-theme') || '{}'); }
+        catch (_) { return {}; }
+      },
+      apply: function (brand, mode) {
+        document.documentElement.setAttribute('data-brand', brand);
+        document.documentElement.setAttribute('data-mode', mode);
+        localStorage.setItem('gp-landing-theme', JSON.stringify({ brand: brand, mode: mode }));
+        // 通知 island 同步
+        document.dispatchEvent(new CustomEvent('gp:theme', { detail: { brand: brand, mode: mode } }));
+      },
+      cycleBrand: function () {
+        var b = document.documentElement.getAttribute('data-brand');
+        var i = this.BRANDS.indexOf(b);
+        this.apply(this.BRANDS[(i + 1) % this.BRANDS.length], document.documentElement.getAttribute('data-mode'));
+      },
+      toggleMode: function () {
+        var m = document.documentElement.getAttribute('data-mode');
+        var i = this.MODES.indexOf(m);
+        this.apply(document.documentElement.getAttribute('data-brand'), this.MODES[(i + 1) % this.MODES.length]);
+      },
+      label: function () {
+        var b = document.documentElement.getAttribute('data-brand');
+        var m = document.documentElement.getAttribute('data-mode');
+        return this.LABELS[b + '-' + m] || (b + ' / ' + m);
+      },
+    };
+  </script>
+</body>
+</html>

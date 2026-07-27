@@ -1,0 +1,68 @@
+---
+// 数字条 · 进入视口时 counting
+---
+<section class="reveal max-w-container mx-auto px-16 py-20">
+  <div class="grid grid-cols-5 gap-px rounded-3xl overflow-hidden"
+    style="background: var(--border);">
+    <div class="p-8 text-center transition-colors" style="background: var(--surface-1);">
+      <div class="font-serif text-5xl md:text-6xl font-bold leading-none mb-1.5 font-mono tabular-nums" style="color: var(--primary);">
+        <span class="stat-num" data-count="178">0</span>
+      </div>
+      <div class="text-[13px]" style="color: var(--text-3);">首·已会曲目</div>
+    </div>
+    <div class="p-8 text-center" style="background: var(--surface-1);">
+      <div class="font-serif text-5xl md:text-6xl font-bold leading-none mb-1.5 font-mono tabular-nums" style="color: var(--primary);">
+        <span class="stat-num" data-count="7">0</span>
+      </div>
+      <div class="text-[13px]" style="color: var(--text-3);">套·水彩主题</div>
+    </div>
+    <div class="p-8 text-center" style="background: var(--surface-1);">
+      <div class="font-serif text-5xl md:text-6xl font-bold leading-none mb-1.5 font-mono tabular-nums" style="color: var(--primary);">
+        <span class="stat-num" data-count="6">0</span>
+      </div>
+      <div class="text-[13px]" style="color: var(--text-3);">套·排版布局</div>
+    </div>
+    <div class="p-8 text-center" style="background: var(--surface-1);">
+      <div class="font-serif text-5xl md:text-6xl font-bold leading-none mb-1.5 font-mono tabular-nums" style="color: var(--primary);">
+        <span class="stat-num" data-count="16">0</span>
+      </div>
+      <div class="text-[13px]" style="color: var(--text-3);">金标准快照</div>
+    </div>
+    <div class="p-8 text-center" style="background: var(--surface-1);">
+      <div class="font-serif text-5xl md:text-6xl font-bold leading-none mb-1.5 font-mono tabular-nums" style="color: var(--primary);">
+        <span class="stat-num" data-count="0">0</span>
+      </div>
+      <div class="text-[13px]" style="color: var(--text-3);">像素误差</div>
+    </div>
+  </div>
+</section>
+
+<script is:inline>
+  // 数字 counting 动画 · IntersectionObserver 触发
+  (function () {
+    function ease(t) { return 1 - Math.pow(1 - t, 3); }
+    function animate(el) {
+      if (el.dataset.animated) return;
+      el.dataset.animated = '1';
+      var target = parseInt(el.dataset.count, 10);
+      var start = performance.now();
+      var dur = 1200;
+      function tick(now) {
+        var p = Math.min((now - start) / dur, 1);
+        el.textContent = Math.round(target * ease(p));
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+    var statObs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.querySelectorAll('.stat-num').forEach(animate);
+        }
+      });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('section').forEach(function (s) {
+      if (s.querySelector('.stat-num')) statObs.observe(s);
+    });
+  })();
+</script>

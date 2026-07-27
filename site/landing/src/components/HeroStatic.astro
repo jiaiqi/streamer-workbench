@@ -1,0 +1,106 @@
+---
+// Hero 静态部分（左半：标题 + CTA + 滚动指示 + 右半 island）
+import HeroPosterDeck from './HeroPosterDeck';
+---
+<section class="hero-section relative z-10 min-h-screen flex items-center px-4 sm:px-8 lg:px-16 pt-32 pb-20 max-w-container mx-auto gap-16">
+  <div class="hero-left reveal flex-1 max-w-[620px]">
+    <div class="font-mono text-[12px] font-semibold uppercase tracking-[2.5px] mb-5"
+      style="color: var(--spotlight);">Open Source · 主播工作台</div>
+    <h1 class="hero-title">把歌单变成海报</h1>
+    <h1 class="hero-title-sub">把舞台留给声音</h1>
+    <p class="hero-desc">
+      7 主题 × 多布局 · 逐像素金标准 · 直播查歌、点歌、看谱，一套搞定。
+    </p>
+    <div class="hero-cta">
+      <a href="https://github.com/jiaiqi/playlist-poster-generator" target="_blank" rel="noopener"
+        class="btn-cta">
+        ★ Star on GitHub
+      </a>
+      <a href="https://github.com/jiaiqi/playlist-poster-generator/blob/master/README.md" target="_blank" rel="noopener"
+        class="btn-ghost">
+        了解更多 →
+      </a>
+    </div>
+  </div>
+
+  <div class="hero-right flex-1 min-h-[500px] flex items-center justify-center">
+    <HeroPosterDeck client:visible />
+  </div>
+</section>
+
+<style>
+  .hero-title {
+    font-family: var(--font-serif);
+    font-size: clamp(3.5rem, 7vw, 7rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    margin-bottom: 8px;
+  }
+  .hero-title-sub {
+    font-family: var(--font-serif);
+    font-size: clamp(3.5rem, 7vw, 7rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    -webkit-text-fill-color: transparent;
+    -webkit-text-stroke: 1.5px var(--text-1);
+    margin-bottom: 28px;
+    opacity: 0.7;
+  }
+  .hero-desc {
+    font-size: 17px;
+    line-height: 1.7;
+    margin-bottom: 36px;
+    max-width: 460px;
+    color: var(--text-2);
+  }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border-radius: var(--radius-md);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    transition: all 0.3s var(--ease-out);
+    text-decoration: none;
+  }
+  .btn-cta:hover {
+    background: var(--primary-strong);
+    box-shadow: var(--glow-spot);
+    transform: translateY(-1px);
+  }
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border-radius: var(--radius-md);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-1);
+    transition: all 0.3s var(--ease-out);
+    text-decoration: none;
+  }
+  .btn-ghost:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-softer);
+  }
+  @media (max-width: 1024px) {
+    .hero-section { flex-direction: column; gap: 48px; padding-top: 7rem; }
+    .hero-left { max-width: 100%; text-align: center; }
+    .hero-desc { margin-left: auto; margin-right: auto; }
+    .hero-cta { justify-content: center; }
+    .hero-right { min-height: 360px; }
+  }
+</style>

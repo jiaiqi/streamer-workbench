@@ -1,0 +1,58 @@
+---
+// 7 主题画廊
+const themes = [
+  { id: 'ocean', name: '海洋柔光',  c1: '#2b544e', c2: '#246e60', c3: '#bce0d2', c4: '#e89272', c5: '#f7f6f2' },
+  { id: 'dream', name: '梦幻海洋',  c1: '#5f4658', c2: '#7c4a63', c3: '#f0d0e0', c4: '#c98aa9', c5: '#fffafd' },
+  { id: 'cream', name: '奶油花园',  c1: '#6b4a3f', c2: '#8a4a38', c3: '#f7c7b2', c4: '#e89272', c5: '#fffcf8' },
+  { id: 'green', name: '青提气泡',  c1: '#3d5e58', c2: '#4f8576', c3: '#d4e8b8', c4: '#7eb88f', c5: '#f7fce8' },
+  { id: 'note',  name: '卡通音符',  c1: '#465044', c2: '#406e5a', c3: '#c6e9d2', c4: '#e89272', c5: '#ffffff' },
+  { id: 'glass', name: '奶油玻璃',  c1: '#465064', c2: '#406a94', c3: '#e4eef6', c4: '#e69e94', c5: '#ffffff' },
+  { id: 'retro', name: '轻复古唱片', c1: '#3a2820', c2: '#7a4a32', c3: '#e8b888', c4: '#c46a3e', c5: '#f7e8d0' },
+];
+---
+<section class="reveal max-w-container mx-auto px-16 py-20">
+  <div class="font-mono text-[11px] font-semibold uppercase tracking-[2px] mb-3"
+    style="color: var(--spotlight);">主题工坊</div>
+  <h2 class="font-serif text-4xl md:text-5xl font-bold tracking-tight leading-tight mb-4">
+    7 套水彩主题
+  </h2>
+  <p class="text-base max-w-[560px] mb-10 leading-relaxed" style="color: var(--text-2);">
+    每套主题 = 一组设计令牌 + 双页背景 + 五角色色板。AI 水彩生成，PIL 引擎逐像素渲染。
+  </p>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+    {themes.map((t, i) => (
+      <a
+        class={`gallery-item reveal reveal-d${(i % 4) + 1}`}
+        style={`--c1:${t.c1};--c2:${t.c2};--c3:${t.c3};--c4:${t.c4};`}
+        href={`#${t.id}`}
+      >
+        <div class="aspect-[3/4] grid place-items-center text-[13px] text-white"
+          style={`background: linear-gradient(180deg, ${t.c1} 0%, ${t.c2} 30%, ${t.c3} 65%, ${t.c5} 100%); text-shadow: 0 1px 4px rgba(0,0,0,.3);`}>
+          {t.name}
+        </div>
+        <div class="px-3 py-2 text-[12px] font-semibold"
+          style="background: var(--surface-1); color: var(--text-1); border-top: 1px solid var(--border);">
+          {t.name}
+        </div>
+      </a>
+    ))}
+  </div>
+</section>
+
+<style>
+  .gallery-item {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.4s var(--ease-cinematic);
+    text-decoration: none;
+    display: block;
+  }
+  .gallery-item:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 0 40px var(--spotlight-soft), var(--shadow-lg);
+    border-color: var(--spotlight);
+  }
+</style>
