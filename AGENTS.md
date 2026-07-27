@@ -9,7 +9,7 @@
 
 - **中文名**：主播工作台
 - **英文名**：streamer-workbench
-- **旧名**：歌单海报生成器 / playlist-poster-generator（GitHub 远程仓仍为旧名，推送走 SSH）
+- **旧名**：歌单海报生成器 / playlist-poster-generator（已迁移至 streamer-workbench）
 - **定位**：音乐主播的内容与直播运营工作台。对外可称"主播演出后台"。
 - **不再称"歌单海报生成器"**——所有新文档、代码注释、UI 文字均使用新名。
 
@@ -131,7 +131,7 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 - Python 改动运行 `PYTHONPATH=. python tests/test_unit.py`
 - React 改动运行 `cd ui && npx tsc --noEmit`
 - 允许纯本地提交，不强制推远程。
-- 推远程走 SSH：`git push git@github.com:jiaiqi/playlist-poster-generator.git HEAD:master`
+- 推远程走 SSH：`git push git@github.com:jiaiqi/streamer-workbench.git HEAD:master`
 - **不 force push，不改写已发布历史**。
 
 ---
@@ -178,5 +178,5 @@ cd ui && npm run dev                          # 前端
 PYTHONPATH=. python tools/benchmark.py        # 渲染性能
 
 # 推送
-git push git@github.com:jiaiqi/playlist-poster-generator.git HEAD:master
+git push git@github.com:jiaiqi/streamer-workbench.git HEAD:master
 ```

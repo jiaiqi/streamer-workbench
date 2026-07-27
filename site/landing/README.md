@@ -14,7 +14,7 @@
 ```bash
 cd site/landing
 pnpm install
-pnpm dev                # http://localhost:4321/playlist-poster-generator/
+pnpm dev                # http://localhost:4321/streamer-workbench/
 ```
 
 ## 构建
@@ -34,7 +34,7 @@ pnpm build              # 输出到 ../../docs/（覆盖 GitHub Pages 部署）
 
 构建后 `docs/` 即被 GitHub Pages 服务。仓库 Settings → Pages → Source: master → /docs。
 
-URL: `https://jiaiqi.github.io/playlist-poster-generator/`
+URL: `https://jiaiqi.github.io/streamer-workbench/`
 
 ### Vercel（可选，主推）
 
@@ -52,7 +52,7 @@ URL: `https://jiaiqi.github.io/playlist-poster-generator/`
 
 ```
 site/landing/
-├── astro.config.mjs              base='/playlist-poster-generator/' + outDir='../../docs'
+├── astro.config.mjs              base='/streamer-workbench/' + outDir='../../docs'
 ├── tailwind.config.mjs           content glob + 字体族
 ├── tsconfig.json
 ├── package.json

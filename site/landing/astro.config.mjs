@@ -4,7 +4,7 @@ import react from '@astrojs/react';
 
 export default defineConfig({
   site: 'https://jiaiqi.github.io',
-  base: '/playlist-poster-generator/',
+  base: '/streamer-workbench/',
   outDir: '../../docs',
   trailingSlash: 'never',
   build: { inlineStylesheets: 'auto' },

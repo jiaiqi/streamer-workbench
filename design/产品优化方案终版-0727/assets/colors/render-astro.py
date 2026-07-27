@@ -16,11 +16,11 @@ async def main():
         )
         page = await ctx.new_page()
 
-        # 把 /playlist-poster-generator/ 前缀的请求重写到根（仅限本次截图）
+        # 把 /streamer-workbench/ 前缀的请求重写到根（仅限本次截图）
         async def rewrite(route):
-            url = route.request.url.replace("http://localhost:4321/playlist-poster-generator/", "http://localhost:4321/")
+            url = route.request.url.replace("http://localhost:4321/streamer-workbench/", "http://localhost:4321/")
             await route.continue_(url=url)
-        await page.route("**/playlist-poster-generator/**", rewrite)
+        await page.route("**/streamer-workbench/**", rewrite)
 
         await page.goto("http://localhost:4321/index.html", wait_until="networkidle")
         await page.wait_for_timeout(2500)
