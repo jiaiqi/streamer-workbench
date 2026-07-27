@@ -39,7 +39,6 @@ class GridWrapLayout(LayoutPlugin):
     id = "grid-wrap"
     name = "全行网格绕排版"
     pages = 2
-    page_capacity = 1920
     supports_avoidance = True
 
     def params(self) -> list[ParamSpec]:

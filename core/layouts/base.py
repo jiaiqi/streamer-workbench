@@ -32,8 +32,14 @@ class LayoutPlugin(ABC):
     id: str                              # "grid-wrap"
     name: str                            # "全行网格绕排版"
     pages: int | None = None             # 固定页数（如 2）；None = 自动分页
-    page_capacity: int = 1920            # 自动分页时单页最大内容高度(px)
     supports_avoidance: bool = True      # 是否支持 avoid_zones 避让
+
+    def get_page_capacity(self, spec) -> int:
+        """单页最大内容高度（px），自动分页时使用。默认从画布高度推算。
+        
+        子类可覆盖以声明比默认更小/更大的页容量。
+        """
+        return max(1, spec.height - spec.margin * 2)
 
     @abstractmethod
     def params(self) -> List[ParamSpec]: ...
