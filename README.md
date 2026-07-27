@@ -2,7 +2,9 @@
 
 把 `歌单-排版一\build_playlist.py` 的 PIL 海报能力升级为桌面 App。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-27 晚）**：引擎 100%（金标准 16/16 diff=0）；UI 工作台/歌曲库/学歌/设置/速查（/quick）可用；数据时间维度 Phase 5 进行中——事件日志、点歌双写、曲谱管理已上线（S1-S3），学歌打卡（S4）与统计视图（S5）待开发。**接手开发请读 `design/roadmap-data-stats.md` + 设计仓库《HANDOFF.md》。**
+> **进度快照（2026-07-27 晚）**：引擎 100%（金标准 16/16 diff=0）；UI 工作台/歌曲库/学歌/设置/速查（/quick）可用；数据时间维度 Phase 5 进行中——事件日志、点歌双写、曲谱管理已上线（S1-S3），学歌打卡（S4）与统计视图（S5）待开发。**接手开发请读 `design/roadmap-data-stats.md` + `design-docs/歌单海报生成器-界面设计/HANDOFF.md`。**
+>
+> **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `design-docs/`（完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
 ## 技术栈（2026-07-25 定稿，决策过程见设计仓库《歌单海报生成器-设计结论.md》第一节）
 - **渲染引擎**：Python + PIL（纯函数，金标准：与现有成品逐像素一致，当前 16/16 diff=0）
@@ -19,6 +21,7 @@ server/      FastAPI 渲染后端
 web/         原生验证页（开发期）
 ui/          React + Vite 前端工作台
 design/      UI/UX 重设计提案交互稿（redesign-v1/v2.html）+ 数据时间维度路线图（roadmap-data-stats.md）
+design-docs/ 原设计仓库全部内容（设计结论/项目结构设计/HANDOFF/7 页设计稿/歌单-排版一 预言机）
 prototype/   高保真 UI 原型 + 7 主题背景 + 14 张成品海报
 themes/      主题包（从 歌单-排版一 复制背景图 + theme.json）
 fonts/       字体 MaokenAssortedSans.ttf
@@ -41,8 +44,8 @@ cd ui && npm install && npm run dev                  # http://localhost:5173，/
 
 ## 金标准测试
 ```bash
-# 前提：金标准参照图在设计仓库的 歌单-排版一/，测试以 ../歌单-排版一 相对路径引用——
-# 两个仓库并列克隆，或在本仓库上级目录建软链：ln -s playlist-poster-design/歌单-排版一 ../歌单-排版一
+# 金标准参照图（tests/golden/）随 git 提交；独立预言机（旧脚本）已并入本仓库
+# design-docs/歌单-排版一/，重建方式见 tools/regenerate_golden.py
 PYTHONPATH=. python tests/test_golden.py             # 目标：16/16 逐像素 diff=0
 ```
 

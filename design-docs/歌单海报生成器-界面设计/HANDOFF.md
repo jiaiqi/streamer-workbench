@@ -10,7 +10,7 @@
 
 这是一个「歌单海报生成器」——把 178 首中文歌曲以精美排版打印成竖版海报 PNG（抖音 9:20 全屏），7 套主题、2 页/主题、逐像素排版精度已用金标准锁死。架构是 **Python PIL 引擎 + FastAPI HTTP 后端 + React 前端 + Electron 壳（spike 已过，正式壳未做）**。
 
-**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官；Phase 3 打包 spike 完成；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手/选调回填、UI/UX 快修包、歌曲库响应式卡片网格。**Phase 5（数据时间维度）进行中**：✅ S1 事件日志地基（events.jsonl + 迁移 v4 learned_at/tab_files + 五端点埋点 + /api/events feed）→ ✅ S2 点歌双写上报（/api/events/report + QuickView localStorage 双写保序补报）→ ✅ S3 曲谱管理（data/tabs/ 附件上传/删除/预览 + 曲库/学歌/直播 T 键三触点）→ ⬜ S4 学歌打卡 → ⬜ S5 统计视图。**下一步开发就按仓库 B 的 `design/roadmap-data-stats.md` 继续做 S4/S5**。其余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳、引擎魔数清理。另有 UI/UX 重设计提案 v2 交互稿（仓库 B `design/redesign-v2.html`，暗色「演出后台」方向，未落地）。
+**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官；Phase 3 打包 spike 完成；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手/选调回填、UI/UX 快修包、歌曲库响应式卡片网格。**Phase 5（数据时间维度）进行中**：✅ S1 事件日志地基（events.jsonl + 迁移 v4 learned_at/tab_files + 五端点埋点 + /api/events feed）→ ✅ S2 点歌双写上报（/api/events/report + QuickView localStorage 双写保序补报）→ ✅ S3 曲谱管理（data/tabs/ 附件上传/删除/预览 + 曲库/学歌/直播 T 键三触点）→ ⬜ S4 学歌打卡 → ⬜ S5 统计视图。**下一步开发就按 `design/roadmap-data-stats.md` 继续做 S4/S5**。其余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳、引擎魔数清理。另有 UI/UX 重设计提案 v2 交互稿（`design/redesign-v2.html`，暗色「演出后台」方向，未落地）。
 
 ---
 
@@ -35,18 +35,20 @@
 - PySide6 (Qt) → 改为 FastAPI + Web 前端（2026-07-23）
 - Tauri 2.0 sidecar → 改为 Electron child_process（2026-07-25）
 
-### 两个 Git 仓库（刻意不嵌套，各自提交）
+### 单仓库（2026-07-27 合并）
 
-| 仓库 | macOS 路径 | GitHub 远程（私有） | 内容 |
-|---|---|---|---|
-| A 设计 | `song-list/playlist-poster-design/` | `jiaiqi/playlist-poster-design` | 设计结论、项目结构设计、HANDOFF、7 页设计稿、旧脚本、歌单数据 |
-| B 产品 | `song-list/playlist-poster-generator/` | `jiaiqi/playlist-poster-generator` | Python 引擎 + FastAPI + React + Electron spike + 主题包 + 测试 |
+| 属性 | 值 |
+|---|---|
+| GitHub 远程 | `jiaiqi/playlist-poster-generator`（私有） |
+| 内容 | 产品本体（core/server/ui/...）+ `design-docs/`（原 playlist-poster-design 仓库全部内容与完整历史，本文档现位于 `design-docs/歌单海报生成器-界面设计/HANDOFF.md`） |
+| 原设计仓库 | `jiaiqi/playlist-poster-design` 已归档只读，URL 保留可访问历史 |
 
-> 原 Windows 工作目录为 `F:\Desktop\李梓涵\`（外层=A、内层=B）；现主开发机为 macOS，两仓库并列放置。GitHub 账号 `jiaiqi`，macOS 上 SSH 凭据可用（HTTPS 443 不通，克隆/推送走 SSH）。
+> 合并前为 A/B 双仓库（刻意不嵌套）。因金标准预言机跨仓依赖、状态文档多仓漂移、agent 接力双克隆摩擦，2026-07-27 以子树合并（read-tree --prefix=design-docs/）合为单仓，双方提交历史完整保留为祖先链。金标准预言机路径：`design-docs/歌单-排版一/`（原 `../歌单-排版一` 软链约定废止）。
+> macOS 上 SSH 凭据可用（HTTPS 443 不通，克隆/推送走 SSH）。
 
 **协作约定：每次改动都要 git 提交，原子提交、中文提交信息。**
 
-### 仓库 B git log（最新 12 条，截至 2026-07-27 晚）
+### git log（最新 12 条，截至 2026-07-27 晚，不含合并提交）
 
 ```
 42fc392 feat(tabs): 曲谱管理全链路——附件上传/预览/直播 T 键看谱（S3）
@@ -63,7 +65,7 @@ f734fab fix(learning): 学歌卡片版收尾——接通编辑对话框 + 共享
 8d8ce92 feat(library): 歌曲库视图重设计 + pinyin 搜索索引回填（迁移 v3）
 ```
 
-### 仓库 B 结构速览
+### 仓库结构速览（产品区）
 
 ```
 core/        纯函数引擎（spec/style/engine/watermark/mist/context + data/ + layouts/ + themes/）
@@ -86,7 +88,7 @@ tools/       migrate_data / migrate_themes / regenerate_golden / render_samples 
 Makefile     test / test-unit / test-golden / run-backend / run-ui / export-sample / regenerate-golden
 ```
 
-### 仓库 A 结构速览
+### 仓库结构速览（design-docs/ 文档区）
 
 ```
 歌单海报生成器-设计结论.md      最权威文档：13 节架构决策
@@ -255,10 +257,10 @@ source .venv/bin/activate && uvicorn server.main:app --reload --port 8000  # 后
 cd ui && npm run dev                                                       # 前端 :5173
 ```
 
-### 设计稿 agent-browser 验证工作流（仓库 A）
+### 设计稿 agent-browser 验证工作流（design-docs/）
 
 ```bash
-cd "song-list/playlist-poster-design/歌单海报生成器-界面设计"
+cd "playlist-poster-generator/design-docs/歌单海报生成器-界面设计"
 python -m http.server 8931 --bind 127.0.0.1          # 后台起静态服务
 npx agent-browser set viewport 1600 900
 npx agent-browser open "http://127.0.0.1:8931/pages/workspace.html"
@@ -283,8 +285,8 @@ npx agent-browser eval 'localStorage.clear()'         # 测暗色前先清 gp-th
 
 ### Phase 5：数据时间维度（进行中，最高优先）
 
-> **规格文档（必读）**：仓库 B `design/roadmap-data-stats.md`——事件 schema、迁移 v4、API 契约、统计口径、验收标准全部在内。
-> 关联设计稿：仓库 B `design/redesign-v2.html`（UI/UX 重设计提案 v2，暗色「演出后台」，含统计视图的方向指引，未落地）。
+> **规格文档（必读）**：`design/roadmap-data-stats.md`——事件 schema、迁移 v4、API 契约、统计口径、验收标准全部在内。
+> 关联设计稿：`design/redesign-v2.html`（UI/UX 重设计提案 v2，暗色「演出后台」，含统计视图的方向指引，未落地）。
 
 - [x] **S1 事件日志地基** ✅ `05ac6e7`：core/data/events.py + 迁移 v4（learned_at/tab_files）+ 五端点埋点 + /api/events feed
 - [x] **S2 点歌双写上报** ✅ `403165c`：/api/events/report + QuickView 双写（localStorage 为现场真相，失败 localStorage 保序补报）

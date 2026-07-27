@@ -22,7 +22,7 @@ from core.engine import render_page
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 THEMES_DIR = os.path.join(ROOT, "themes")
 GOLDEN_DIR_LOCAL = os.path.join(ROOT, "tests", "golden")
-GOLDEN_DIR_UP = os.path.join(ROOT, "..", "歌单-排版一")
+GOLDEN_DIR_UP = os.path.join(ROOT, "design-docs", "歌单-排版一")
 # 优先用本地 tests/golden/（从设计仓库复制而来），其次用上级软链
 GOLDEN_DIR = GOLDEN_DIR_LOCAL if os.path.isdir(GOLDEN_DIR_LOCAL) and os.listdir(GOLDEN_DIR_LOCAL) else GOLDEN_DIR_UP
 FONT = os.path.join(ROOT, "fonts", "MaokenAssortedSans.ttf")
