@@ -2,7 +2,7 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-27 晚）**：引擎 100%（金标准 16/16 diff=0）；UI 工作台/歌曲库/学歌/设置/速查（/quick）可用；数据时间维度 Phase 5 进行中——事件日志、点歌双写、曲谱管理已上线（S1-S3），学歌打卡（S4）与统计视图（S5）待开发。**产品、UI/UX、架构与多布局的下一阶段唯一主规格见 `design/产品优化方案终版-0727/产品优化方案终版.md`，实施顺序见 `design/产品优化方案终版-0727/路线图.md`；三套前序方案保留为历史记录。当前数据开发请读 `design/roadmap-data-stats.md`，接手上下文请读 `.archive/design-docs/歌单海报生成器-界面设计/HANDOFF.md`。**
+> **进度快照（2026-07-27 晚）**：引擎层 100%（金标准 16/16 diff=0）；数据时间维度 Phase 5（S1-S3 已完成，S4/S5 待开发）；**产品优化主线已启动**——P0 基线冻结与架构地基已完成（魔数收编/ADR/benchmark/font 缓存），P1 Palette/Skin/Preset 领域模型与 server 依赖注入/routers 拆分已完成。UI 工作台/歌曲库/学歌/设置/速查（/quick）可用。**唯一执行主规格见 `design/产品优化方案终版-0727/产品优化方案终版.md`，执行状态见同目录 `路线图.md`。当前数据开发请读 `design/roadmap-data-stats.md`，接手上下文请读 `.archive/design-docs/歌单海报生成器-界面设计/HANDOFF.md`。**
 >
 > **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `.archive/design-docs/`（原 `design-docs/`，点号开头表示已归档；完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `.archive/design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
@@ -16,17 +16,13 @@
 
 ## 目录
 ```
-core/        纯函数引擎（spec/style/engine/watermark/mist/context + themes/ + layouts/ + data/）
-server/      FastAPI 渲染后端
+core/        纯函数引擎（spec/style/engine/watermark/mist/context + themes/ + layouts/ + data/ + presets/）
+server/      FastAPI 渲染后端（main/deps + routers/songs/render/export/events/settings/presets）
 web/         原生验证页（开发期）
 ui/          React + Vite 前端工作台
-design/      UI/UX 重设计提案交互稿（redesign-v1/v2.html）+ 数据时间维度路线图 + 产品优化方案终版-0727（下一阶段唯一主规格）
+design/      UI/UX 重设计交互稿 + 数据时间维度路线图 + 产品优化方案终版-0727（唯一执行主规格）
 .archive/design-docs/ 原设计仓库全部内容（已归档）（设计结论/项目结构设计/HANDOFF/7 页设计稿/歌单-排版一 预言机）
-prototype/   ~~高保真 UI 原型~~（已由 themes/ 和 tests/golden/ 替代，已清理）
-themes/      主题包（从 `.archive/design-docs/歌单-排版一` 复制背景图 + theme.json）
-fonts/       字体 MaokenAssortedSans.ttf
-tests/       test_golden.py 金标准逐像素对比
-tools/       迁移与样例渲染脚本
+tools/       迁移、样例渲染与 benchmark 脚本
 ```
 
 ## 开发期运行

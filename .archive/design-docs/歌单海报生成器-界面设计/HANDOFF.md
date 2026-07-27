@@ -1,8 +1,8 @@
 # 主播工作台 / streamer-workbench · Agent 交接上下文
 
 > 写给下一位接手协作的 Agent。本文汇总项目现状、已完成工作、关键决策与坑位，读完后可直接继续开发，无需重新探索。
-> 最近更新：2026-07-27 晚 · 数据时间维度 Phase 5 进行中（S1 事件日志 / S2 点歌双写 / S3 曲谱管理 已上线，S4 学歌打卡 / S5 统计视图 待开发），核实到最新提交 `42fc392`
-> 项目整体完工度：引擎层 100%（金标准 16/16 diff=0，独立预言机基准），UI 层约 80%（工作台/歌曲库/学歌/设置/速查/曲谱可用），打包 spike 已过、正式壳 0%
+> 最近更新：2026-07-27 晚 · **产品优化主线 P0/P1 已完成**（基线冻结/ADR/魔数收编/Palette-Skin-Preset模型/server deps+routers拆分）；数据时间维度 Phase 5 进行中；核实到最新提交 `7ec04f4`
+> 项目整体完工度：引擎层 100%（金标准 16/16 diff=0，独立预言机基准），UI 层约 80%，**产品优化主线 P0-P1 已完成**（魔数清理/领域模型/server 重构），正式壳 0%
 
 ---
 
@@ -10,7 +10,7 @@
 
 这是一个「歌单海报生成器」——把 178 首中文歌曲以精美排版打印成竖版海报 PNG（抖音 9:20 全屏），7 套主题、2 页/主题、逐像素排版精度已用金标准锁死。架构是 **Python PIL 引擎 + FastAPI HTTP 后端 + React 前端 + Electron 壳（spike 已过，正式壳未做）**。
 
-**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官；Phase 3 打包 spike 完成；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手/选调回填、UI/UX 快修包、歌曲库响应式卡片网格。**Phase 5（数据时间维度）进行中**：✅ S1 事件日志地基（events.jsonl + 迁移 v4 learned_at/tab_files + 五端点埋点 + /api/events feed）→ ✅ S2 点歌双写上报（/api/events/report + QuickView localStorage 双写保序补报）→ ✅ S3 曲谱管理（data/tabs/ 附件上传/删除/预览 + 曲库/学歌/直播 T 键三触点）→ ⬜ S4 学歌打卡 → ⬜ S5 统计视图。**下一步产品升级唯一主规格以 `design/产品优化方案终版-0727/产品优化方案终版.md` 为准，实施依赖与阶段门见同目录 `路线图.md`；v1/v2/v3 三套前序方案保留为历史记录。当前数据线继续按 `design/roadmap-data-stats.md` 完成 S4/S5。**其余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳、引擎魔数清理。另有 UI/UX 重设计提案 v2 交互稿（`design/redesign-v2.html`，暗色「演出后台」方向，未落地）。
+**当前状态**：引擎 100% 就绪；金标准为独立预言机基准（16/16 diff=0，随 git 版本化，禁止引擎自举）；CI 三件套在线；Phase 2 全部收官；Phase 3 打包 spike 完成；此后又落地：学歌管理视图、速查小窗 Web 版（/quick）、「今晚歌单」直播点歌队列、歌手/选调回填、UI/UX 快修包、歌曲库响应式卡片网格。**Phase 5（数据时间维度）进行中**：✅ S1 事件日志地基（events.jsonl + 迁移 v4 learned_at/tab_files + 五端点埋点 + /api/events feed）→ ✅ S2 点歌双写上报（/api/events/report + QuickView localStorage 双写保序补报）→ ✅ S3 曲谱管理（data/tabs/ 附件上传/删除/预览 + 曲库/学歌/直播 T 键三触点）→ ⬜ S4 学歌打卡 → ⬜ S5 统计视图。**产品优化主线**：✅ P0 基线冻结（ADR/魔数收编/benchmark/font 缓存）→ ✅ P1 Palette/Skin/Preset 模型 + server deps/routers 拆分。**下一步产品升级唯一主规格以 `design/产品优化方案终版-0727/产品优化方案终版.md` 为准，实施依赖与阶段门见同目录 `路线图.md`；v1/v2/v3 三套前序方案均已归档。当前数据线继续按 `design/roadmap-data-stats.md` 完成 S4/S5。**其余缺口：3 个占位视图（主题/预设/历史）、正式 Electron 壳。UI/UX 重设计提案 v2 交互稿（`design/redesign-v2.html`，暗色「演出后台」方向，未落地）。
 
 ---
 
