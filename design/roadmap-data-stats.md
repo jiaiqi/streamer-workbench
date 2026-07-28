@@ -1,8 +1,8 @@
 # 数据时间维度路线图：事件日志 · 曲谱管理 · 学歌记录 · 数据统计（主播工作台 / streamer-workbench）
 
 > **状态**：进行中（2026-07-28 更新）——S1 ✅ S2 ✅ S3 ✅；S3.5 中 Song v5 / Event v2 ✅，tabs/queue/Preset 关系迁移待完成；S4 / S5 等待完整前置
-> **关联文档**：`redesign-v2.html`、`../ADR-004.md`、`产品优化方案终版-0727/路线图.md` R0/R3（事件类型与统计口径仍以本文为唯一真相）
-> **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`server/main.py`（API 现状）
+> **关联文档**：`../ADR-004.md`、`../ADR-005.md`、`产品优化方案终版-0727/路线图.md` R0/R2/R3（事件类型与统计口径仍以本文为唯一真相）
+> **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`core/data/events.py`（事件现状）、`server/routers/`（API 现状）。旧 `redesign-v2.html` 已归档，不再作为实现规范。
 
 ---
 
@@ -50,9 +50,9 @@
 - 个人使用量级（每日数十事件、每年数千行）顺序扫描足够；
 - **撤退路线**：事件量破万或需多设备同步时，事件流可整体导入 SQLite，schema 无需重设计——事件先行，存储可换。
 
-### 决策：点歌事件不分"场次"（2026-07-27 定，方案 A）
+### 决策：LiveSession 可选关联（2026-07-28，取代 2026-07-27 方案 A）
 
-不加「开始今晚」会话按钮。所有点歌事件平铺带时间戳，排行按全部时间/近 30 天聚合。未来需要按场分析时，按时间窗口事后切分即可，现在不付交互成本。
+“本场”是准备海报、现场队列和直播记录的共同聚合。进入直播模式时自动创建或恢复当日未结束的 LiveSession，不增加强制的“开始今晚”按钮。Event v2 允许可选 `session_id`；不属于具体场次的事件仍可省略，并继续按时间窗口聚合。完整裁决见 `../ADR-005.md`。
 
 ### 决策：歌曲使用不可变 ID（2026-07-28 定）
 
@@ -67,15 +67,16 @@
 **文件**：`data/events.jsonl`，每行一个 JSON 对象。当前代码只读兼容 Schema v1，所有新写入使用 Schema v2：
 
 ```json
-{"schema_version":2,"event_id":"evt_...","occurred_at":"2026-07-28T21:03:11+08:00","recorded_at":"2026-07-28T21:03:12+08:00","type":"song_learned","song_id":"song_...","title_snapshot":"凄美地","source":"learning-view","meta":{"days_in_learning":12}}
+{"schema_version":2,"event_id":"evt_...","occurred_at":"2026-07-28T21:03:11+08:00","recorded_at":"2026-07-28T21:03:12+08:00","type":"song_sung","song_id":"song_...","session_id":"session_...","title_snapshot":"凄美地","source":"quick-view","meta":{}}
 ```
 
-**新模块**：`core/data/events.py`（预计 ~100 行）
+**现有模块**：`core/data/events.py`。Schema v2、稳定 `event_id`、`song_id`、双时间和 `source` 已落地；R2 在兼容前提下增加可选 `session_id`。
 
-- `append_event(type, song_id=None, title_snapshot=None, meta=None, occurred_at=None, event_id=None)` —— 追加一行（open-append-close）
+- 当前 `append_event(path, type, ..., song_id=None, title_snapshot=None, occurred_at=None, event_id=None, source="server")` —— 追加一行（open-append-close）；R2 增加 `session_id=None`
 - `iter_events(type=None, since=None, until=None)` —— 顺序扫描生成器
 - `tail(n)` —— 更新记录 feed 用
 - `event_id` 用于离线补报幂等；相同 ID 不同内容会被拒绝；`occurred_at` 与 `recorded_at` 分离；
+- `session_id` 是可选字段，R2 接入 LiveSession 后写入；旧 v1/v2 无场次事件继续只读兼容；
 - 遵守铁律：`core/` 不 import 任何服务器/UI 框架；`server/` 调用它
 
 **事件类型**：
@@ -117,6 +118,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 | /api/songs/{song_id}/tabs/{file} | DELETE | 删除单个谱文件 |
 | /tabs/{song_id}/{file} | GET | 静态访问（StaticFiles 挂载 data/tabs/） |
 | /api/practice/log | POST | 学歌打卡，写 practice_logged |
+| /api/sessions* | GET/POST/PATCH | 创建或恢复本场、更新计划歌曲/队列/已唱状态 |
 | /api/events | GET | 事件 feed（参数：type/since/limit），更新记录视图用 |
 | /api/stats/overview | GET | 总览聚合（现算）：曲库规模、选调完整度、本月学会、本月演唱次数 |
 | /api/stats/learning | GET | 学歌聚合：学习周期分布、打卡热力、卡最久 draft 榜 |
@@ -124,18 +126,19 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 
 **埋点位置**：add/update/status/delete/export 五个现有端点各加一行 `append_event`（`_save_library()` 调用处旁），不改现有响应契约。
 
-**QuickView 上报**：今晚歌单使用 `song_id + title_snapshot` 本地缓存并上报 Event v2。上报失败存本地待补；后端按 `event_id` 去重，直播现场不能因为后端挂了就丢队列。
+**QuickView 上报**：今晚歌单使用 `session_id + song_id + title_snapshot` 本地缓存并上报 Event v2。上报失败存本地待补；后端按稳定 `event_id` 去重，直播现场不能因为后端挂了就丢队列。
 
-## 7. UI 触点（对照 redesign-v2.html）
+## 7. UI 触点
 
 | 功能 | 触点 |
 |---|---|
 | 曲谱 | 歌曲库展开面板加「曲谱」区（缩略图墙+上传+lightbox）；学歌卡片加谱子入口；直播模式焦点区加 `T` 键看谱弹层 |
+| 本场工作台 | LiveSession → SongQuery → selected_song_ids → 模板 → 预览/导出/进入直播；普通设置与高级设置分层；空曲库提供样例数据入口 |
 | 更新记录 | 新「统计」视图内"最近动态"时间线（事件 feed 直渲） |
 | 学歌记录 | 学歌卡片加「打卡」按钮（note+可选时长+自评）+ 展开练习时间线（倒序）+ 累计打卡天数 |
 | 数据统计 | **导航加第五项「统计」**（4 一等公民 + 统计 + 设置 = 6 图标位，仍在导航上限内）。三板块：总览卡 / 趋势图（近 12 周学会数、曲库增长，纯 CSS 柱状，不引图表库）/ 排行榜（点歌 TOP10、练习最勤、卡最久未会） |
 
-视觉全部套 v2 设计稿 token（surface 阶梯、amber/green/red 语义色、◆◆◇ 难度、三档按钮）。
+视觉全部套 v2 设计稿 token（surface 阶梯、amber/green/red 语义色、◆◆◇ 难度、三档按钮）。工作台和统计视图默认使用画廊白；QuickView/演出模式使用暗色舞台。
 
 ## 8. 统计口径（提前定义，避免口径漂移）
 
@@ -143,7 +146,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 - **学习周期** = learned_at − added_at（天）；旧数据 learned_at 为空不参与均值
 - **本月学会** = song_learned 事件当月计数（减同月 song_unlearned 净额另列）
 - **点歌排行** = song_sung 事件按 song_id 计数；title_snapshot 只负责展示；点歌率 = song_sung / queue_added（约等于唱完率）
-- **直播场次（估算）** = song_sung 事件按自然日聚类（无会话 id，事后按日切分）
+- **直播场次** = 有 `session_id` 时按 LiveSession 精确聚合；旧事件或无场次事件按自然日估算并明确标注“估算”
 
 ## 9. 分期实施（S1→S5）
 
@@ -153,6 +156,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 | **S2 点歌上报** | QuickView 双写（localStorage + 上报）+ 失败补报 | ✅ `403165c` | /api/events/report（仅三类可上报）；断网队列不丢、恢复保序补报 |
 | **S3 曲谱** | tabs 上传/列表/删除/静态访问 + 曲库/学歌/直播三触点 | ✅ `42fc392` | core/data/tabs.py；TabsPanel 共享组件；直播 T 键看谱；42/42 测试 |
 | **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | 🟡 Song v5/Event v2 ✅；关系迁移待完成 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
+| **R2 本场关联** | LiveSession + Event v2 可选 session_id | ⬜ 等待 R0/R1 | 本场准备、QuickView 队列和已唱记录共享同一 session_id |
 | **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | ⬜ 等待 S3.5 | 打卡 → 时间线可见；离线补报不重复；学会周期正确 |
 | **S5 统计视图** | /api/stats/* 三端点 + 第五导航视图 | ⬜ 待开发 | 口径与第 8 节一致；截图回归 |
 
@@ -166,7 +170,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 **S5 开工提示**：
 - 聚合主键必须是 song_id，改名不得拆榜；
 - 统计全部从 `core/data/events.py` 的 `iter_events()` 现算，**只算不存**（第 10 节纪律）；
-- 导航第五视图直接按 `redesign-v2.html` 的 token 新写（surface 阶梯/语义色/◆◆◇/三档按钮）；
+- 统计视图使用 `design/design-tokens.json` 和主规格 §4 的当前视觉语义，不再复刻已归档交互稿；
 - 排行榜口径：点歌 TOP10 = `song_sung` 按 `song_id` 计数，使用最新歌名或 `title_snapshot` 展示（全时段/近 30 天两档）。
 
 **已完成阶段排序回顾**：S1 解锁更新记录且让之后所有功能"白拿"历史数据；S2 尽早沉淀直播数据；S3 高频刚需但工程量最大放中间；S5 是全部数据的兑现，收尾。
@@ -174,7 +178,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 ## 10. 工程纪律（沿用项目既有约定）
 
 - **统计只算不存**：每次请求从 events 现算，不引入缓存失效问题；
-- 迁移 v4 走 `MIGRATIONS` 链 + 单元测试（现有 27 项基础上加）；
+- 后续迁移继续走 `MIGRATIONS` 链并增加单元测试；当前基线为 Song v5、56 项单元测试；
 - 每阶段跑：`npx tsc --noEmit` + `make test-unit` + `make test-golden`（16/16 diff=0 不许破）+ 截图验证；
 - 铁律不变：`core/` 不 import UI/服务器框架；UI 经 `engine.render_page()` 拿图；events.py 属 core/data，被 server 调用；
 - events.jsonl 纳入 data/backups 备份节奏（追加式文件，备份即复制）。
@@ -184,6 +188,6 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 | 风险 | 应对 |
 |---|---|
 | events.jsonl 长期增长 | 个人量级无需处理；破万行时按撤退路线迁 SQLite |
-| QuickView 双写一致性 | localStorage 为现场真相，后端事件为分析用，允许短暂不一致 |
+| QuickView 双写一致性 | LiveSession 是业务真相；localStorage 是断网现场缓存和待补队列，恢复后按 event_id 幂等合并 |
 | 曲谱版权文件混进 git | data/tabs/ 加 .gitignore（与 data/songs.json 现有策略核对后统一） |
 | 统计视图与 v2 设计稿落地并行冲突 | 统计视图直接按 v2 token 新写，不碰旧视图改造分支 |

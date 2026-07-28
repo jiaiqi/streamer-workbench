@@ -1,6 +1,6 @@
 # 落地页 · Astro 工程化
 
-歌单海报生成器的产品门面落地页。基于「暗色舞台 Cinematic Stage × 画廊白 Art Gallery」双品牌设计令牌构建。
+主播工作台的产品门面落地页。基于「暗色舞台 Cinematic Stage × 画廊白 Art Gallery」双品牌设计令牌构建。
 
 ## 技术栈
 
@@ -24,7 +24,7 @@ pnpm build              # 输出到 ../../docs/（覆盖 GitHub Pages 部署）
 ```
 
 构建流程会自动：
-1. `prebuild` 钩子 → `scripts/gen-posters.mjs` 从 `tests/golden/` 生成 14 张 webp + OG image
+1. `prebuild` 钩子 → `scripts/gen-posters.mjs` 从 `tests/golden/` 生成 16 张 webp + OG image
 2. Astro 编译 + 静态生成
 3. 输出到仓库根 `docs/` 目录
 

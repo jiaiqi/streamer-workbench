@@ -1,8 +1,8 @@
 # 落地页配色样张（2026-07-27）
 
 > **目的**：在动代码前验证「明暗 × 双品牌变体」4 种状态的视觉方向。
-> **位置**：`设计/产品优化方案终版-0727/assets/colors/`
-> **配套文档**：`../落地页设计方案.md` §4 视觉系统
+> **状态**：历史样张资产，仅用于追溯配色形成过程；当前颜色名称和值以 `design/design-tokens.json` 为准。
+> **位置**：`design/产品优化方案终版-0727/assets/colors/`
 
 ---
 
@@ -10,10 +10,10 @@
 
 | 文件 | 主题 | 状态 | 视觉气质 | 主色 |
 |---|---|---|---|---|
-| [swatch-dawn-light.png](./swatch-dawn-light.png) | 晨光纸感 | 亮 | 奶油纸底，海洋青主色，暖珊瑚点缀，温柔清新 | `#2f8f7a` |
-| [swatch-dawn-dark.png](./swatch-dawn-dark.png) | 晨光纸感 | 暗 | 深版纸感（grain opacity 0.05），夜空墨绿 | `#4dbb9e` |
-| [swatch-stagedark-light.png](./swatch-stagedark-light.png) | 演出后台 | 亮 | 中性灰绿底，墨绿主色，琥珀强调，专业克制 | `#257a67` |
-| [swatch-stagedark-dark.png](./swatch-stagedark-dark.png) | 演出后台 | 暗 | 近黑舞台底 `#0b0d0c`，墨绿 + 琥珀，对比强烈，"演出后台"心智 | `#4dbb9e` |
+| [swatch-dawn-light.png](./swatch-dawn-light.png) | 画廊白（旧文件名 dawn） | 亮 | 奶油纸底，海洋青主色，暖珊瑚点缀，温柔清新 | `#2f8f7a` |
+| [swatch-dawn-dark.png](./swatch-dawn-dark.png) | 画廊白（旧文件名 dawn） | 暗 | 深版纸感（grain opacity 0.05），夜空墨绿 | `#4dbb9e` |
+| [swatch-stagedark-light.png](./swatch-stagedark-light.png) | 暗色舞台（旧文件名 stagedark） | 亮 | 中性灰绿底，墨绿主色，琥珀强调，专业克制 | `#257a67` |
+| [swatch-stagedark-dark.png](./swatch-stagedark-dark.png) | 暗色舞台（旧文件名 stagedark） | 暗 | 近黑舞台底 `#0b0d0c`，墨绿 + 琥珀，对比强烈 | `#4dbb9e` |
 
 每张样张包含：核心 6 色卡 · 中性文字色阶 · 状态色 · 7 档字号阶 · 组件预览（按钮/chip/输入/学歌卡片）· 4 项关键数字 · 7 产品主题色板小条。
 
@@ -26,13 +26,13 @@
 你最初问的是"3 主题都支持"。评审下来走的是**明暗 × 双品牌** = 4 状态：
 
 ```
-              晨光纸感（产品中性）     演出后台（暗色直播）
+              画廊白（产品工具）       暗色舞台（直播/门面）
 亮态     ▢ 默认进入（首屏）         ▢ 白天/演示场景
 暗态     ▢ 夜间/长时阅读            ▢ 演出场景（默认）
 ```
 
 理由：
-- 双品牌（晨光纸感 vs 演出后台）= **两套不同心智**：前者"工具感"，后者"舞台感"
+- 双品牌（画廊白 vs 暗色舞台）= **两套不同心智**：前者"工具感"，后者"舞台感"
 - 明暗 = **同一品牌的环境适配**，成本极低（同一令牌换 BG）
 - 4 状态 = 2×2 矩阵，CSS 属性选择器一键切换，**不写两套样式**
 
@@ -40,14 +40,14 @@
 
 ## 视觉方向建议
 
-### 晨光纸感（Dawn）
+### 画廊白（旧名 Dawn）
 
 - **主轴**：温柔清新，长时间阅读不累
 - **Hero 区**：大留白 + 衬线标题 + 暖珊瑚 + 海洋青的双色渐变光晕
 - **适用受众**：主播本人 + 白天使用的潜在主播
 - **风险**：纸感做得过强会显得"工具感"，但落地页需要"产品门面"的硬朗，**适度克制纸张颗粒（亮 0.028 / 暗 0.05）**
 
-### 演出后台（Stage Dark）
+### 暗色舞台（Stage）
 
 - **主轴**：演出场景，3 米外可读（quick 速查的延伸）
 - **Hero 区**：近黑舞台底 + 墨绿 + 琥珀 + 红，对比强烈
@@ -73,16 +73,16 @@ assets/colors/
 ├── README.md                本文件
 ├── swatch-template.html     样张模板（含 {{占位符}}，可手动编辑后单独渲染）
 ├── render-swatches.py       Playwright 批量渲染脚本
-├── swatch-dawn-light.png    晨光纸感·亮（1440×1024 ×2 倍 DPR = 2880×2048）
-├── swatch-dawn-dark.png     晨光纸感·暗
-├── swatch-stagedark-light.png  演出后台·亮
-└── swatch-stagedark-dark.png   演出后台·暗
+├── swatch-dawn-light.png    画廊白·亮（旧文件名保留；1440×1024 ×2 倍 DPR = 2880×2048）
+├── swatch-dawn-dark.png     画廊白·暗（旧文件名保留）
+├── swatch-stagedark-light.png  暗色舞台·亮
+└── swatch-stagedark-dark.png   暗色舞台·暗
 ```
 
 ## 复现命令
 
 ```bash
-cd "设计/产品优化方案终版-0727/assets/colors"
+cd "design/产品优化方案终版-0727/assets/colors"
 python render-swatches.py
 ```
 
@@ -90,13 +90,9 @@ python render-swatches.py
 
 ---
 
-## 下一步建议
+## 当前使用方式
 
-四张样张都已成型，**视觉方向基本确认**。接下来建议：
-
-1. **确认方向**：四张中选一张作为"产品门面默认态"（推荐 `stagedark-dark` 作为技术导向默认 + `dawn-light` 作为长时阅读默认，用户首次进入按 `prefers-color-scheme` + localStorage）
-2. **微调令牌**（如有需要）：比如 accent 暖珊瑚在暗态下是否过亮、surface-2 在演出后台暗态下是否过暗
-3. **进入 Phase A**：开始动代码（Astro + Tailwind 初始化 + tokens.css 落地）
+这些样张不再承担决策职责。修改产品配色时先更新 `design/design-tokens.json`，再同步 React 和 `site/landing/src/styles/tokens.css`，最后用本目录脚本重新生成样张做视觉核对。
 
 ---
 

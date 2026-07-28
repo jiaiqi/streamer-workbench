@@ -1,7 +1,7 @@
 # Agent 项目规则
 
 > 此文件供 AI 编码助手（Agent）读取并遵守。每次接手时首先读取本文。
-> 最后更新：2026-07-27
+> 最后更新：2026-07-28
 
 ---
 
@@ -25,7 +25,8 @@
 6. **Palette v1 只包含 5 个颜色角色**（text/label/pill/line/mist）+ font_roles（title/label/song/note）。不把 UI token（surface/border/accent）混入海报 Palette。
 7. **Anchors/subjects 使用 0–1 归一化坐标**。像素输入仅作为兼容层。
 8. **`halo` 和 `vinyl-rings` 已统一为 `subject-orbit`**，不重复实现。
-9. **编辑器（P8）只在 3 套新布局上线并被真实使用后启动**，不提前造完整图片编辑器。
+9. **编辑器（R7）只在 3 套新布局上线并被真实使用后启动**，不提前造完整图片编辑器。
+10. **`design/archive/` 中的文档已退役**。只允许追溯历史，不得据此判断当前状态或执行顺序；当前真相以主规格、路线图、数据路线图和 ADR 为准。
 
 ---
 
@@ -37,18 +38,18 @@
 |---|---|---|
 | **唯一执行主规格** | `design/产品优化方案终版-0727/产品优化方案终版.md` | 产品/UI/架构/多布局完整规格 |
 | **唯一路线图** | `design/产品优化方案终版-0727/路线图.md` | R0–R7 执行路径与阶段门；P 编号仅作历史能力分组 |
-| **差异裁决** | `design/产品优化方案终版-0727/三方案差异分析.md` | 前序方案合并记录 |
 | **数据路线图（S1–S5）** | `design/roadmap-data-stats.md` | 事件 Schema/统计口径唯一真相 |
-| **架构决策记录** | `ADR-001.md`（产品边界）、`ADR-002.md`（grid-wrap 兼容）、`ADR-003.md`（用户数据权威）、`ADR-004.md`（歌曲不可变身份） |
+| **架构决策记录** | `ADR-001.md`–`ADR-005.md`；ADR-005 负责 AppContext、应用服务/仓储、RenderDocument、本场模型和本地服务安全 |
 | **项目 README** | `README.md` | 运行命令/目录结构/API 列表 |
-| **设计系统** | `.archive/design-docs/歌单海报生成器-界面设计/` | shared.css / design-tokens.json / 7 页设计稿（只读引用） |
+| **设计系统** | `design/design-tokens.json` | 双品牌 UI 令牌的当前单源真值；归档设计稿只作历史参考 |
+| **归档索引** | `design/产品优化方案终版-0727/README.md` | 活跃文档唯一真相表与退役文档清单 |
 
 ### 当前完成状态
 
 ```
-引擎兼容  ✅          金标准 16/16 diff=0；avoid/cache 正确性待 R0 收口
+引擎兼容  ✅          avoid/cache 正确性已修复，金标准 16/16 diff=0；环境复现待 R0 收口
 数据层    S1-S3 ✅   S3.5 🟡（Song v5/Event v2 ✅，关系迁移 ⬜）  S4/S5 等待 S3.5
-产品主线  R0 🟡      avoid/cache、Song v5、Event v2 已完成；关系迁移、数据目录与 P1 欠账待收口
+产品主线  R0 🟡      avoid/cache、Song v5、Event v2 已完成；关系迁移、AppContext、Repository、API 契约、数据目录与安全待收口
 桌面壳    spike 已过  正式壳 ⬜
 UI        ~80%       工作台/歌曲库/学歌/速查可用
 ```
@@ -58,9 +59,9 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 | 层 | 技术 | 说明 |
 |---|---|---|
 | 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；本地 venv 版本漂移需 R0 收口 |
-| 后端 | FastAPI 0.115.0（requirements）+ uvicorn | `server/`，已拆分为 deps + routers（6 个） |
+| 后端 | FastAPI 0.115.0（requirements）+ uvicorn | `server/`，已拆分为 deps + routers；目标边界见 ADR-005 |
 | 前端 | React 19 + Vite 6 + Tailwind 4 | `ui/` |
-| 数据 | JSON + JSONL 本地文件 | songs.json v4（178 首）、events.jsonl、settings.json |
+| 数据 | JSON + JSONL 本地文件 | songs.json v5（178 首）、events.jsonl v1/v2、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
 | 测试 | 56 项单元测试 + 16 张金标准逐像素 + tsc --noEmit | Windows 直接 runner 56/56；控制台 UTF-8 与依赖锁定仍待 R0 收口 |
@@ -73,13 +74,12 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 .
 ├── AGENTS.md                       ← 本文件
 ├── README.md                       项目入口
-├── ADR-001.md / ADR-002.md         架构决策记录
-├── P0_现状快照.md                  P0 基线快照
+├── ADR-001.md ... ADR-005.md       架构决策记录
 │
 ├── design/                         活跃设计文档（可修改）
 │   ├── 产品优化方案终版-0727/       唯一执行主规格
 │   ├── roadmap-data-stats.md        S1-S5 数据规格
-│   └── redesign-v1/v2.html          UI 交互稿
+│   └── archive/                     已退役文档（只读参考，不再执行）
 │
 ├── .archive/                       只读归档（不可修改）
 │   └── design-docs/                原设计仓库全部内容
@@ -169,7 +169,7 @@ Python 后端是核心用户数据的唯一写入权威（ADR-003）。Electron 
 ```bash
 # 测试
 PYTHONPATH=. python tests/test_golden.py     # 金标准 16/16
-PYTHONPATH=. python tests/test_unit.py        # 单元测试 47 项
+PYTHONPATH=. python tests/test_unit.py        # 单元测试 56 项
 cd ui && npx tsc --noEmit                    # TS 编译检查
 
 # 运行
