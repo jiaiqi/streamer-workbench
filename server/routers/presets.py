@@ -34,15 +34,17 @@ def api_presets_save(payload: dict):
     """创建（无 id 时生成）或完整更新（有 id 时整体覆盖）预设。"""
     try:
         p = _from_dict(payload)
-    except TypeError as e:
+    except (TypeError, ValueError, AttributeError) as e:
         return Response(f"预设字段不合法：{e}", status_code=400)
     if not p.id:
         p.id = new_preset_id()
+    # `_default` 是唯一默认预设；客户端负载不能移除或伪造该身份标志。
+    p.is_default = p.id == "_default"
     if not p.created_at:
         p.created_at = datetime.now().isoformat(timespec="seconds")
     try:
         save(p)
-    except ValueError as e:
+    except (TypeError, ValueError) as e:
         return Response(str(e), status_code=400)
     return {"ok": True, "id": p.id, "updated_at": p.updated_at}
 

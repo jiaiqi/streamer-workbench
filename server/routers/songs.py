@@ -111,7 +111,8 @@ def api_songs_update(req: Request, payload: dict):
         old_view = _song_dict(old_song) if old_song else None
         ok = library.update(title, fields)
     except ValueError as e:
-        return Response(str(e), status_code=400)
+        status_code = 409 if "改名失败" in str(e) else 400
+        return Response(str(e), status_code=status_code)
     if not ok:
         return Response(f"未找到歌曲：{title}", status_code=404)
     _save_library(library, settings)
