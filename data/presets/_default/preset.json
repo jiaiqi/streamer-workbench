@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "_default",
+  "name": "默认预设",
+  "created_at": "2026-07-27T15:59:19",
+  "updated_at": "2026-07-27T15:59:19",
+  "is_default": true,
+  "song_query": {
+    "status": "active",
+    "classify": "chars",
+    "sort_by": "default",
+    "max_songs": 0,
+    "custom_ids": []
+  },
+  "layout_id": "grid-wrap",
+  "palette_id": "",
+  "skin_id": "",
+  "canvas": {
+    "width": 1080,
+    "height": 2400
+  },
+  "params": {},
+  "export": {},
+  "color_overrides": {}
+}

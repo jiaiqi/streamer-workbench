@@ -1,0 +1,9 @@
+{
+  "_default": {
+    "name": "默认预设",
+    "layout_id": "grid-wrap",
+    "is_default": true,
+    "created_at": "2026-07-27T15:59:19",
+    "updated_at": "2026-07-27T15:59:19"
+  }
+}

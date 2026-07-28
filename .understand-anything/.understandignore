@@ -1,0 +1,40 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+# Lines below are suggestions — uncomment to activate.
+# Use ! prefix to force-include something excluded by defaults.
+#
+# Built-in defaults (always excluded unless negated):
+#   node_modules/, .git/, dist/, build/, obj/, binary assets, lock files, etc.
+
+# --- Project-specific suggestions ---
+
+# Historical snapshot; including it may mix obsolete architecture into the active graph.
+.archive/
+
+# Generated GitHub Pages output, not source documentation.
+docs/
+
+# Runtime/user data; code under core/data remains included.
+data/
+
+# Local editor/agent metadata.
+.zcode/
+
+# Re-generatable outputs and caches.
+output/
+packaging/dist/
+packaging/build/
+site/landing/dist/
+site/landing/.astro/
+site/landing/public/posters/
+
+# --- Detected directories (keep tests/design active by default) ---
+
+# tests/
+# design/
+
+# --- Test file patterns ---
+
+# *.test.*
+# *.spec.*
+# *.snap
