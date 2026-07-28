@@ -515,6 +515,25 @@ def test_song_router_registers_id_primary_and_title_compat_routes():
     assert ("/api/songs/delete", frozenset({"POST"})) in routes
     assert ("/api/songs/status", frozenset({"POST"})) in routes
 
+def test_song_title_compat_rename_conflict_matches_id_api():
+    import server.routers.songs as songs_router
+    library = SongLibrary([
+        Song(title="第一首", id="song_first"),
+        Song(title="第二首", id="song_second"),
+    ])
+    request = _request_for_library(library)
+    saves = []
+    old_save = songs_router._save_library
+    try:
+        songs_router._save_library = lambda lib, settings: saves.append(lib)
+        response = songs_router.api_songs_update(
+            request, {"title": "第一首", "fields": {"title": "第二首"}})
+    finally:
+        songs_router._save_library = old_save
+    assert response.status_code == 409
+    assert library.get_by_id("song_first").title == "第一首"
+    assert saves == []
+
 
 # ═══════ 曲谱存储（core/data/tabs.py）═══════
 from core.data import tabs as tabs_store
@@ -966,6 +985,113 @@ def test_tabs_api_resolves_id_first_and_title_as_compatibility():
     assert by_id == by_title
     assert by_id["song_id"] == song.id
     assert by_id["title"] == "新歌名"
+
+def test_tabs_api_identity_collision_prefers_song_id():
+    import server.routers.songs as songs_router
+    primary_id = _sid("主路径")
+    primary = Song(title="主路径歌曲", id=primary_id)
+    title_collision = Song(title=primary_id, id=_sid("同名兼容歌曲"))
+    request = _request_for_library(SongLibrary([primary, title_collision]))
+    result = songs_router.api_tab_list(request, primary_id)
+    assert result["song_id"] == primary.id
+    assert result["title"] == primary.title
+
+def test_tabs_api_upload_and_delete_use_resolved_song_id():
+    import asyncio
+    import io
+    import tempfile
+    from starlette.datastructures import UploadFile
+    import server.deps as deps
+    import server.routers.songs as songs_router
+
+    song = Song(title="可改名歌曲", id=_sid("曲谱主路径"))
+    library = SongLibrary([song])
+    request = _request_for_library(library)
+    old_tabs_dir = deps.TABS_DIR
+    old_save = songs_router._save_library
+    old_append = songs_router.append_event
+    old_events_path = songs_router._events_path
+    events = []
+    with tempfile.TemporaryDirectory() as data_root:
+        try:
+            deps.TABS_DIR = os.path.join(data_root, "tabs")
+            songs_router._save_library = lambda lib, settings: None
+            songs_router._events_path = lambda: os.path.join(data_root, "events.jsonl")
+            songs_router.append_event = lambda path, event_type, **kwargs: events.append(
+                {"type": event_type, **kwargs})
+            upload = UploadFile(io.BytesIO(b"PNG"), filename="主歌.png")
+            created = asyncio.run(songs_router.api_tab_upload(request, song.title, upload))
+            rel = created["file"]
+            assert created["song_id"] == song.id
+            assert rel == f"tabs/{song.id}/主歌.png"
+            assert os.path.isfile(os.path.join(data_root, rel))
+
+            deleted = songs_router.api_tab_delete(request, song.id, rel)
+            assert deleted["tab_files"] == []
+            assert not os.path.exists(os.path.join(data_root, rel))
+        finally:
+            deps.TABS_DIR = old_tabs_dir
+            songs_router._save_library = old_save
+            songs_router.append_event = old_append
+            songs_router._events_path = old_events_path
+    assert [event["source"] for event in events] == ["tabs-api", "tabs-api"]
+    assert all(event["song_id"] == song.id for event in events)
+
+def test_event_v2_route_idempotency_and_conflict():
+    import tempfile
+    import server.deps as deps
+    import server.routers.events as events_router
+
+    song = Song(title="当前歌名", id="song_event_route")
+    request = _request_for_library(SongLibrary([song]))
+    payload = {
+        "type": "song_sung", "event_id": "evt_route_fixed",
+        "song_id": song.id, "title_snapshot": "旧歌名",
+        "occurred_at": "2026-07-29T01:00:00+08:00", "source": "quick-view",
+    }
+    old_path = deps.EVENTS_JSONL
+    with tempfile.TemporaryDirectory() as data_root:
+        try:
+            deps.EVENTS_JSONL = os.path.join(data_root, "events.jsonl")
+            first = events_router.api_events_report(request, payload)
+            second = events_router.api_events_report(request, payload)
+            conflict = events_router.api_events_report(
+                request, {**payload, "occurred_at": "2026-07-29T01:01:00+08:00"})
+        finally:
+            deps.EVENTS_JSONL = old_path
+    assert first["event"]["event_id"] == "evt_route_fixed"
+    assert second["event"] == first["event"]
+    assert first["event"]["title_snapshot"] == "当前歌名"
+    assert conflict.status_code == 400
+    assert b"event_id" in conflict.body
+
+def test_preset_api_rejects_malformed_query_and_protects_default_flag():
+    import tempfile
+    import core.data.presets as presets_store
+    import server.routers.presets as presets_router
+
+    old_dir = presets_store.PRESETS_DIR
+    with tempfile.TemporaryDirectory() as data_root:
+        try:
+            presets_store.init_presets(data_root)
+            malformed = presets_router.api_presets_save({"name": "坏数据", "song_query": "不是对象"})
+            invalid_ids = presets_router.api_presets_save({
+                "name": "坏关系", "song_query": {"custom_ids": None},
+            })
+            ordinary = presets_router.api_presets_save({
+                "id": "ordinary", "name": "普通预设", "is_default": True,
+            })
+            default = presets_router.api_presets_save({
+                "id": "_default", "name": "默认预设", "is_default": False,
+            })
+            saved_ordinary = presets_store.load("ordinary")
+            saved_default = presets_store.load("_default")
+        finally:
+            presets_store.PRESETS_DIR = old_dir
+    assert malformed.status_code == 400
+    assert invalid_ids.status_code == 400
+    assert ordinary["ok"] is True and saved_ordinary.is_default is False
+    assert default["ok"] is True and saved_default.is_default is True
 
 def test_preset_full_fields_roundtrip():
     import tempfile
