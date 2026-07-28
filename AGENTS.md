@@ -36,19 +36,19 @@
 | 文档 | 路径 | 用途 |
 |---|---|---|
 | **唯一执行主规格** | `design/产品优化方案终版-0727/产品优化方案终版.md` | 产品/UI/架构/多布局完整规格 |
-| **唯一路线图** | `design/产品优化方案终版-0727/路线图.md` | P0–P9 执行路径与阶段门 |
+| **唯一路线图** | `design/产品优化方案终版-0727/路线图.md` | R0–R7 执行路径与阶段门；P 编号仅作历史能力分组 |
 | **差异裁决** | `design/产品优化方案终版-0727/三方案差异分析.md` | 前序方案合并记录 |
 | **数据路线图（S1–S5）** | `design/roadmap-data-stats.md` | 事件 Schema/统计口径唯一真相 |
-| **架构决策记录** | `ADR-001.md`（产品边界）、`ADR-002.md`（grid-wrap 兼容） |
+| **架构决策记录** | `ADR-001.md`（产品边界）、`ADR-002.md`（grid-wrap 兼容）、`ADR-003.md`（用户数据权威）、`ADR-004.md`（歌曲不可变身份） |
 | **项目 README** | `README.md` | 运行命令/目录结构/API 列表 |
 | **设计系统** | `.archive/design-docs/歌单海报生成器-界面设计/` | shared.css / design-tokens.json / 7 页设计稿（只读引用） |
 
 ### 当前完成状态
 
 ```
-引擎层    100% ✅    金标准 16/16 diff=0
-数据层    S1-S3 ✅   S4 学歌打卡 ⬜  S5 统计视图 ⬜
-产品主线  P0 ✅      P1 ✅           P2 ⬜（见路线图）
+引擎兼容  ✅          金标准 16/16 diff=0；avoid/cache 正确性待 R0 收口
+数据层    S1-S3 ✅   S3.5 身份升级 🟡  S4/S5 等待 S3.5
+产品主线  R0 🟡      正确性、Song v5/Event v2、数据目录与 P1 欠账收口
 桌面壳    spike 已过  正式壳 ⬜
 UI        ~80%       工作台/歌曲库/学歌/速查可用
 ```
@@ -57,13 +57,13 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| 渲染引擎 | Python 3.12.10 + Pillow 12.3.0 | 纯函数，金标准保护 |
-| 后端 | FastAPI 0.135.3 + uvicorn | `server/`，已拆分为 deps + routers（6 个） |
+| 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；本地 venv 版本漂移需 R0 收口 |
+| 后端 | FastAPI 0.115.0（requirements）+ uvicorn | `server/`，已拆分为 deps + routers（6 个） |
 | 前端 | React 19 + Vite 6 + Tailwind 4 | `ui/` |
 | 数据 | JSON + JSONL 本地文件 | songs.json v4（178 首）、events.jsonl、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 47 项单元测试 + 16 张金标准逐像素 + tsc --noEmit | |
+| 测试 | 47 项单元测试目标 + 16 张金标准逐像素 + tsc --noEmit | Windows 直接 runner 当前 46/47，R0 修复临时目录/UTF-8 |
 
 ---
 
@@ -119,7 +119,7 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 | macOS | `~/Library/Application Support/streamer-workbench/` |
 | 开发期 | 项目根 `data/` |
 
-用户可在设置页自由修改路径。Web 端（Chrome/Edge 86+）使用 `showDirectoryPicker` 选择目录；Electron 端使用原生文件对话框。不支持 File System Access API 的浏览器降级为文本输入。
+Python 后端是核心用户数据的唯一写入权威（ADR-003）。Electron 使用原生目录对话框选择路径并交给后端；浏览器开发模式通过后端设置 API、启动参数或配置文件指定。`showDirectoryPicker` 仅用于显式导入/导出，不直接管理 songs/events/tabs/presets。
 
 ---
 
@@ -156,6 +156,8 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 |---|---|
 | GitHub HTTPS 443 不通 | 走 SSH：`git push git@github.com:...` |
 | `pypinyin` 未安装 | `pip install pypinyin`（迁移测试依赖） |
+| Windows 控制台 GBK 无法输出 ✅/❌ | 运行 Python 测试前设置 `PYTHONUTF8=1`；R0 将修复测试入口 |
+| 本地 `.venv` 与 requirements 版本漂移 | R0 重新锁定并重建环境，文档不得把未锁定版本写成基线 |
 | Windows Git Bash `grep` 中文路径 bug | 用 `ls -R` 代替 `find` |
 | 主题背景图命名不统一 | 6 套用 `bg1.png`，海洋柔光独用 `background-1.png`，以各自 `theme.json` 为准 |
 | 缩略图 `object-cover` | 背景装饰集中在底部，必须 `object-cover object-bottom` |
@@ -179,4 +181,14 @@ PYTHONPATH=. python tools/benchmark.py        # 渲染性能
 
 # 推送
 git push git@github.com:jiaiqi/streamer-workbench.git HEAD:master
+```
+
+Windows PowerShell 当前兼容命令：
+
+```powershell
+$env:PYTHONPATH='.'
+$env:PYTHONUTF8='1'
+& '.venv\Scripts\python.exe' tests/test_golden.py
+& '.venv\Scripts\python.exe' tests/test_unit.py
+cd ui; npx tsc --noEmit
 ```
