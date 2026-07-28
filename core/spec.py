@@ -4,7 +4,7 @@
 由排版插件自行实现避让策略。CanvasSpec 本身不关心具体避让逻辑。
 移植自 歌单-排版一\build_playlist.py 的 FULL/AVOID/R_at/OFF 常量。
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Tuple
 
 
@@ -41,7 +41,17 @@ AVOID_ZONES_X1 = 1080
 
 # 画布预设（UI 下拉选项，不是引擎逻辑）
 CANVAS_PRESETS = {
-    "抖音全屏 9:20": CanvasSpec(
-        width=1080, height=2400, avoid_zones=((940, 1080, 1080, 2400),)),
+    "抖音全屏 9:20": CanvasSpec(width=1080, height=2400),
     "标准 9:16": CanvasSpec(width=1080, height=1920),
 }
+
+
+def get_canvas_spec(name: str, avoid: bool = False,
+                    default: str = "标准 9:16") -> CanvasSpec:
+    """按画布名构造规格；避让是独立行为，不由尺寸预设隐式开启。"""
+    base = CANVAS_PRESETS.get(name, CANVAS_PRESETS[default])
+    zones = (
+        ((AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1, base.height),)
+        if avoid else ()
+    )
+    return replace(base, avoid_zones=zones)

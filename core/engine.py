@@ -20,7 +20,7 @@ from .layouts.base import LayoutPlugin
 
 
 # ---- 背景预处理缓存 ----
-# key: (theme_name, page, canvas_width, canvas_height)
+# key: 所有影响背景合成的输入签名
 # value: 合成后的 RGBA 底版（背景+水印+延展+柔光）
 # 参数调整（字号/边距/栏数）时底版完全不变，只重排文字层。
 _BG_CACHE: dict = {}
@@ -64,7 +64,17 @@ def _compose_base(theme: Theme, page: int, spec: CanvasSpec) -> Image.Image:
 
 def _get_base(theme: Theme, page: int, spec: CanvasSpec) -> Image.Image:
     """获取缓存底版，未命中则合成并缓存。"""
-    key = (theme.name, page, spec.width, spec.height)
+    st = theme.styles[page]
+    key = (
+        theme.background_path(page),
+        theme.watermark_fix,
+        page,
+        spec.width,
+        spec.height,
+        spec.baseline_height,
+        tuple(spec.avoid_zones),
+        tuple(st.mist),
+    )
     if key not in _BG_CACHE:
         _BG_CACHE[key] = _compose_base(theme, page, spec)
     return _BG_CACHE[key].copy()  # 返回副本，避免污染缓存

@@ -63,7 +63,7 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 | 数据 | JSON + JSONL 本地文件 | songs.json v4（178 首）、events.jsonl、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 47 项单元测试目标 + 16 张金标准逐像素 + tsc --noEmit | Windows 直接 runner 当前 46/47，R0 修复临时目录/UTF-8 |
+| 测试 | 49 项单元测试 + 16 张金标准逐像素 + tsc --noEmit | Windows 直接 runner 49/49；控制台 UTF-8 与依赖锁定仍待 R0 收口 |
 
 ---
 

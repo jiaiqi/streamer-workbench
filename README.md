@@ -55,7 +55,7 @@ $env:PYTHONUTF8='1'
 cd ui; npx tsc --noEmit
 ```
 
-当前 Windows 直接单元测试 runner 为 46/47：唯一失败是测试自身硬编码 `/tmp/test_presets`，列入路线图 R0.9；金标准与 TypeScript 检查通过。
+当前 Windows 直接单元测试 runner 为 49/49；Preset 测试已改用平台临时目录。金标准保持 16/16 diff=0。
 
 ## 后端 API（server/main.py）
 `GET /api/health`、`/api/themes`、`/api/layouts`（含 pages/supports_avoidance）、`/api/layouts/{id}/params`（ParamSpec 参数描述）、`/api/songs`、`/api/render?theme=&page=&canvas=&avoid=&layout=&margin=&font_song=&row_h=&sec_gap=`（支持排版参数覆盖）、`/bg/<主题>/<文件>` 静态背景。

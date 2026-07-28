@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, Response
 from PIL import Image
 
 from server.deps import get_themes, get_library, get_settings, get_thumb_cache
-from core.spec import CANVAS_PRESETS, AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1
+from core.spec import get_canvas_spec
 from core.layouts import get_layout, list_layouts, layout_params
 from core.engine import render_page
 
@@ -76,10 +76,7 @@ def api_render(req: Request,
         layout_plugin = get_layout(layout)
     except KeyError as e:
         return Response(str(e), status_code=404)
-    base = CANVAS_PRESETS.get(canvas, CANVAS_PRESETS["标准 9:16"])
-    spec = base
-    if avoid:
-        spec = replace(spec, avoid_zones=((AVOID_ZONES_X0, AVOID_ZONES_Y0, AVOID_ZONES_X1, base.height),))
+    spec = get_canvas_spec(canvas, avoid=avoid)
     overrides = {k: v for k, v in
                  {"margin": margin, "font_song": font_song,
                   "row_h": row_h, "sec_gap": sec_gap}.items()

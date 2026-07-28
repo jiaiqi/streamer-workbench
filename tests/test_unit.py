@@ -348,6 +348,59 @@ def test_layout_params():
     assert "font_song" in keys
 
 
+# ═══════ Canvas / background cache correctness ═══════
+
+def test_canvas_avoidance_is_explicit():
+    from core.spec import CANVAS_PRESETS, get_canvas_spec
+    base = CANVAS_PRESETS["抖音全屏 9:20"]
+    assert base.avoid_zones == ()
+    assert get_canvas_spec("抖音全屏 9:20", avoid=False).avoid_zones == ()
+    assert get_canvas_spec("抖音全屏 9:20", avoid=True).avoid_zones == (
+        (940, 1080, 1080, 2400),
+    )
+
+
+def test_bg_cache_separates_avoid_and_mist_inputs():
+    import tempfile
+    from PIL import Image, ImageChops
+    from core.engine import _get_base, clear_bg_cache
+    from core.spec import CanvasSpec
+
+    with tempfile.TemporaryDirectory() as d:
+        bg = os.path.join(d, "bg.png")
+        Image.new("RGB", (24, 1600), (20, 40, 60)).save(bg)
+        normal = Style(text=(0, 0, 0), label=(0, 0, 0), pill=(0, 0, 0, 0),
+                       line=(0, 0, 0), mist=(255, 255, 255, 40))
+        theme = Theme(name="cache-test", dir=d, output_prefix="x",
+                      backgrounds={"1": "bg.png", "2": "bg.png"},
+                      watermark_fix=False, styles={1: normal, 2: normal})
+        spec_normal = CanvasSpec(width=24, height=1600, baseline_height=1600)
+        spec_avoid = CanvasSpec(width=24, height=1600, baseline_height=1600,
+                                avoid_zones=((20, 1080, 24, 1600),))
+
+        clear_bg_cache()
+        avoid_first = _get_base(theme, 1, spec_avoid)
+        normal_after = _get_base(theme, 1, spec_normal)
+        assert ImageChops.difference(
+            avoid_first.convert("RGB"), normal_after.convert("RGB")
+        ).getbbox() is not None
+
+        clear_bg_cache()
+        normal_first = _get_base(theme, 1, spec_normal)
+        avoid_after = _get_base(theme, 1, spec_avoid)
+        assert ImageChops.difference(normal_first, normal_after).getbbox() is None
+        assert ImageChops.difference(avoid_after, avoid_first).getbbox() is None
+
+        changed = Style(text=(0, 0, 0), label=(0, 0, 0), pill=(0, 0, 0, 0),
+                        line=(0, 0, 0), mist=(255, 0, 0, 120))
+        theme.styles[1] = changed
+        changed_mist = _get_base(theme, 1, spec_normal)
+        assert ImageChops.difference(
+            normal_after.convert("RGB"), changed_mist.convert("RGB")
+        ).getbbox() is not None
+        clear_bg_cache()
+
+
 # ═══════ Grouping Logic ═══════
 
 def test_group_section_override():
@@ -426,37 +479,34 @@ def test_preset_default():
     assert p.song_query.status == "active"
     assert p.canvas["width"] == 1080
 
-def test_preset_crud(tmp_path="/tmp/test_presets"):
-    import os, shutil
+def test_preset_crud():
+    import tempfile
     from core.data.presets import Preset, SongQuery, init_presets, save, load, delete, list_all, duplicate
-    path = tmp_path
-    if os.path.isdir(path):
-        shutil.rmtree(path)
-    init_presets(path)
-    all_p = list_all()
-    assert len(all_p) == 1  # 默认预设
-    assert all_p[0]["id"] == "_default"
+    with tempfile.TemporaryDirectory() as path:
+        init_presets(path)
+        all_p = list_all()
+        assert len(all_p) == 1  # 默认预设
+        assert all_p[0]["id"] == "_default"
 
-    p = Preset(
-        id="test1",
-        name="测试预设",
-        layout_id="magazine-flow",
-        canvas={"width": 1080, "height": 1920},
-    )
-    save(p)
-    loaded = load("test1")
-    assert loaded is not None
-    assert loaded.name == "测试预设"
-    assert loaded.layout_id == "magazine-flow"
+        p = Preset(
+            id="test1",
+            name="测试预设",
+            layout_id="magazine-flow",
+            canvas={"width": 1080, "height": 1920},
+        )
+        save(p)
+        loaded = load("test1")
+        assert loaded is not None
+        assert loaded.name == "测试预设"
+        assert loaded.layout_id == "magazine-flow"
 
-    d = duplicate("test1", "test1-copy", "副本")
-    assert d is not None
-    assert d.id == "test1-copy"
-    assert "副本" in d.name
+        d = duplicate("test1", "test1-copy", "副本")
+        assert d is not None
+        assert d.id == "test1-copy"
+        assert "副本" in d.name
 
-    delete("test1")
-    assert load("test1") is None
-    shutil.rmtree(path)
+        delete("test1")
+        assert load("test1") is None
 
 
 # ═══════ Runner ═══════

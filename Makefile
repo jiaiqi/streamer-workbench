@@ -29,7 +29,7 @@ requirements:
 export-sample:
 	@echo "=== 导出海洋柔光全屏绕排 ×2页 ==="
 	PYTHONPATH=. python -c "
-from core.spec import CANVAS_PRESETS
+from core.spec import get_canvas_spec
 from core.themes.loader import load_themes
 from core.layouts import get_layout
 from core.data.songs import build_default_library
@@ -37,7 +37,7 @@ from core.engine import render_page
 t = load_themes('themes')['海洋柔光']
 l = get_layout('grid-wrap')
 b = build_default_library()
-s = CANVAS_PRESETS['抖音全屏 9:20']
+s = get_canvas_spec('抖音全屏 9:20', avoid=True)
 for p in (1,2):
     render_page(t, l, b, s, p, 'fonts/MaokenAssortedSans.ttf').save(f'output/sample-p{p}.png')
 print('导出了 output/sample-p1.png output/sample-p2.png')
