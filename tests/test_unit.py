@@ -525,39 +525,64 @@ def test_tabs_sanitize_name():
     assert tabs_store.sanitize_name("a/b\\c") == "a_b_c"
     assert tabs_store.sanitize_name("") == "未命名"
 
-def test_tabs_save_and_dedup():
+def test_tabs_save_and_dedup_id_dir():
     import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
     with tempfile.TemporaryDirectory() as d:
-        r1 = tabs_store.save_tab(d, "知足", "主歌.png", b"\x89PNG fake")
-        r2 = tabs_store.save_tab(d, "知足", "主歌.png", b"\x89PNG fake2")
-        assert r1 == "tabs/知足/主歌.png"
-        assert r2 == "tabs/知足/主歌-1.png"          # 重名自动加后缀
-        assert open(os.path.join(d, "知足", "主歌-1.png"), "rb").read() == b"\x89PNG fake2"
+        r1 = tabs_store.save_tab(d, sid, "主歌.png", b"\x89PNG fake")
+        r2 = tabs_store.save_tab(d, sid, "主歌.png", b"\x89PNG fake2")
+        assert r1 == f"tabs/{sid}/主歌.png"
+        assert r2 == f"tabs/{sid}/主歌-1.png"          # 重名自动加后缀
+        assert open(os.path.join(d, sid, "主歌-1.png"), "rb").read() == b"\x89PNG fake2"
 
 def test_tabs_save_rejects_bad_ext_and_oversize():
     import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
     with tempfile.TemporaryDirectory() as d:
         for bad in ("谱.exe", "谱", "谱.svg"):
             try:
-                tabs_store.save_tab(d, "知足", bad, b"x")
+                tabs_store.save_tab(d, sid, bad, b"x")
                 assert False, f"{bad} 应被拦截"
             except ValueError:
                 pass
         try:
-            tabs_store.save_tab(d, "知足", "big.png", b"x" * (tabs_store.MAX_FILE_BYTES + 1))
+            tabs_store.save_tab(d, sid, "big.png", b"x" * (tabs_store.MAX_FILE_BYTES + 1))
             assert False, "超尺寸应被拦截"
         except ValueError:
             pass
 
-def test_tabs_delete_traversal_guard():
+def test_tabs_save_rejects_invalid_song_id():
+    """目录键只接受稳定 song_id：title、空值、路径穿越全部拒绝。"""
     import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
+    with tempfile.TemporaryDirectory() as d:
+        for bad in ("知足", "", "../x", "song_短"):
+            try:
+                tabs_store.save_tab(d, bad, "a.png", b"x")
+                assert False, f"{bad!r} 应被拒绝"
+            except ValueError:
+                pass
+        try:
+            tabs_store.delete_tab(d, "知足", f"tabs/{sid}/a.png")
+            assert False, "delete 用 title 应被拒绝"
+        except ValueError:
+            pass
+
+def test_tabs_delete_traversal_guard_id_dir():
+    import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
+    other = legacy_song_id("别的歌")
     with tempfile.TemporaryDirectory() as d:
         tabs_root = os.path.join(d, "data", "tabs")  # 与生产一致：relpath 相对 data/
-        rel = tabs_store.save_tab(tabs_root, "知足", "主歌.png", b"\x89PNG fake")
-        assert tabs_store.delete_tab(tabs_root, "知足", "tabs/知足/../songs.json") is False
-        assert tabs_store.delete_tab(tabs_root, "知足", "tabs/别的歌/x.png") is False
-        assert tabs_store.delete_tab(tabs_root, "知足", rel) is True
-        assert tabs_store.delete_tab(tabs_root, "知足", rel) is False  # 已删 → False
+        rel = tabs_store.save_tab(tabs_root, sid, "主歌.png", b"\x89PNG fake")
+        assert tabs_store.delete_tab(tabs_root, sid, f"tabs/{sid}/../songs.json") is False
+        assert tabs_store.delete_tab(tabs_root, sid, f"tabs/{other}/x.png") is False
+        assert tabs_store.delete_tab(tabs_root, sid, rel) is True
+        assert tabs_store.delete_tab(tabs_root, sid, rel) is False  # 已删 → False
 
 def test_pinyin_initials():
     from core.data.songs import pinyin_initials
@@ -765,6 +790,230 @@ def test_preset_crud():
 
         delete("test1")
         assert load("test1") is None
+
+
+# ═══════ R0.5 Tabs title→ID 目录迁移 ═══════
+
+def _sid(title):
+    from core.data.songs import legacy_song_id
+    return legacy_song_id(title)
+
+
+def _mk_dir(root, dirname, files: dict):
+    d = os.path.join(root, dirname)
+    os.makedirs(d, exist_ok=True)
+    for name, content in files.items():
+        with open(os.path.join(d, name), "wb") as f:
+            f.write(content)
+    return d
+
+
+def test_tabs_migration_moves_title_dir():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"A", "副歌.png": b"B"})
+        id_map = {"知足": sid}
+        plan = tabs_store.plan_migration(d, id_map)
+        assert [p["dirname"] for p in plan["planned"]] == ["知足"]
+        assert plan["conflicts"] == []
+        backup = os.path.join(d, "backup")
+        rep = tabs_store.migrate_title_dirs(d, id_map, backup_root=backup, apply=True)
+        assert rep["errors"] == []
+        assert open(os.path.join(d, sid, "主歌.png"), "rb").read() == b"A"
+        assert not os.path.isdir(os.path.join(d, "知足"))           # 旧目录已搬走
+        assert os.path.isdir(os.path.join(backup, "知足"))          # 进可恢复备份，未删除
+        assert rep["moved"][0]["files"] == ["主歌.png", "副歌.png"] or \
+               sorted(rep["moved"][0]["files"]) == ["主歌.png", "副歌.png"]
+
+def test_tabs_migration_idempotent():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"A"})
+        id_map = {"知足": sid}
+        backup = os.path.join(d, "backup")
+        tabs_store.migrate_title_dirs(d, id_map, backup_root=backup, apply=True)
+        snapshot = {sid: sorted(os.listdir(os.path.join(d, sid)))}
+        rep2 = tabs_store.migrate_title_dirs(d, id_map, backup_root=backup, apply=True)
+        assert rep2["planned"] == []                                # 第二次无可迁目录
+        assert rep2["moved"] == []                                  # 不产生第二份关系
+        assert sorted(os.listdir(os.path.join(d, sid))) == snapshot[sid]
+
+def test_tabs_migration_conflict_no_overwrite():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"OLD"})
+        _mk_dir(d, sid, {"主歌.png": b"NEW-DIFFERENT"})
+        id_map = {"知足": sid}
+        plan = tabs_store.plan_migration(d, id_map)
+        assert plan["conflicts"] and plan["planned"] == []          # 冲突 → 整目录停止
+        rep = tabs_store.migrate_title_dirs(d, id_map, backup_root=os.path.join(d, "b"), apply=True)
+        assert rep["moved"] == []
+        assert open(os.path.join(d, sid, "主歌.png"), "rb").read() == b"NEW-DIFFERENT"  # 不覆盖
+        assert os.path.isdir(os.path.join(d, "知足"))               # 旧目录保留
+
+def test_tabs_migration_same_content_is_idempotent():
+    """目标已存在同名同内容文件 → 视为已迁移，源文件去重，不算冲突。"""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"SAME"})
+        _mk_dir(d, sid, {"主歌.png": b"SAME"})
+        id_map = {"知足": sid}
+        rep = tabs_store.migrate_title_dirs(d, id_map, backup_root=os.path.join(d, "b"), apply=True)
+        assert rep["conflicts"] == [] and rep["errors"] == []
+        assert open(os.path.join(d, sid, "主歌.png"), "rb").read() == b"SAME"
+        assert not os.path.isdir(os.path.join(d, "知足"))
+
+def test_tabs_migration_unresolved_reported():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _mk_dir(d, "幽灵歌", {"x.png": b"X"})
+        rep = tabs_store.migrate_title_dirs(d, {}, backup_root=os.path.join(d, "b"), apply=True)
+        assert rep["unresolved"] == ["幽灵歌"]                      # 进报告
+        assert os.path.isdir(os.path.join(d, "幽灵歌"))             # 保留原地，不丢
+
+def test_tabs_migration_dry_run_no_writes():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"A"})
+        before = sorted(os.listdir(d))
+        rep = tabs_store.migrate_title_dirs(d, {"知足": sid}, apply=False)
+        assert rep["planned"] and not os.path.exists(os.path.join(d, sid))
+        assert sorted(os.listdir(d)) == before                      # dry-run 零写入
+
+def test_tabs_rewrite_tab_files():
+    sid = _sid("知足")
+    old = [f"tabs/知足/主歌.png", "tabs/其他/x.png"]
+    new = tabs_store.rewrite_tab_files(old, "知足", sid)
+    assert new == [f"tabs/{sid}/主歌.png", "tabs/其他/x.png"]       # 只改本歌前缀
+
+
+# ═══════ R0.5 Preset custom_ids 迁移与校验 ═══════
+
+def test_preset_custom_ids_migration():
+    from core.data.presets import Preset, SongQuery, migrate_custom_ids
+    sid, sid2 = _sid("知足"), _sid("温柔")
+    p = Preset(id="p1", schema_version=1,
+               song_query=SongQuery(custom_ids=["知足", sid2, "不存在的歌", "知足"]))
+    rep = migrate_custom_ids(p, {"知足": sid, "温柔": sid2})
+    assert rep["resolved"] == {"知足": sid}
+    assert rep["unresolved"] == ["不存在的歌"]                      # 未匹配不丢
+    assert p.song_query.custom_ids == [sid, sid2]                   # 歌名→ID + 去重
+    assert p.song_query.unresolved == ["不存在的歌"]
+    assert p.schema_version == 2                                    # 版本提升
+    rep2 = migrate_custom_ids(p, {"知足": sid})
+    assert rep2["changed"] is False                                 # 幂等
+
+def test_preset_custom_ids_validation_rejects_bad():
+    import tempfile
+    from core.data.presets import Preset, SongQuery, init_presets, save
+    with tempfile.TemporaryDirectory() as path:
+        init_presets(path)
+        for bad in (["知足"], ["song_短"], [_sid("a"), _sid("a")]):
+            try:
+                save(Preset(id="bad1", song_query=SongQuery(custom_ids=bad)))
+                assert False, f"{bad} 应被拒绝"
+            except ValueError:
+                pass
+
+def test_preset_full_fields_roundtrip():
+    import tempfile
+    from core.data.presets import Preset, SongQuery, init_presets, save, load, duplicate, delete
+    with tempfile.TemporaryDirectory() as path:
+        init_presets(path)
+        p = Preset(
+            id="full1", name="完整场景", layout_id="grid-wrap",
+            palette_id="pal-1", skin_id="skin-1",
+            canvas={"width": 1080, "height": 1920},
+            params={"margin": 58, "font_song": 36},
+            export={"format": "png", "scale": 2},
+            color_overrides={"text": "#111111"},
+            song_query=SongQuery(status="all", classify="artist",
+                                 sort_by="title", max_songs=30,
+                                 custom_ids=[_sid("知足")],
+                                 unresolved=["旧歌名"]),
+        )
+        save(p)
+        q = load("full1")
+        assert q is not None
+        assert q.palette_id == "pal-1" and q.skin_id == "skin-1"
+        assert q.canvas == {"width": 1080, "height": 1920}
+        assert q.params == {"margin": 58, "font_song": 36}
+        assert q.export == {"format": "png", "scale": 2}
+        assert q.color_overrides == {"text": "#111111"}
+        assert q.song_query.custom_ids == [_sid("知足")]
+        assert q.song_query.unresolved == ["旧歌名"]
+        assert q.schema_version == 2
+        d = duplicate("full1", "full1-copy", "副本")
+        assert d is not None and d.song_query.custom_ids == [_sid("知足")]
+        assert delete("full1") is True
+        assert load("full1") is None
+        assert delete("full1") is False                             # 不存在 → False（路由 404）
+
+
+# ═══════ R0.5 迁移器端到端（tools/migrate_data.py）═══════
+
+def _write_v4_songs(data_root, titles_with_tabs):
+    """构造最小 v4 songs.json（无 id 字段），返回 data_root。"""
+    import json as _json
+    os.makedirs(data_root, exist_ok=True)
+    payload = {"version": 4, "songs": [
+        {"title": t, "tab_files": [f"tabs/{t}/主歌.png"] if t in titles_with_tabs else []}
+        for t in titles_with_tabs
+    ]}
+    with open(os.path.join(data_root, "songs.json"), "w", encoding="utf-8") as f:
+        _json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def test_r05_migrator_end_to_end():
+    import json as _json
+    import tempfile
+    from tools.migrate_data import run_r05_migration
+    with tempfile.TemporaryDirectory() as d:
+        data_root = os.path.join(d, "data")
+        _write_v4_songs(data_root, ["知足"])
+        sid = _sid("知足")
+        _mk_dir(os.path.join(data_root, "tabs"), "知足", {"主歌.png": b"A"})
+        # 旧 preset：custom_ids 为歌名
+        pdir = os.path.join(data_root, "presets", "legacy1")
+        os.makedirs(pdir)
+        with open(os.path.join(data_root, "presets", "manifest.json"), "w", encoding="utf-8") as f:
+            _json.dump({"legacy1": {"name": "旧预设"}}, f, ensure_ascii=False)
+        with open(os.path.join(pdir, "preset.json"), "w", encoding="utf-8") as f:
+            _json.dump({"schema_version": 1, "id": "legacy1", "name": "旧预设",
+                        "song_query": {"custom_ids": ["知足", "幽灵歌"]}}, f, ensure_ascii=False)
+
+        # 1. dry-run：零写入
+        before = sorted(os.listdir(os.path.join(data_root, "tabs")))
+        rep = run_r05_migration(data_root, apply=False)
+        assert rep["dry_run"] is True
+        assert sorted(os.listdir(os.path.join(data_root, "tabs"))) == before
+        assert rep["planned"] and rep["presets"]
+
+        # 2. apply：目录搬迁 + tab_files 改写 + v5 持久化 + preset 迁移 + 备份
+        rep = run_r05_migration(data_root, apply=True)
+        assert rep["conflicts"] == []
+        assert os.path.isfile(os.path.join(data_root, "tabs", sid, "主歌.png"))
+        assert not os.path.isdir(os.path.join(data_root, "tabs", "知足"))
+        saved = _json.load(open(os.path.join(data_root, "songs.json"), encoding="utf-8"))
+        assert saved["version"] == 5                                 # v4→v5 持久化
+        assert saved["songs"][0]["id"] == sid                        # 确定性 ID
+        assert saved["songs"][0]["tab_files"] == [f"tabs/{sid}/主歌.png"]
+        migrated = _json.load(open(os.path.join(pdir, "preset.json"), encoding="utf-8"))
+        assert migrated["song_query"]["custom_ids"] == [sid]
+        assert migrated["song_query"]["unresolved"] == ["幽灵歌"]    # 未解析不丢
+        assert migrated["schema_version"] == 2
+        assert rep["backups"]                                        # 备份存在
+        assert rep["verify"]["remaining_planned"] == 0
+
+        # 3. 重复运行：无副作用
+        rep3 = run_r05_migration(data_root, apply=True)
+        assert rep3["planned"] == [] and rep3["tab_files_rewritten"] == 0
+        assert rep3["presets"] == []
 
 
 # ═══════ Runner ═══════
