@@ -457,6 +457,45 @@ def test_event_report_rejects_unknown_explicit_song_id():
     })
     assert response.status_code == 404
 
+def test_event_report_explicit_song_id_requires_complete_v2_envelope():
+    import server.routers.events as events_router
+    request = _request_for_library(SongLibrary([Song(title="知足", id="song_known")]))
+    response = events_router.api_events_report(request, {
+        "type": "song_sung", "song_id": "song_known", "title_snapshot": "知足",
+    })
+    assert response.status_code == 400
+    assert b"event_id" in response.body
+    assert b"occurred_at" in response.body
+    assert b"source" in response.body
+
+def test_event_report_complete_v2_refreshes_title_and_keeps_client_identity():
+    import server.routers.events as events_router
+    import server.deps as deps
+    request = _request_for_library(SongLibrary([Song(title="新歌名", id="song_known")]))
+    captured = []
+    old_append = events_router.append_event
+    old_path = deps.EVENTS_JSONL
+    try:
+        deps.EVENTS_JSONL = "unused-events.jsonl"
+        events_router.append_event = lambda path, event_type, **kwargs: captured.append(
+            {"type": event_type, **kwargs}) or {"event_id": kwargs["event_id"]}
+        result = events_router.api_events_report(request, {
+            "type": "song_sung",
+            "event_id": "evt_client_fixed",
+            "song_id": "song_known",
+            "title_snapshot": "旧歌名",
+            "occurred_at": "2026-07-28T20:00:00+08:00",
+            "source": "quick-view",
+        })
+    finally:
+        events_router.append_event = old_append
+        deps.EVENTS_JSONL = old_path
+    assert result["ok"] is True
+    assert captured[0]["event_id"] == "evt_client_fixed"
+    assert captured[0]["song_id"] == "song_known"
+    assert captured[0]["title_snapshot"] == "新歌名"
+    assert captured[0]["occurred_at"] == "2026-07-28T20:00:00+08:00"
+
 def test_event_report_legacy_title_must_resolve_to_song_id():
     import server.routers.events as events_router
     request = _request_for_library(SongLibrary([]))
@@ -464,6 +503,17 @@ def test_event_report_legacy_title_must_resolve_to_song_id():
         "type": "queue_added", "title": "不存在的歌",
     })
     assert response.status_code == 400
+
+def test_song_router_registers_id_primary_and_title_compat_routes():
+    from server.routers.songs import router as songs_router
+    routes = {(route.path, frozenset(route.methods or set())) for route in songs_router.routes}
+    assert ("/api/songs/{song_id}", frozenset({"GET"})) in routes
+    assert ("/api/songs/{song_id}", frozenset({"PATCH"})) in routes
+    assert ("/api/songs/{song_id}", frozenset({"DELETE"})) in routes
+    assert ("/api/songs/{song_id}/status", frozenset({"PATCH"})) in routes
+    assert ("/api/songs/update", frozenset({"POST"})) in routes
+    assert ("/api/songs/delete", frozenset({"POST"})) in routes
+    assert ("/api/songs/status", frozenset({"POST"})) in routes
 
 
 # ═══════ 曲谱存储（core/data/tabs.py）═══════

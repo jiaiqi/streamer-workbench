@@ -37,6 +37,19 @@ def api_events_report(req: Request, payload: dict):
         song = library.get_by_id(song_id)
         if song is None:
             return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
+        required = {
+            "event_id": payload.get("event_id"),
+            "title_snapshot": payload.get("title_snapshot"),
+            "occurred_at": payload.get("occurred_at"),
+            "source": payload.get("source"),
+        }
+        missing = [key for key, value in required.items()
+                   if not str(value or "").strip()]
+        if missing:
+            return Response(
+                f"Event v2 缺少必填字段：{', '.join(missing)}",
+                status_code=400,
+            )
     else:
         # R0.5 兼容旧 QuickView；新客户端必须直接提交 song_id。
         song = library.get(title) if title else None
