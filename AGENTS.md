@@ -47,8 +47,8 @@
 
 ```
 引擎兼容  ✅          金标准 16/16 diff=0；avoid/cache 正确性待 R0 收口
-数据层    S1-S3 ✅   S3.5 身份升级 🟡  S4/S5 等待 S3.5
-产品主线  R0 🟡      正确性、Song v5/Event v2、数据目录与 P1 欠账收口
+数据层    S1-S3 ✅   S3.5 🟡（Song v5 ✅ / Event v2 ⬜）  S4/S5 等待 S3.5
+产品主线  R0 🟡      avoid/cache 与 Song v5 已完成；Event v2、数据目录与 P1 欠账待收口
 桌面壳    spike 已过  正式壳 ⬜
 UI        ~80%       工作台/歌曲库/学歌/速查可用
 ```
@@ -63,7 +63,7 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 | 数据 | JSON + JSONL 本地文件 | songs.json v4（178 首）、events.jsonl、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 49 项单元测试 + 16 张金标准逐像素 + tsc --noEmit | Windows 直接 runner 49/49；控制台 UTF-8 与依赖锁定仍待 R0 收口 |
+| 测试 | 54 项单元测试 + 16 张金标准逐像素 + tsc --noEmit | Windows 直接 runner 54/54；控制台 UTF-8 与依赖锁定仍待 R0 收口 |
 
 ---
 

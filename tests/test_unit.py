@@ -98,6 +98,17 @@ def test_library_add_duplicate():
     assert lib.add(Song(title="a")) is False
     assert lib.add(Song(title="b")) is True
 
+def test_library_add_duplicate_id():
+    first = Song(title="a")
+    lib = SongLibrary([first])
+    assert lib.add(Song(title="b", id=first.id)) is False
+
+def test_library_get_by_id_survives_rename():
+    song = Song(title="a")
+    lib = SongLibrary([song])
+    assert lib.update("a", {"title": "renamed"}) is True
+    assert lib.get_by_id(song.id).title == "renamed"
+
 def test_mark_active():
     lib = SongLibrary([Song(title="a", status="draft"), Song(title="b", status="active")])
     assert lib.mark_active("a") is True
@@ -136,7 +147,7 @@ def test_remove():
 def test_migration_v1_to_v2_capo():
     data = {"version": 1, "songs": [
         {"title": "a", "capo": 0}, {"title": "b", "capo": 3}]}
-    out = SongLibrary._migrate(data)
+    out = SongLibrary._migrate_v1_to_v2(data)
     assert out["songs"][0]["capo"] is None
     assert out["songs"][1]["capo"] == 3
 
@@ -145,7 +156,7 @@ def test_migration_v2_to_v3_pinyin():
         {"title": "知足", "pinyin": ""},          # 空 → 回填
         {"title": "枫", "pinyin": "custom"},      # 手工非空 → 保留
         {"title": "", "pinyin": ""}]}             # 无标题 → 不炸
-    out = SongLibrary._migrate(data)
+    out = SongLibrary._migrate_v2_to_v3(data)
     assert out["songs"][0]["pinyin"] == "zz"
     assert out["songs"][1]["pinyin"] == "custom"
     assert out["songs"][2]["pinyin"] == ""
@@ -167,14 +178,39 @@ def test_migration_v3_to_v4_fields():
     assert out["songs"][1]["learned_at"] == "2026-07-01"
     assert out["songs"][1]["tab_files"] == ["tabs/b/主歌.png"]
 
-def test_migration_chain_v1_to_v4():
+def test_migration_chain_v1_to_v5():
     data = {"version": 1, "songs": [{"title": "知足", "capo": 0, "pinyin": ""}]}
     out = SongLibrary._migrate(data)
     s = out["songs"][0]
     assert s["capo"] is None and s["pinyin"] == "zz"
     assert s["learned_at"] == "" and s["tab_files"] == []
+    assert s["id"].startswith("song_")
+    assert out["version"] == 5
 
-def test_save_load_roundtrip_v4():
+def test_migration_v4_to_v5_is_deterministic():
+    import copy
+    source = {"version": 4, "songs": [{"title": "知足"}, {"title": "枫"}]}
+    first = SongLibrary._migrate(copy.deepcopy(source))
+    second = SongLibrary._migrate(copy.deepcopy(source))
+    assert [s["id"] for s in first["songs"]] == [s["id"] for s in second["songs"]]
+    assert len({s["id"] for s in first["songs"]}) == 2
+
+def test_migration_v5_rejects_invalid_identity():
+    cases = [
+        {"version": 5, "songs": [{"id": "", "title": "a"}]},
+        {"version": 5, "songs": [{"id": "same", "title": "a"},
+                                   {"id": "same", "title": "b"}]},
+        {"version": 5, "songs": [{"id": "one", "title": "a"},
+                                   {"id": "two", "title": "a"}]},
+    ]
+    for data in cases:
+        try:
+            SongLibrary._migrate(data)
+            assert False, "无效 v5 身份应被拒绝"
+        except ValueError:
+            pass
+
+def test_save_load_roundtrip_v5():
     import json, tempfile
     with tempfile.TemporaryDirectory() as d:
         lib = SongLibrary([Song(title="知足", learned_at="2026-07-27",
@@ -182,11 +218,31 @@ def test_save_load_roundtrip_v4():
         p = os.path.join(d, "songs.json")
         lib.save(p)
         with open(p, encoding="utf-8") as f:
-            assert json.load(f)["version"] == 4
+            assert json.load(f)["version"] == 5
         loaded = SongLibrary.load_from_json(p)
         s = loaded.get("知足")
+        assert s.id == lib.get("知足").id
         assert s.learned_at == "2026-07-27"
         assert s.tab_files == ["tabs/知足/chorus.png"]
+
+def test_first_v5_save_backs_up_v4_file():
+    import json, tempfile
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "songs.json")
+        backups = os.path.join(d, "backups")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"version": 4, "songs": [{"title": "知足"}]}, f,
+                      ensure_ascii=False)
+        lib = SongLibrary.load_from_json(path)
+        lib.save(path, backup_dir=backups)
+        backup_files = os.listdir(backups)
+        assert len(backup_files) == 1
+        with open(os.path.join(backups, backup_files[0]), encoding="utf-8") as f:
+            assert json.load(f)["version"] == 4
+        with open(path, encoding="utf-8") as f:
+            saved = json.load(f)
+        assert saved["version"] == 5
+        assert saved["songs"][0]["id"] == lib.songs[0].id
 
 
 # ═══════ 事件日志（core/data/events.py）═══════

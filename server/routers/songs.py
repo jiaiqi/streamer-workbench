@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 def _song_dict(s) -> dict:
-    return {"title": s.title, "status": s.status, "section": s.section,
+    return {"id": s.id, "title": s.title, "status": s.status, "section": s.section,
             "artists": s.artists, "lyricist": s.lyricist, "composer": s.composer,
             "key": s.key, "capo": s.capo, "difficulty": s.difficulty,
             "tabs": s.tabs, "tags": s.tags, "pinyin": s.pinyin,

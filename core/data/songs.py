@@ -11,14 +11,29 @@ import json
 import os
 import shutil
 import tempfile
+import unicodedata
+import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import ClassVar, List, Optional
 
 
+def new_song_id() -> str:
+    """为迁移后的新歌生成无业务含义的不可变 ID。"""
+    return f"song_{uuid.uuid4().hex}"
+
+
+def legacy_song_id(title: str) -> str:
+    """为 v4 旧歌名生成确定性 ID；只在迁移/内置种子数据中使用。"""
+    normalized = unicodedata.normalize("NFC", title or "").strip()
+    value = uuid.uuid5(uuid.NAMESPACE_URL, f"streamer-workbench:song:{normalized}")
+    return f"song_{value.hex}"
+
+
 @dataclass
 class Song:
     title: str
+    id: str = field(default_factory=new_song_id)
     artists: List[str] = field(default_factory=list)
     lyricist: str = ""
     composer: str = ""
@@ -66,8 +81,8 @@ class SongLibrary:
         return None
 
     def add(self, song: Song) -> bool:
-        """查重：title 完全相同则拦截，返回 False。"""
-        if any(s.title == song.title for s in self.songs):
+        """查重：title 或不可变 id 冲突则拦截，返回 False。"""
+        if any(s.title == song.title or s.id == song.id for s in self.songs):
             return False
         self.songs.append(song)
         return True
@@ -95,7 +110,14 @@ class SongLibrary:
                 return s
         return None
 
-    # 允许编辑的字段（status 走 mark_active/mark_draft；id/title 是身份标识）
+    def get_by_id(self, song_id: str) -> Optional[Song]:
+        """按不可变 ID 精确查找，未找到返回 None。"""
+        for s in self.songs:
+            if s.id == song_id:
+                return s
+        return None
+
+    # 允许编辑的字段（status 走 mark_active/mark_draft；id 不可编辑，title 是显示字段）
     EDITABLE_FIELDS: ClassVar[tuple] = (
         "title", "artists", "lyricist", "composer", "key", "capo",
         "difficulty", "tabs", "tags", "pinyin", "notes", "section",
@@ -133,7 +155,7 @@ class SongLibrary:
         return sum(1 for s in self.songs if s.status == "draft")
 
     # ---- JSON 持久化 ----
-    CURRENT_VERSION: ClassVar[int] = 4
+    CURRENT_VERSION: ClassVar[int] = 5
 
     @staticmethod
     def _migrate_v1_to_v2(data: dict) -> dict:
@@ -166,19 +188,50 @@ class SongLibrary:
             item.setdefault("tab_files", [])
         return data
 
+    @staticmethod
+    def _migrate_v4_to_v5(data: dict) -> dict:
+        """v4→v5：为每首歌曲补确定性、不可变的 Song.id。"""
+        for item in data.get("songs", []):
+            if not item.get("id"):
+                item["id"] = legacy_song_id(item.get("title", ""))
+        return data
+
+    @staticmethod
+    def _validate_v5(data: dict) -> dict:
+        """拒绝空身份、重复身份和重复歌名，避免带病写入 v5。"""
+        ids = set()
+        titles = set()
+        for index, item in enumerate(data.get("songs", [])):
+            song_id = item.get("id")
+            title = item.get("title")
+            if not isinstance(song_id, str) or not song_id.strip():
+                raise ValueError(f"第 {index + 1} 首歌曲缺少有效 id")
+            if not isinstance(title, str) or not title.strip():
+                raise ValueError(f"第 {index + 1} 首歌曲缺少有效 title")
+            if song_id in ids:
+                raise ValueError(f"歌曲 id 重复：{song_id}")
+            if title in titles:
+                raise ValueError(f"歌曲 title 重复：{title}")
+            ids.add(song_id)
+            titles.add(title)
+        return data
+
     MIGRATIONS: ClassVar[dict] = {}  # {from_version: migrate_fn(data) -> data}，在类定义后注册
 
     @classmethod
     def _migrate(cls, data: dict) -> dict:
         """版本迁移：从数据版本号迭代到 CURRENT_VERSION。"""
         v = data.get("version", 1)
+        if v > cls.CURRENT_VERSION:
+            raise ValueError(f"歌曲库版本 v{v} 高于当前支持的 v{cls.CURRENT_VERSION}")
         while v < cls.CURRENT_VERSION:
             migrate_fn = cls.MIGRATIONS.get(v)
             if migrate_fn is None:
                 raise ValueError(f"缺少版本迁移函数：v{v} → v{v+1}")
             data = migrate_fn(data)
             v += 1
-        return data
+            data["version"] = v
+        return cls._validate_v5(data)
 
     @classmethod
     def load_from_json(cls, path: str) -> "SongLibrary":
@@ -216,6 +269,7 @@ class SongLibrary:
 
         # 2. 原子写新文件
         payload = {"version": self.CURRENT_VERSION, "songs": [asdict(s) for s in self.songs]}
+        self._validate_v5(payload)
         dir_name = os.path.dirname(path)
         os.makedirs(dir_name, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
@@ -231,7 +285,7 @@ class SongLibrary:
 
 # 注册版本迁移链（类外注册，避免类体内方法引用顺序问题）
 SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2, 2: SongLibrary._migrate_v2_to_v3,
-                               3: SongLibrary._migrate_v3_to_v4})
+                               3: SongLibrary._migrate_v3_to_v4, 4: SongLibrary._migrate_v4_to_v5})
 
 
 def pinyin_initials(title: str) -> str:
@@ -273,5 +327,5 @@ def build_default_library(json_path: str = None) -> SongLibrary:
     songs = []
     for lst, sec in section_map:
         for t in lst:
-            songs.append(Song(title=t, status="active", section=sec))
+            songs.append(Song(title=t, id=legacy_song_id(t), status="active", section=sec))
     return SongLibrary(songs=songs)

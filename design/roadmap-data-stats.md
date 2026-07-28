@@ -1,6 +1,6 @@
 # 数据时间维度路线图：事件日志 · 曲谱管理 · 学歌记录 · 数据统计（主播工作台 / streamer-workbench）
 
-> **状态**：进行中（2026-07-28 更新）——S1 ✅ S2 ✅ S3 ✅ 代码已上线；S3.5 Song v5 / Event v2 为当前前置；S4 / S5 待开发
+> **状态**：进行中（2026-07-28 更新）——S1 ✅ S2 ✅ S3 ✅；S3.5 中 Song v5 ✅、Event v2 与关系迁移待完成；S4 / S5 等待完整前置
 > **关联文档**：`redesign-v2.html`、`../ADR-004.md`、`产品优化方案终版-0727/路线图.md` R0/R3（事件类型与统计口径仍以本文为唯一真相）
 > **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`server/main.py`（API 现状）
 
@@ -104,9 +104,9 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 - `tabs` 文本字段**保留**：记和弦进行简记、谱子来源链接，与文件附件互补；
 - 单元测试按既有纪律同步增加（参照 v1→v2、v2→v3 的测试写法）。
 
-### 当前前置：迁移 v4→v5
+### 已完成代码：迁移 v4→v5
 
-新增不可变 `Song.id`，迁移必须确定性、可重复、先备份并支持往返测试。曲谱文件目标存储改为 `data/tabs/{song_id}/{文件名}`；改名不再移动目录。历史 title 目录在迁移时建立映射，失败保留旧目录。
+已新增不可变 `Song.id`：v4 旧数据使用确定性 UUIDv5，新歌使用 UUIDv4；加载时拒绝空 ID、重复 ID 和重复 title，API 列表返回 `id`。首次持久化仍沿用 `SongLibrary.save()` 的写前备份与原子替换。曲谱目录迁移到 `data/tabs/{song_id}/{文件名}`、Event v2 和其他关系切换仍属于后续 R0.4/R0.5。
 
 ## 6. API 增量（server/main.py）
 
@@ -152,7 +152,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 | **S1 地基** | events.py + 五端点埋点 + 迁移 v4（learned_at/tab_files）+ /api/events feed | ✅ `05ac6e7` | 单元测试 27→37 通过；五动作逐行落 events.jsonl |
 | **S2 点歌上报** | QuickView 双写（localStorage + 上报）+ 失败补报 | ✅ `403165c` | /api/events/report（仅三类可上报）；断网队列不丢、恢复保序补报 |
 | **S3 曲谱** | tabs 上传/列表/删除/静态访问 + 曲库/学歌/直播三触点 | ✅ `42fc392` | core/data/tabs.py；TabsPanel 共享组件；直播 T 键看谱；42/42 测试 |
-| **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | 🟡 当前前置 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
+| **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | 🟡 Song v5 ✅；其余待完成 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
 | **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | ⬜ 等待 S3.5 | 打卡 → 时间线可见；离线补报不重复；学会周期正确 |
 | **S5 统计视图** | /api/stats/* 三端点 + 第五导航视图 | ⬜ 待开发 | 口径与第 8 节一致；截图回归 |
 
