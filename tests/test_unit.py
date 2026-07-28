@@ -1063,6 +1063,37 @@ def test_r05_migrator_end_to_end():
         assert rep3["presets"] == []
 
 
+def test_r05_rename_keeps_tabs_preset_and_event_relationships():
+    """R0.5 组合回归：改名只改变显示字段，三个长期关系继续使用原 song_id。"""
+    import tempfile
+    from core.data.presets import Preset, SongQuery, init_presets, save, load
+    with tempfile.TemporaryDirectory() as d:
+        song = Song(title="旧歌名", id=_sid("旧歌名"))
+        library = SongLibrary([song])
+        tabs_root = os.path.join(d, "data", "tabs")
+        rel = tabs_store.save_tab(tabs_root, song.id, "谱.png", b"TAB")
+        song.tab_files.append(rel)
+        init_presets(os.path.join(d, "data"))
+        save(Preset(id="rename-case",
+                    song_query=SongQuery(custom_ids=[song.id])))
+        events_path = os.path.join(d, "data", "events.jsonl")
+        append_event(events_path, "queue_added", event_id="evt_before_rename",
+                     song_id=song.id, title_snapshot=song.title,
+                     occurred_at="2026-07-29T00:00:00+08:00", source="test")
+
+        assert library.update_by_id(song.id, {"title": "新歌名"}) is True
+
+        current = library.get_by_id(song.id)
+        preset = load("rename-case")
+        event = list(iter_events(events_path))[0]
+        assert current.title == "新歌名"
+        assert current.tab_files == [rel]
+        assert os.path.isfile(os.path.join(d, "data", rel))
+        assert preset.song_query.custom_ids == [song.id]
+        assert event["song_id"] == song.id
+        assert event["title_snapshot"] == "旧歌名"  # 历史快照保持发生时标题
+
+
 # ═══════ Runner ═══════
 
 if __name__ == "__main__":
