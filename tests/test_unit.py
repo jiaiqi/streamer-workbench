@@ -257,12 +257,18 @@ def _tmpevents():
 
 def test_event_append_and_read():
     d, p = _tmpevents()
-    e1 = append_event(p, "song_added", title="知足", meta={"status": "draft"})
-    assert e1["type"] == "song_added" and e1["title"] == "知足" and "ts" in e1
-    append_event(p, "song_learned", title="知足")
+    e1 = append_event(p, "song_added", song_id="song_1", title_snapshot="知足",
+                      meta={"status": "draft"}, source="test")
+    assert e1["schema_version"] == 2
+    assert e1["type"] == "song_added" and e1["song_id"] == "song_1"
+    assert e1["title_snapshot"] == "知足" and e1["source"] == "test"
+    assert e1["event_id"].startswith("evt_")
+    assert "+" in e1["occurred_at"] and "+" in e1["recorded_at"]
+    append_event(p, "song_learned", title="知足")  # v1 参数名仍可调用，写出 v2
     events = list(iter_events(p))
     assert len(events) == 2
     assert events[1]["type"] == "song_learned"
+    assert events[1]["title_snapshot"] == "知足"
     d.cleanup()
 
 def test_event_type_whitelist():
@@ -281,7 +287,7 @@ def test_event_iter_filters():
     append_event(p, "song_sung", title="成都")
     assert len(list(iter_events(p, type="song_sung"))) == 2
     # since/until 前缀比较（ts 固定 ISO 格式）
-    today = events_tail(p, n=1)[0]["ts"][:10]
+    today = events_tail(p, n=1)[0]["occurred_at"][:10]
     assert len(list(iter_events(p, since=today))) == 3
     assert len(list(iter_events(p, until="2020-01-01"))) == 0
     d.cleanup()
@@ -303,14 +309,41 @@ def test_event_tail_order():
     for t in ["歌一", "歌二", "歌三"]:
         append_event(p, "song_added", title=t)
     recent = events_tail(p, n=2)
-    assert [e["title"] for e in recent] == ["歌三", "歌二"]  # 最新在前 + limit 生效
+    assert [e["title_snapshot"] for e in recent] == ["歌三", "歌二"]  # 最新在前 + limit 生效
     d.cleanup()
 
 def test_event_custom_ts():
     """客户端补报离线事件时可传原始时刻（S2 QuickView 双写用）。"""
     d, p = _tmpevents()
     e = append_event(p, "song_sung", title="知足", ts="2026-07-20T22:30:05")
-    assert e["ts"] == "2026-07-20T22:30:05"
+    assert e["occurred_at"].startswith("2026-07-20T22:30:05")
+    assert e["recorded_at"] != e["occurred_at"]
+    d.cleanup()
+
+def test_event_idempotent_report():
+    d, p = _tmpevents()
+    kwargs = {"event_id": "evt_fixed", "song_id": "song_1",
+              "title_snapshot": "知足", "occurred_at": "2026-07-20T22:30:05",
+              "source": "quick-view"}
+    first = append_event(p, "song_sung", **kwargs)
+    second = append_event(p, "song_sung", **kwargs)
+    assert first == second
+    assert len(list(iter_events(p))) == 1
+    try:
+        append_event(p, "queue_added", **kwargs)
+        assert False, "同 event_id 的不同事件应被拒绝"
+    except ValueError:
+        pass
+    d.cleanup()
+
+def test_event_v1_read_compatibility():
+    import json
+    d, p = _tmpevents()
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(json.dumps({"ts": "2026-07-01T10:00:00", "type": "song_added",
+                            "title": "旧事件"}, ensure_ascii=False) + "\n")
+    events = list(iter_events(p, since="2026-07-01"))
+    assert len(events) == 1 and events[0]["title"] == "旧事件"
     d.cleanup()
 
 

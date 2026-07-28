@@ -37,7 +37,8 @@ def _run_batch_job(job_id: str, themes, layout_plugin, spec, out_dir, library, f
         job["status"] = "done"
         job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
         append_event(EVENTS_JSONL, "poster_exported", meta={
-            "batch": True, "files": len(job["files"]), "total_ms": job["total_ms"]})
+            "batch": True, "files": len(job["files"]), "total_ms": job["total_ms"]},
+            source="export-api")
     except Exception as e:
         job["status"] = "error"
         job["error"] = str(e)
@@ -91,7 +92,7 @@ def api_export(req: Request,
 
     append_event(EVENTS_JSONL, "poster_exported", meta={
         "theme": theme, "layout": layout, "canvas": canvas, "page": page,
-        "duration_ms": round(duration * 1000, 1)})
+        "duration_ms": round(duration * 1000, 1)}, source="export-api")
     return {"ok": True, "path": out_path, "filename": filename,
             "duration_ms": round(duration * 1000, 1)}
 

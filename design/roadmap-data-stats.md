@@ -1,6 +1,6 @@
 # 数据时间维度路线图：事件日志 · 曲谱管理 · 学歌记录 · 数据统计（主播工作台 / streamer-workbench）
 
-> **状态**：进行中（2026-07-28 更新）——S1 ✅ S2 ✅ S3 ✅；S3.5 中 Song v5 ✅、Event v2 与关系迁移待完成；S4 / S5 等待完整前置
+> **状态**：进行中（2026-07-28 更新）——S1 ✅ S2 ✅ S3 ✅；S3.5 中 Song v5 / Event v2 ✅，tabs/queue/Preset 关系迁移待完成；S4 / S5 等待完整前置
 > **关联文档**：`redesign-v2.html`、`../ADR-004.md`、`产品优化方案终版-0727/路线图.md` R0/R3（事件类型与统计口径仍以本文为唯一真相）
 > **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`server/main.py`（API 现状）
 
@@ -64,7 +64,7 @@
 
 ## 4. 事件流规格
 
-**文件**：`data/events.jsonl`，每行一个 JSON 对象。当前代码兼容 Schema v1，新写入目标为 Schema v2：
+**文件**：`data/events.jsonl`，每行一个 JSON 对象。当前代码只读兼容 Schema v1，所有新写入使用 Schema v2：
 
 ```json
 {"schema_version":2,"event_id":"evt_...","occurred_at":"2026-07-28T21:03:11+08:00","recorded_at":"2026-07-28T21:03:12+08:00","type":"song_learned","song_id":"song_...","title_snapshot":"凄美地","source":"learning-view","meta":{"days_in_learning":12}}
@@ -75,7 +75,7 @@
 - `append_event(type, song_id=None, title_snapshot=None, meta=None, occurred_at=None, event_id=None)` —— 追加一行（open-append-close）
 - `iter_events(type=None, since=None, until=None)` —— 顺序扫描生成器
 - `tail(n)` —— 更新记录 feed 用
-- `event_id` 用于离线补报去重；`occurred_at` 与 `recorded_at` 分离；
+- `event_id` 用于离线补报幂等；相同 ID 不同内容会被拒绝；`occurred_at` 与 `recorded_at` 分离；
 - 遵守铁律：`core/` 不 import 任何服务器/UI 框架；`server/` 调用它
 
 **事件类型**：
@@ -152,7 +152,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 | **S1 地基** | events.py + 五端点埋点 + 迁移 v4（learned_at/tab_files）+ /api/events feed | ✅ `05ac6e7` | 单元测试 27→37 通过；五动作逐行落 events.jsonl |
 | **S2 点歌上报** | QuickView 双写（localStorage + 上报）+ 失败补报 | ✅ `403165c` | /api/events/report（仅三类可上报）；断网队列不丢、恢复保序补报 |
 | **S3 曲谱** | tabs 上传/列表/删除/静态访问 + 曲库/学歌/直播三触点 | ✅ `42fc392` | core/data/tabs.py；TabsPanel 共享组件；直播 T 键看谱；42/42 测试 |
-| **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | 🟡 Song v5 ✅；其余待完成 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
+| **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | 🟡 Song v5/Event v2 ✅；关系迁移待完成 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
 | **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | ⬜ 等待 S3.5 | 打卡 → 时间线可见；离线补报不重复；学会周期正确 |
 | **S5 统计视图** | /api/stats/* 三端点 + 第五导航视图 | ⬜ 待开发 | 口径与第 8 节一致；截图回归 |
 

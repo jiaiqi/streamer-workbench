@@ -25,14 +25,27 @@ def api_events(req: Request,
 @router.post("/api/events/report")
 def api_events_report(req: Request, payload: dict):
     from server.deps import EVENTS_JSONL
+    from server.deps import get_library
     etype = (payload.get("type") or "").strip()
     if etype not in CLIENT_REPORTABLE:
         return Response(f"不可上报的事件类型：{etype}（允许 {CLIENT_REPORTABLE}）", status_code=400)
-    title = payload.get("title")
-    if title is not None:
-        title = str(title).strip() or None
+    library = get_library(req.app.state)
+    song_id = str(payload.get("song_id") or "").strip() or None
+    title = payload.get("title_snapshot", payload.get("title"))
+    title = str(title).strip() if title is not None else None
+    song = library.get_by_id(song_id) if song_id else (library.get(title) if title else None)
+    if song is not None:
+        song_id = song.id
+        title = song.title
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
-    ts = payload.get("ts")
-    ts = str(ts)[:19] if ts else None
-    event = append_event(EVENTS_JSONL, etype, title=title, meta=meta, ts=ts)
+    occurred_at = payload.get("occurred_at", payload.get("ts"))
+    event_id = str(payload.get("event_id") or "").strip() or None
+    source = str(payload.get("source") or "quick-view").strip()
+    try:
+        event = append_event(
+            EVENTS_JSONL, etype, song_id=song_id, title_snapshot=title,
+            meta=meta, occurred_at=occurred_at, event_id=event_id, source=source,
+        )
+    except ValueError as e:
+        return Response(str(e), status_code=400)
     return {"ok": True, "event": event}

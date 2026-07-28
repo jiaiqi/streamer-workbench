@@ -88,9 +88,12 @@ def api_songs_status(req: Request, payload: dict):
         song = library.get(title)
         if song is not None:
             song.learned_at = datetime.now().strftime("%Y-%m-%d")
+    else:
+        song = library.get(title)
     _save_library(library, settings)
     append_event(_events_path(), "song_learned" if status == "active" else "song_unlearned",
-                 title=title)
+                 song_id=song.id if song else None, title_snapshot=title,
+                 source="songs-api")
     return {"ok": True, "title": title, "status": status,
             "active": library.count_active(), "draft": library.count_draft()}
 
@@ -115,8 +118,9 @@ def api_songs_update(req: Request, payload: dict):
     song = library.get(fields.get("title", title))
     changes = [{"field": k, "old": old_view.get(k), "new": song and _song_dict(song).get(k)}
                for k in fields if old_view and old_view.get(k) != _song_dict(song).get(k)]
-    append_event(_events_path(), "song_edited", title=song.title,
-                 meta={"changes": changes})
+    append_event(_events_path(), "song_edited", song_id=song.id,
+                 title_snapshot=song.title, meta={"changes": changes},
+                 source="songs-api")
     return {"ok": True, "song": _song_dict(song)}
 
 
@@ -140,7 +144,9 @@ def api_songs_add(req: Request, payload: dict):
     if not library.add(song):
         return Response(f"歌曲已存在：{title}", status_code=409)
     _save_library(library, settings)
-    append_event(_events_path(), "song_added", title=title, meta={"status": song.status})
+    append_event(_events_path(), "song_added", song_id=song.id,
+                 title_snapshot=title, meta={"status": song.status},
+                 source="songs-api")
     return {"ok": True, "song": _song_dict(song),
             "active": library.count_active(), "draft": library.count_draft()}
 
@@ -150,10 +156,12 @@ def api_songs_delete(req: Request, payload: dict):
     library = get_library(req.app.state)
     settings = get_settings(req.app.state)
     title = (payload.get("title") or "").strip()
-    if not library.remove(title):
+    song = library.get(title)
+    if song is None or not library.remove(title):
         return Response(f"未找到歌曲：{title}", status_code=404)
     _save_library(library, settings)
-    append_event(_events_path(), "song_deleted", title=title)
+    append_event(_events_path(), "song_deleted", song_id=song.id,
+                 title_snapshot=title, source="songs-api")
     return {"ok": True, "title": title,
             "active": library.count_active(), "draft": library.count_draft()}
 
@@ -175,8 +183,10 @@ async def api_tab_upload(req: Request, title: str, file: UploadFile = File(...))
         return Response(str(e), status_code=400)
     song.tab_files.append(rel)
     _save_library(library, settings)
-    append_event(_events_path(), "song_edited", title=title,
-                 meta={"changes": [{"field": "tab_files", "old": None, "new": rel}]})
+    append_event(_events_path(), "song_edited", song_id=song.id,
+                 title_snapshot=title,
+                 meta={"changes": [{"field": "tab_files", "old": None, "new": rel}]},
+                 source="tabs-api")
     return {"ok": True, "file": rel, "tab_files": song.tab_files}
 
 
@@ -202,6 +212,8 @@ def api_tab_delete(req: Request, title: str, file: str):
     song.tab_files.remove(file)
     tabs_store.delete_tab(TABS_DIR, title, file)
     _save_library(library, settings)
-    append_event(_events_path(), "song_edited", title=title,
-                 meta={"changes": [{"field": "tab_files", "old": file, "new": None}]})
+    append_event(_events_path(), "song_edited", song_id=song.id,
+                 title_snapshot=title,
+                 meta={"changes": [{"field": "tab_files", "old": file, "new": None}]},
+                 source="tabs-api")
     return {"ok": True, "tab_files": song.tab_files}

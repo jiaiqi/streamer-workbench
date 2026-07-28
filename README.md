@@ -2,7 +2,7 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-28）**：旧 `grid-wrap` 金标准仍为 16/16 diff=0；S1–S3 代码已完成。当前唯一活跃阶段为路线图 **R0 正确性与领域身份收口**：avoid/cache 与 Song v5 已完成，Event v2、用户数据单一写入权威落地和 P1 欠账待收口。S4/S5 等待 S3.5 完整通过。UI 工作台/歌曲库/学歌/设置/速查（/quick）可用；正式桌面壳未完成。**唯一执行主规格见 `design/产品优化方案终版-0727/产品优化方案终版.md`，唯一执行顺序见同目录 `路线图.md`。**
+> **进度快照（2026-07-28）**：旧 `grid-wrap` 金标准仍为 16/16 diff=0；S1–S3 代码已完成。当前唯一活跃阶段为路线图 **R0 正确性与领域身份收口**：avoid/cache、Song v5、Event v2 已完成，tabs/queue/Preset 关系迁移、用户数据单一写入权威落地和 P1 欠账待收口。S4/S5 等待 S3.5 完整通过。UI 工作台/歌曲库/学歌/设置/速查（/quick）可用；正式桌面壳未完成。**唯一执行主规格见 `design/产品优化方案终版-0727/产品优化方案终版.md`，唯一执行顺序见同目录 `路线图.md`。**
 >
 > **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `.archive/design-docs/`（原 `design-docs/`，点号开头表示已归档；完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `.archive/design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
@@ -55,7 +55,7 @@ $env:PYTHONUTF8='1'
 cd ui; npx tsc --noEmit
 ```
 
-当前 Windows 直接单元测试 runner 为 54/54；Preset 测试已改用平台临时目录。金标准保持 16/16 diff=0。
+当前 Windows 直接单元测试 runner 为 56/56；Preset 测试已改用平台临时目录。金标准保持 16/16 diff=0。
 
 ## 后端 API（server/main.py）
 `GET /api/health`、`/api/themes`、`/api/layouts`（含 pages/supports_avoidance）、`/api/layouts/{id}/params`（ParamSpec 参数描述）、`/api/songs`、`/api/render?theme=&page=&canvas=&avoid=&layout=&margin=&font_song=&row_h=&sec_gap=`（支持排版参数覆盖）、`/bg/<主题>/<文件>` 静态背景。

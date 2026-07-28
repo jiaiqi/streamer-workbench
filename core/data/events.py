@@ -3,7 +3,9 @@
 一切带时间维度的历史（曲库变更/学会/练习打卡/直播点歌/海报导出）都写成
 data/events.jsonl 里的一行一个 JSON 对象：
 
-    {"ts": "2026-07-27T21:03:11", "type": "song_learned", "title": "凄美地", "meta": {...}}
+    {"schema_version": 2, "event_id": "evt_...", "occurred_at": "...",
+     "recorded_at": "...", "type": "song_learned", "song_id": "song_...",
+     "title_snapshot": "凄美地", "source": "songs-api", "meta": {...}}
 
 设计决策（design/roadmap-data-stats.md 第 3 节）：
   - songs.json 仍是当前状态的唯一真相；本文件只追加、不改写，专记历史；
@@ -13,6 +15,8 @@ data/events.jsonl 里的一行一个 JSON 对象：
 """
 import json
 import os
+import threading
+import uuid
 from datetime import datetime
 from typing import Iterator, Optional
 
@@ -25,24 +29,83 @@ EVENT_TYPES = (
     "poster_exported",
 )
 
+_EVENT_WRITE_LOCK = threading.Lock()
+
+
+def _now() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _normalize_timestamp(value: Optional[str]) -> str:
+    """规范为带时区 ISO 时间；兼容旧客户端发送的无时区本地时间。"""
+    if not value:
+        return _now()
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError as e:
+        raise ValueError(f"无效事件时间：{value}") from e
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    return parsed.isoformat(timespec="seconds")
+
+
+def _find_event(path: str, event_id: str) -> Optional[dict]:
+    if not os.path.isfile(path):
+        return None
+    for event in iter_events(path):
+        if event.get("event_id") == event_id:
+            return event
+    return None
+
 
 def append_event(path: str, type: str, title: Optional[str] = None,
-                 meta: Optional[dict] = None, ts: Optional[str] = None) -> dict:
+                 meta: Optional[dict] = None, ts: Optional[str] = None,
+                 *, song_id: Optional[str] = None,
+                 title_snapshot: Optional[str] = None,
+                 occurred_at: Optional[str] = None,
+                 event_id: Optional[str] = None,
+                 source: str = "server") -> dict:
     """向 events.jsonl 追加一个事件，返回写入的事件对象。
 
     type 必须在 EVENT_TYPES 白名单内（防手滑写出无法统计的类型名）。
-    ts 缺省为当前时间；客户端补报离线事件时可传原始时间（保留真实发生时刻）。
+    title/ts 是 Schema v1 调用兼容参数，新代码使用 title_snapshot/occurred_at。
+    客户端补报必须复用 event_id；重复 event_id 返回已有事件，不重复追加。
     """
     if type not in EVENT_TYPES:
         raise ValueError(f"未知事件类型：{type}（白名单见 EVENT_TYPES）")
-    event = {"ts": ts or datetime.now().strftime("%Y-%m-%dT%H:%M:%S"), "type": type}
-    if title is not None:
-        event["title"] = title
+    event_id = (event_id or f"evt_{uuid.uuid4().hex}").strip()
+    if not event_id:
+        raise ValueError("event_id 不能为空")
+    title_snapshot = title_snapshot if title_snapshot is not None else title
+    occurred_at = _normalize_timestamp(occurred_at or ts)
+    source = (source or "").strip()
+    if not source:
+        raise ValueError("source 不能为空")
+    event = {
+        "schema_version": 2,
+        "event_id": event_id,
+        "occurred_at": occurred_at,
+        "recorded_at": _now(),
+        "type": type,
+        "source": source,
+    }
+    if song_id is not None:
+        event["song_id"] = song_id
+    if title_snapshot is not None:
+        event["title_snapshot"] = title_snapshot
     if meta:
         event["meta"] = meta
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    with _EVENT_WRITE_LOCK:
+        existing = _find_event(path, event_id)
+        if existing is not None:
+            comparable = ("schema_version", "event_id", "occurred_at", "type", "source",
+                          "song_id", "title_snapshot", "meta")
+            if any(existing.get(key) != event.get(key) for key in comparable):
+                raise ValueError(f"event_id 冲突且事件内容不同：{event_id}")
+            return existing
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False) + "\n")
     return event
 
 
@@ -67,10 +130,10 @@ def iter_events(path: str, type: Optional[str] = None,
                 continue
             if type and event.get("type") != type:
                 continue
-            ts = event.get("ts", "")
-            if since and ts < since:
+            occurred_at = event.get("occurred_at") or event.get("ts", "")
+            if since and occurred_at < since:
                 continue
-            if until and ts > until:
+            if until and occurred_at > until:
                 continue
             yield event
 
