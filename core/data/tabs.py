@@ -150,6 +150,10 @@ def migrate_title_dirs(tabs_root: str, id_by_dirname: dict,
     report["errors"] = []
     if not apply:
         return report
+    if report["conflicts"]:
+        # 契约 §7.4：任何目录存在冲突时，本次 apply 全局零写入。
+        # 不能先迁移无冲突目录再返回失败，否则无法把一次执行视为原子迁移批次。
+        return report
 
     backup_root = backup_root or os.path.join(tabs_root, DEFAULT_BACKUP_DIRNAME)
 

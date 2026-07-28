@@ -107,6 +107,8 @@ def _read_presets(presets_dir: str) -> list:
         manifest = json.load(f)
     result = []
     for pid in manifest:
+        if not presets_store.is_valid_preset_id(pid):
+            raise ValueError(f"manifest 包含非法 preset_id：{pid!r}")
         path = os.path.join(presets_dir, pid, "preset.json")
         if os.path.isfile(path):
             with open(path, "r", encoding="utf-8") as f:

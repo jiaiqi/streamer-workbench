@@ -854,6 +854,22 @@ def test_tabs_migration_conflict_no_overwrite():
         assert open(os.path.join(d, sid, "主歌.png"), "rb").read() == b"NEW-DIFFERENT"  # 不覆盖
         assert os.path.isdir(os.path.join(d, "知足"))               # 旧目录保留
 
+def test_tabs_migration_any_conflict_stops_entire_batch():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid_ok, sid_bad = _sid("知足"), _sid("温柔")
+        _mk_dir(d, "知足", {"主歌.png": b"OK"})
+        _mk_dir(d, "温柔", {"主歌.png": b"OLD"})
+        _mk_dir(d, sid_bad, {"主歌.png": b"CONFLICT"})
+        rep = tabs_store.migrate_title_dirs(
+            d, {"知足": sid_ok, "温柔": sid_bad},
+            backup_root=os.path.join(d, "backup"), apply=True)
+        assert rep["conflicts"]
+        assert rep["moved"] == []
+        assert os.path.isfile(os.path.join(d, "知足", "主歌.png"))
+        assert not os.path.exists(os.path.join(d, sid_ok))
+        assert open(os.path.join(d, sid_bad, "主歌.png"), "rb").read() == b"CONFLICT"
+
 def test_tabs_migration_same_content_is_idempotent():
     """目标已存在同名同内容文件 → 视为已迁移，源文件去重，不算冲突。"""
     import tempfile
@@ -919,6 +935,37 @@ def test_preset_custom_ids_validation_rejects_bad():
                 assert False, f"{bad} 应被拒绝"
             except ValueError:
                 pass
+
+def test_preset_id_rejects_directory_escape():
+    import tempfile
+    from core.data.presets import Preset, init_presets, save, load, delete, duplicate
+    with tempfile.TemporaryDirectory() as path:
+        init_presets(path)
+        for bad in ("", ".", "..", "../escape", "a/b", "a\\b", " bad"):
+            try:
+                save(Preset(id=bad))
+                assert False, f"preset_id {bad!r} 应被拒绝"
+            except ValueError:
+                pass
+            assert load(bad) is None
+            assert delete(bad) is False
+        try:
+            duplicate("_default", "../copy")
+            assert False, "duplicate 的目标 ID 逃逸应被拒绝"
+        except ValueError:
+            pass
+        assert not os.path.exists(os.path.join(path, "escape"))
+
+def test_tabs_api_resolves_id_first_and_title_as_compatibility():
+    import server.routers.songs as songs_router
+    song = Song(title="新歌名", id=_sid("旧歌名"),
+                tab_files=[f"tabs/{_sid('旧歌名')}/谱.png"])
+    request = _request_for_library(SongLibrary([song]))
+    by_id = songs_router.api_tab_list(request, song.id)
+    by_title = songs_router.api_tab_list(request, song.title)
+    assert by_id == by_title
+    assert by_id["song_id"] == song.id
+    assert by_id["title"] == "新歌名"
 
 def test_preset_full_fields_roundtrip():
     import tempfile

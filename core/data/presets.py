@@ -30,6 +30,17 @@ def new_preset_id() -> str:
     return f"preset_{uuid.uuid4().hex[:16]}"
 
 
+def is_valid_preset_id(preset_id: str) -> bool:
+    """Preset ID 必须是单个安全路径段；兼容既有 test1/legacy1 等旧 ID。"""
+    if not isinstance(preset_id, str) or not preset_id or len(preset_id) > 80:
+        return False
+    if preset_id != preset_id.strip() or preset_id in (".", ".."):
+        return False
+    if "/" in preset_id or "\\" in preset_id:
+        return False
+    return not any(ord(char) < 32 or ord(char) == 127 for char in preset_id)
+
+
 @dataclass
 class SongQuery:
     """歌曲选择快照，不是完整数据。"""
@@ -137,8 +148,9 @@ def _manifest_path():
 
 
 def _preset_dir(preset_id: str):
-    safe = preset_id.replace("/", "_").replace("\\", "_")
-    return os.path.join(PRESETS_DIR, safe)
+    if not is_valid_preset_id(preset_id):
+        raise ValueError(f"非法 preset_id：{preset_id!r}")
+    return os.path.join(PRESETS_DIR, preset_id)
 
 
 def init_presets(data_root: str):
@@ -176,6 +188,8 @@ def list_all() -> list:
 
 
 def load(preset_id: str) -> Optional[Preset]:
+    if not is_valid_preset_id(preset_id):
+        return None
     manifest = _load_manifest()
     if preset_id not in manifest:
         return None
@@ -189,6 +203,8 @@ def load(preset_id: str) -> Optional[Preset]:
 
 def save(preset: Preset):
     _ensure_dir()
+    if not is_valid_preset_id(preset.id):
+        raise ValueError(f"非法 preset_id：{preset.id!r}")
     validate_song_query(preset.song_query)
     preset.updated_at = datetime.now().isoformat(timespec="seconds")
     d = _to_dict(preset)
@@ -210,6 +226,8 @@ def save(preset: Preset):
 
 def delete(preset_id: str) -> bool:
     """软删除：移入 .trash 子目录。返回预设是否存在过。"""
+    if not is_valid_preset_id(preset_id):
+        return False
     manifest = _load_manifest()
     pdir = _preset_dir(preset_id)
     existed = preset_id in manifest or os.path.isdir(pdir)
@@ -228,6 +246,8 @@ def delete(preset_id: str) -> bool:
 
 
 def duplicate(preset_id: str, new_id: str, new_name: str = "") -> Optional[Preset]:
+    if not is_valid_preset_id(new_id):
+        raise ValueError(f"非法 preset_id：{new_id!r}")
     p = load(preset_id)
     if p is None:
         return None

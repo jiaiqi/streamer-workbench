@@ -246,52 +246,59 @@ def api_song_delete_by_id(req: Request, song_id: str):
 
 # ── 曲谱附件 ──
 
-@router.post("/api/songs/{title}/tabs")
-async def api_tab_upload(req: Request, title: str, file: UploadFile = File(...)):
+def _resolve_song_identity(library, identity: str):
+    """R0.5：ID 主查找，title 仅作为迁移期兼容回退。"""
+    return library.get_by_id(identity) or library.get(identity)
+
+
+@router.post("/api/songs/{identity}/tabs")
+async def api_tab_upload(req: Request, identity: str, file: UploadFile = File(...)):
     library = get_library(req.app.state)
     settings = get_settings(req.app.state)
     from server.deps import TABS_DIR
-    song = library.get(title)
+    song = _resolve_song_identity(library, identity)
     if song is None:
-        return Response(f"未找到歌曲：{title}", status_code=404)
+        return Response(f"未找到歌曲：{identity}", status_code=404)
     data = await file.read()
     try:
-        rel = tabs_store.save_tab(TABS_DIR, title, file.filename or "tab.png", data)
+        rel = tabs_store.save_tab(TABS_DIR, song.id, file.filename or "tab.png", data)
     except ValueError as e:
         return Response(str(e), status_code=400)
     song.tab_files.append(rel)
     _save_library(library, settings)
     append_event(_events_path(), "song_edited", song_id=song.id,
-                 title_snapshot=title,
+                 title_snapshot=song.title,
                  meta={"changes": [{"field": "tab_files", "old": None, "new": rel}]},
                  source="tabs-api")
-    return {"ok": True, "file": rel, "tab_files": song.tab_files}
+    return {"ok": True, "song_id": song.id, "title": song.title,
+            "file": rel, "tab_files": song.tab_files}
 
 
-@router.get("/api/songs/{title}/tabs")
-def api_tab_list(req: Request, title: str):
+@router.get("/api/songs/{identity}/tabs")
+def api_tab_list(req: Request, identity: str):
     library = get_library(req.app.state)
-    song = library.get(title)
+    song = _resolve_song_identity(library, identity)
     if song is None:
-        return Response(f"未找到歌曲：{title}", status_code=404)
-    return {"title": title, "tab_files": song.tab_files}
+        return Response(f"未找到歌曲：{identity}", status_code=404)
+    return {"song_id": song.id, "title": song.title, "tab_files": song.tab_files}
 
 
-@router.delete("/api/songs/{title}/tabs")
-def api_tab_delete(req: Request, title: str, file: str):
+@router.delete("/api/songs/{identity}/tabs")
+def api_tab_delete(req: Request, identity: str, file: str):
     library = get_library(req.app.state)
     settings = get_settings(req.app.state)
     from server.deps import TABS_DIR
-    song = library.get(title)
+    song = _resolve_song_identity(library, identity)
     if song is None:
-        return Response(f"未找到歌曲：{title}", status_code=404)
+        return Response(f"未找到歌曲：{identity}", status_code=404)
     if file not in song.tab_files:
         return Response(f"曲谱不存在：{file}", status_code=404)
     song.tab_files.remove(file)
-    tabs_store.delete_tab(TABS_DIR, title, file)
+    tabs_store.delete_tab(TABS_DIR, song.id, file)
     _save_library(library, settings)
     append_event(_events_path(), "song_edited", song_id=song.id,
-                 title_snapshot=title,
+                 title_snapshot=song.title,
                  meta={"changes": [{"field": "tab_files", "old": file, "new": None}]},
                  source="tabs-api")
-    return {"ok": True, "tab_files": song.tab_files}
+    return {"ok": True, "song_id": song.id, "title": song.title,
+            "tab_files": song.tab_files}
