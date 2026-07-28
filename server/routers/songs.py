@@ -166,6 +166,84 @@ def api_songs_delete(req: Request, payload: dict):
             "active": library.count_active(), "draft": library.count_draft()}
 
 
+# ── Song ID 主接口 ──
+
+@router.get("/api/songs/{song_id}")
+def api_song_get_by_id(req: Request, song_id: str):
+    """按不可变 ID 获取歌曲；新消费者不得再用 title 定位资源。"""
+    library = get_library(req.app.state)
+    song = library.get_by_id(song_id)
+    if song is None:
+        return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
+    return _song_dict(song)
+
+
+@router.patch("/api/songs/{song_id}")
+def api_song_update_by_id(req: Request, song_id: str, payload: dict):
+    """按不可变 ID 更新歌曲，允许修改 title 但禁止修改 id。"""
+    library = get_library(req.app.state)
+    settings = get_settings(req.app.state)
+    song = library.get_by_id(song_id)
+    if song is None:
+        return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
+    old_view = _song_dict(song)
+    try:
+        fields = _clean_song_fields(payload)
+        if not fields:
+            return Response("fields 为空", status_code=400)
+        library.update_by_id(song_id, fields)
+    except ValueError as e:
+        status_code = 409 if "改名失败" in str(e) else 400
+        return Response(str(e), status_code=status_code)
+    _save_library(library, settings)
+    current = library.get_by_id(song_id)
+    current_view = _song_dict(current)
+    changes = [{"field": key, "old": old_view.get(key), "new": current_view.get(key)}
+               for key in fields if old_view.get(key) != current_view.get(key)]
+    append_event(_events_path(), "song_edited", song_id=current.id,
+                 title_snapshot=current.title, meta={"changes": changes},
+                 source="songs-api")
+    return {"ok": True, "song": current_view}
+
+
+@router.patch("/api/songs/{song_id}/status")
+def api_song_status_by_id(req: Request, song_id: str, payload: dict):
+    """按不可变 ID 修改 active/draft 状态。"""
+    library = get_library(req.app.state)
+    settings = get_settings(req.app.state)
+    status = (payload.get("status") or "").strip()
+    if status not in ("active", "draft"):
+        return Response("status 必须是 active 或 draft", status_code=400)
+    song = library.get_by_id(song_id)
+    if song is None:
+        return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
+    mark = library.mark_active_by_id if status == "active" else library.mark_draft_by_id
+    mark(song_id)
+    if status == "active":
+        song.learned_at = datetime.now().strftime("%Y-%m-%d")
+    _save_library(library, settings)
+    append_event(_events_path(), "song_learned" if status == "active" else "song_unlearned",
+                 song_id=song.id, title_snapshot=song.title, source="songs-api")
+    return {"ok": True, "song": _song_dict(song),
+            "active": library.count_active(), "draft": library.count_draft()}
+
+
+@router.delete("/api/songs/{song_id}")
+def api_song_delete_by_id(req: Request, song_id: str):
+    """按不可变 ID 删除歌曲；历史事件保留 ID 与 title_snapshot。"""
+    library = get_library(req.app.state)
+    settings = get_settings(req.app.state)
+    song = library.get_by_id(song_id)
+    if song is None:
+        return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
+    library.remove_by_id(song_id)
+    _save_library(library, settings)
+    append_event(_events_path(), "song_deleted", song_id=song.id,
+                 title_snapshot=song.title, source="songs-api")
+    return {"ok": True, "song_id": song.id, "title_snapshot": song.title,
+            "active": library.count_active(), "draft": library.count_draft()}
+
+
 # ── 曲谱附件 ──
 
 @router.post("/api/songs/{title}/tabs")

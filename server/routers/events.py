@@ -33,10 +33,17 @@ def api_events_report(req: Request, payload: dict):
     song_id = str(payload.get("song_id") or "").strip() or None
     title = payload.get("title_snapshot", payload.get("title"))
     title = str(title).strip() if title is not None else None
-    song = library.get_by_id(song_id) if song_id else (library.get(title) if title else None)
-    if song is not None:
-        song_id = song.id
-        title = song.title
+    if song_id:
+        song = library.get_by_id(song_id)
+        if song is None:
+            return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
+    else:
+        # R0.5 兼容旧 QuickView；新客户端必须直接提交 song_id。
+        song = library.get(title) if title else None
+        if song is None:
+            return Response("事件必须关联有效的 song_id", status_code=400)
+    song_id = song.id
+    title = song.title
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
     occurred_at = payload.get("occurred_at", payload.get("ts"))
     event_id = str(payload.get("event_id") or "").strip() or None
