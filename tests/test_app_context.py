@@ -226,6 +226,31 @@ def test_corrupt_song_data_blocks_startup_without_publishing_context():
     asyncio.run(scenario())
 
 
+def test_inconsistent_preset_manifest_blocks_startup():
+    from server.app import create_app
+    from server.ports.repositories import RepositoryError
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            data_root = Path(raw)
+            presets = data_root / "presets"
+            presets.mkdir()
+            (presets / "manifest.json").write_text(json.dumps({
+                "missing": {"name": "缺失内容", "layout_id": "grid-wrap",
+                            "is_default": False, "created_at": "", "updated_at": ""},
+            }), encoding="utf-8")
+            app = create_app(AppConfig(Path(__file__).resolve().parent.parent,
+                                       mode="test", data_root=data_root))
+            try:
+                async with app.router.lifespan_context(app):
+                    assert False, "Preset manifest 与内容不一致必须阻止启动"
+            except RepositoryError:
+                pass
+            assert not hasattr(app.state, "context")
+
+    asyncio.run(scenario())
+
+
 def _run():
     tests = [value for name, value in sorted(globals().items())
              if name.startswith("test_") and callable(value)]

@@ -65,6 +65,13 @@ def test_equivalent_input_has_stable_document_identity_and_revisions():
     assert first.source_revisions.settings == "settings-1"
 
 
+def test_preview_and_export_routers_share_the_same_builder():
+    import server.routers.export as export_router
+    import server.routers.render as render_router
+
+    assert render_router.build_render_document is export_router.build_render_document
+
+
 def test_export_job_uses_only_frozen_input_and_reports_after_publish():
     document, library, _ = _document()
     library.songs.clear()
