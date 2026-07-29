@@ -1,10 +1,8 @@
 """导出路由（/api/export*）。"""
-import os
 import sys
 import subprocess
-import threading
-import time
 import uuid
+from pathlib import Path
 from dataclasses import replace
 
 from fastapi import APIRouter, Request, Response
@@ -12,37 +10,10 @@ from fastapi import APIRouter, Request, Response
 from server.dependencies import get_app_context
 from core.spec import get_canvas_spec
 from core.layouts import get_layout
-from core.engine import render_page
-from core.data.events import append_event
+from server.services.export import ExportJobInput, ExportTarget, run_export_job
+from server.services.render_document import build_render_document
 
 router = APIRouter()
-
-
-def _run_batch_job(job_id: str, themes, layout_plugin, spec, out_dir, library, font,
-                   jobs, events_path):
-    job = jobs[job_id]
-    t0 = time.perf_counter()
-    try:
-        for tname, theme in themes.items():
-            for page in range(1, (layout_plugin.pages or 2) + 1):
-                job["current"] = f"{tname} p{page}"
-                img = render_page(theme, layout_plugin, library, spec, page, font)
-                tag = "糖圆体全屏绕排" if spec.avoid_zones and spec.height > 1920 else "糖圆体"
-                filename = f"{theme.output_prefix}-{layout_plugin.id}-{tag}-{page}.png"
-                out_path = os.path.join(out_dir, filename)
-                img.save(out_path, "PNG")
-                job["files"].append({"theme": tname, "page": page, "path": out_path})
-                job["done"] += 1
-        job["status"] = "done"
-        job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
-        append_event(events_path, "poster_exported", meta={
-            "batch": True, "files": len(job["files"]), "total_ms": job["total_ms"]},
-            source="export-api")
-    except Exception as e:
-        job["status"] = "error"
-        job["error"] = str(e)
-    if job["total_ms"] is None:
-        job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
 
 
 @router.post("/api/export")
@@ -54,8 +25,8 @@ def api_export(req: Request,
                row_h: int = None, sec_gap: int = None):
     context = get_app_context(req)
     themes = context.themes
-    library = context.song_repository.load().value
-    settings = context.settings_repository.load().value
+    songs = context.song_repository.load()
+    settings = context.settings_repository.load()
     font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     if theme not in themes:
         return Response(f"未知主题：{theme}", status_code=404)
@@ -71,22 +42,23 @@ def api_export(req: Request,
     if overrides:
         spec = replace(spec, **overrides)
 
-    t0 = time.perf_counter()
-    img = render_page(themes[theme], layout_plugin, library, spec, page, font)
-    duration = time.perf_counter() - t0
-
     tag = "糖圆体全屏绕排" if avoid and spec.height > 1920 else "糖圆体"
     filename = f"{themes[theme].output_prefix}-{layout}-{tag}-{page}.png"
-    out_dir = settings["output_dir"]
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, filename)
-    img.save(out_path, "PNG")
-
-    append_event(str(context.paths.events_jsonl), "poster_exported", meta={
-        "theme": theme, "layout": layout, "canvas": canvas, "page": page,
-        "duration_ms": round(duration * 1000, 1)}, source="export-api")
-    return {"ok": True, "path": out_path, "filename": filename,
-            "duration_ms": round(duration * 1000, 1)}
+    out_path = Path(settings.value["output_dir"]) / filename
+    document = build_render_document(
+        song_snapshot=songs, theme=themes[theme], layout_id=layout_plugin.id,
+        canvas=spec, page=page, font_path=font,
+        settings_revision=settings.revision, parameters=overrides)
+    job_id = uuid.uuid4().hex[:8]
+    job = {"status": "running", "done": 0, "total": 1, "current": "",
+           "files": [], "output_dir": str(out_path.parent), "total_ms": None, "error": None}
+    run_export_job(ExportJobInput(job_id, (document,),
+                                  (ExportTarget(out_path, theme, page),),
+                                  context.event_store, job))
+    if job["status"] == "error":
+        return Response(f"导出失败：{job['error']}", status_code=500)
+    return {"ok": True, "path": str(out_path), "filename": filename,
+            "duration_ms": job["total_ms"]}
 
 
 @router.post("/api/export/batch")
@@ -95,8 +67,8 @@ def api_export_batch(req: Request,
                      canvas: str = "抖音全屏 9:20", avoid: bool = True):
     context = get_app_context(req)
     themes = context.themes
-    library = context.song_repository.load().value
-    settings = context.settings_repository.load().value
+    songs = context.song_repository.load()
+    settings = context.settings_repository.load()
     font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     try:
         layout_plugin = get_layout(layout)
@@ -104,20 +76,29 @@ def api_export_batch(req: Request,
         return Response(str(e), status_code=404)
     spec = get_canvas_spec(canvas, avoid=avoid, default="抖音全屏 9:20")
 
-    out_dir = settings["output_dir"]
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir = Path(settings.value["output_dir"])
     pages = layout_plugin.pages or 2
     job_id = uuid.uuid4().hex[:8]
     jobs = context.export_job_manager
     jobs[job_id] = {
         "status": "running", "done": 0, "total": len(themes) * pages,
-        "current": "", "files": [], "output_dir": out_dir,
+        "current": "", "files": [], "output_dir": str(out_dir),
         "total_ms": None, "error": None,
     }
-    threading.Thread(target=_run_batch_job,
-                     args=(job_id, themes, layout_plugin, spec, out_dir, library, font,
-                           jobs, str(context.paths.events_jsonl)),
-                     daemon=True).start()
+    documents = []
+    targets = []
+    tag = "糖圆体全屏绕排" if spec.avoid_zones and spec.height > 1920 else "糖圆体"
+    for theme_name, theme_value in themes.items():
+        for page in range(1, pages + 1):
+            documents.append(build_render_document(
+                song_snapshot=songs, theme=theme_value, layout_id=layout_plugin.id,
+                canvas=spec, page=page, font_path=font,
+                settings_revision=settings.revision))
+            filename = f"{theme_value.output_prefix}-{layout_plugin.id}-{tag}-{page}.png"
+            targets.append(ExportTarget(out_dir / filename, theme_name, page))
+    job_input = ExportJobInput(job_id, tuple(documents), tuple(targets),
+                               context.event_store, jobs[job_id])
+    jobs.start(job_input)
     return {"ok": True, "job_id": job_id, "total": len(themes) * pages}
 
 
@@ -134,7 +115,7 @@ def api_export_job(job_id: str, req: Request):
 def api_export_open(req: Request):
     settings = get_app_context(req).settings_repository.load().value
     out_dir = settings["output_dir"]
-    os.makedirs(out_dir, exist_ok=True)
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
     try:
         if sys.platform == "darwin":
             subprocess.Popen(["open", out_dir])

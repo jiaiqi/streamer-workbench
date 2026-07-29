@@ -1,7 +1,6 @@
 """渲染/主题/布局路由（/api/render, /api/themes, /api/thumb, /api/layouts）。"""
 import io
 import os
-import time
 from dataclasses import replace
 
 from fastapi import APIRouter, Request, Response
@@ -10,7 +9,7 @@ from PIL import Image
 from server.dependencies import get_app_context
 from core.spec import get_canvas_spec
 from core.layouts import get_layout, list_layouts, layout_params
-from core.engine import render_page
+from server.services.render_document import build_render_document, render_document
 
 router = APIRouter()
 
@@ -69,7 +68,7 @@ def api_render(req: Request,
                row_h: int = None, sec_gap: int = None):
     context = get_app_context(req)
     themes = context.themes
-    library = context.song_repository.load().value
+    songs = context.song_repository.load()
     font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     if theme not in themes:
         return Response(f"未知主题：{theme}", status_code=404)
@@ -84,7 +83,10 @@ def api_render(req: Request,
                  if v is not None}
     if overrides:
         spec = replace(spec, **overrides)
-    img = render_page(themes[theme], layout_plugin, library, spec, page, font)
+    document = build_render_document(
+        song_snapshot=songs, theme=themes[theme], layout_id=layout_plugin.id,
+        canvas=spec, page=page, font_path=font, parameters=overrides)
+    img = render_document(document)
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return Response(buf.getvalue(), media_type="image/png")
