@@ -1,7 +1,7 @@
 # 主播工作台 · CI 流水线
 #
 # 质量门：
-#   1. Python 单元、AppContext、持久化与冻结导出测试（当前 131 项）
+#   1. Python 单元、AppContext、持久化、冻结导出与 API 合约测试（当前 135 项）
 #   2. 金标准逐像素对比（16 张，diff=0 死线）
 #   3. 前端纯函数测试
 #   4. TypeScript 编译与生产构建
@@ -62,6 +62,12 @@ jobs:
       - name: RenderDocument 与冻结导出测试
         run: .venv/bin/python tests/test_render_document.py
 
+      - name: API 合约测试
+        run: .venv/bin/python tests/test_api_contract.py
+
+      - name: OpenAPI TypeScript 类型漂移检查
+        run: .venv/bin/python tools/generate_api_types.py --check
+
       # ---- 门 2：金标准逐像素对比（参照图随仓库检出）----
       - name: 金标准测试（diff=0 死线）
         run: PYTHONPATH=. .venv/bin/python tests/test_golden.py
@@ -85,4 +91,4 @@ jobs:
 
       # ---- 汇总 ----
       - name: ✅ 全部质量门通过
-        run: echo "Python 单元/AppContext/持久化/冻结导出测试 + 金标准 diff=0 + 前端测试 + TS 编译/构建 —— 全部通过"
+        run: echo "Python/AppContext/持久化/冻结导出/API 合约 + 金标准 diff=0 + 前端测试 + TS 编译/构建 —— 全部通过"
