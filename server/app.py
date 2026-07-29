@@ -18,6 +18,7 @@ from server.repositories.events import FileEventStore
 from server.repositories.presets import FilePresetRepository
 from server.repositories.settings import FileSettingsRepository
 from server.repositories.songs import FileSongRepository
+from server.services.export import ExportApplicationService
 
 logger = logging.getLogger("streamer-workbench")
 
@@ -50,12 +51,21 @@ def _lifespan(config: AppConfig, paths):
             if preset_repository.get("_default") is None:
                 from core.data.presets import Preset
                 preset_repository.save(Preset.default(), expected_revision=None)
+            export_service = ExportApplicationService(
+                song_repository=song_repository,
+                settings_repository=settings_repository,
+                event_store=event_store,
+                export_job_manager=app.state.export_jobs,
+                themes=app.state.themes,
+                font_path=paths.fonts_dir / "MaokenAssortedSans.ttf",
+            )
             context = AppContext(
                 config=config, paths=paths,
                 song_repository=song_repository, event_store=event_store,
                 preset_repository=preset_repository,
                 settings_repository=settings_repository,
                 render_service=render_page,
+                export_service=export_service,
                 export_job_manager=app.state.export_jobs, themes=app.state.themes,
             )
             app.state.context = context

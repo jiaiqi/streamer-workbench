@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -290,6 +291,78 @@ def test_render_and_export_query_models_reject_unknown_fields_before_services():
                 status, body, _ = await _request(
                     app, "GET", "/api/render?theme=missing&t=123")
                 assert status == 404 and body["error"]["code"] == "theme_not_found"
+
+    asyncio.run(scenario())
+
+
+def test_export_router_delegates_validated_commands_to_application_service():
+    from server.app import create_app
+    from server.services.export import ExportSpec
+
+    class RecordingExportService:
+        def __init__(self):
+            self.specs = []
+
+        def export_one(self, spec):
+            self.specs.append(spec)
+            return SimpleNamespace(
+                path=Path("/tmp/delegated.png"),
+                filename="delegated.png",
+                duration_ms=1.5,
+            )
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+            async with app.router.lifespan_context(app):
+                service = RecordingExportService()
+                app.state.context.export_service = service
+                status, body, _ = await _request(
+                    app,
+                    "POST",
+                    "/api/export?theme=%E6%B5%B7%E6%B4%8B%E6%9F%94%E5%85%89"
+                    "&layout=grid-wrap&canvas=%E6%A0%87%E5%87%86%209%3A16"
+                    "&page=2&margin=52",
+                )
+                assert status == 200
+                assert body["filename"] == "delegated.png"
+                assert service.specs == [ExportSpec(
+                    theme="海洋柔光",
+                    page=2,
+                    canvas="标准 9:16",
+                    avoid=False,
+                    layout="grid-wrap",
+                    parameters={
+                        "margin": 52,
+                        "font_song": None,
+                        "row_h": None,
+                        "sec_gap": None,
+                    },
+                )]
+
+    asyncio.run(scenario())
+
+
+def test_export_application_service_completes_real_http_vertical_slice():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+            async with app.router.lifespan_context(app):
+                status, body, _ = await _request(
+                    app,
+                    "POST",
+                    "/api/export?theme=%E6%B5%B7%E6%B4%8B%E6%9F%94%E5%85%89"
+                    "&layout=grid-wrap&canvas=%E6%A0%87%E5%87%86%209%3A16",
+                )
+                assert status == 200
+                assert Path(body["path"]).is_file()
+                events = app.state.context.event_store.tail(
+                    limit=1, event_type="poster_exported")
+                assert len(events) == 1
+                assert events[0]["meta"]["snapshot_id"].startswith("export_")
+                assert len(events[0]["meta"]["document_ids"]) == 1
 
     asyncio.run(scenario())
 
