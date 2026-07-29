@@ -2,7 +2,7 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-30）**：旧 `grid-wrap` 金标准保持 16/16 diff=0；S1–S3.5、R0.1–R0.7 已完成。四类文件 Repository、恢复与索引、跨 app 组合可靠性，以及导出、歌曲、曲谱附件、Preset 和 Settings 五条 Application Service 纵向切片均已闭合。设置写入现在统一经过校验与 CAS，并持久化 `appearanceMode`、`applicationAccentId`；应用主色不进入海报 Theme/Palette。R0.11 Preset/API 欠账已关闭。R0.8 已完成错误/API 合约基础，加载/空/错误/重试和正式 React 视觉迁移继续推进；用户数据目录和本地服务安全仍待后续阶段。R1a 将用 `grid-wrap` 跑通独立海报固定两页兼容闭环；R1b 再用具体的 `magazine-flow` 验证自动分页，避免破坏旧金标准或提前建设通用运行时。海报不依赖直播场次；直播点歌使用独立的规则、权益、队列和结果台账。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
+> **进度快照（2026-07-30）**：旧 `grid-wrap` 金标准保持 16/16 diff=0；S1–S3.5、R0.1–R0.7 已完成。四类文件 Repository、恢复与索引、跨 app 组合可靠性，以及导出、歌曲、曲谱附件、Preset 和 Settings 五条 Application Service 纵向切片均已闭合。设置写入现在统一经过校验与 CAS，并持久化 `appearanceMode`、`applicationAccentId`；应用主色不进入海报 Theme/Palette。R0.11 Preset/API 欠账已关闭。R0.8 已完成错误/API 合约基础，加载/空/错误/重试和正式 React 视觉迁移继续推进。R0.10 后端边界已拒绝非 loopback 配置、任意 CORS 来源和未授权写请求，Electron CSP/导航边界随 R2.6 壳层闭合；用户数据目录仍待 R0.9。R1a 将用 `grid-wrap` 跑通独立海报固定两页兼容闭环；R1b 再用具体的 `magazine-flow` 验证自动分页，避免破坏旧金标准或提前建设通用运行时。海报不依赖直播场次；直播点歌使用独立的规则、权益、队列和结果台账。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >
 > **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `.archive/design-docs/`（原 `design-docs/`，点号开头表示已归档；完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `.archive/design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
@@ -31,13 +31,21 @@ tools/       迁移、样例渲染与 benchmark 脚本
 # 后端（项目根目录）
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn server.main:app --reload --port 8000
+python -m server --reload --port 8000
 
 # 前端（React 工作台）
 cd ui && npm install && npm run dev                  # http://localhost:5173，/api 与 /bg 已代理到 8000
 
-# 或打开原生验证页 web/index.html（python -m http.server 起静态服务）
 ```
+
+后端配置只接受 `127.0.0.1`、`::1` 或 `localhost` 等 loopback 地址。开发模式默认仅放行
+`http://localhost:5173` 与 `http://127.0.0.1:5173`；如 Vite 使用其他本机端口，可通过
+`STREAMER_WORKBENCH_ALLOWED_ORIGINS` 提供逗号分隔的明确 Origin。桌面模式必须设置每次启动
+随机生成的 `STREAMER_WORKBENCH_SESSION_TOKEN`，写请求通过 `X-Streamer-Session` 传递；
+令牌不得持久化或写入日志。
+
+`web/index.html` 是旧版诊断页，不再作为默认运行入口。如需追溯验证，可在固定本机端口启动，
+并把该端口的完整 Origin 显式加入 `STREAMER_WORKBENCH_ALLOWED_ORIGINS` 后重启后端。
 
 ## 金标准测试
 ```bash
@@ -56,7 +64,7 @@ $env:PYTHONUTF8='1'
 cd ui; npx tsc --noEmit
 ```
 
-当前 CI 质量基线为 Python 测试 180 项、前端测试 15 项、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。前端已接入画廊白/暗色舞台、跟随系统及 8 种应用主色；这些应用令牌不影响海报 Palette。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
+当前 CI 质量基线为 Python 测试 189 项、前端测试 15 项、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。前端已接入画廊白/暗色舞台、跟随系统及 8 种应用主色；这些应用令牌不影响海报 Palette。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
 
 ## 后端 API
 

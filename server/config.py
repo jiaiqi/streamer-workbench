@@ -5,15 +5,52 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Mapping
+from urllib.parse import urlsplit
 
 
 AppMode = Literal["development", "desktop", "test"]
 DATA_DIR_ENV = "STREAMER_WORKBENCH_DATA_DIR"
+ALLOWED_ORIGINS_ENV = "STREAMER_WORKBENCH_ALLOWED_ORIGINS"
+SESSION_TOKEN_ENV = "STREAMER_WORKBENCH_SESSION_TOKEN"
+DEFAULT_DEVELOPMENT_ORIGINS = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
+
+
+def is_loopback_host(host: str) -> bool:
+    candidate = host.strip().strip("[]")
+    if candidate.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False
+
+
+def _validate_origin(origin: str) -> str:
+    origin = origin.strip().rstrip("/")
+    if not origin or origin == "*":
+        raise ValueError("CORS 来源必须是明确地址，不能使用通配符")
+    parsed = urlsplit(origin)
+    if parsed.scheme in ("http", "https"):
+        if (not parsed.hostname or not is_loopback_host(parsed.hostname)
+                or parsed.username or parsed.password
+                or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
+            raise ValueError(f"CORS 来源必须是 loopback origin：{origin}")
+    elif parsed.scheme == "app":
+        if (parsed.netloc != "streamer-workbench"
+                or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
+            raise ValueError(f"无效的桌面应用 origin：{origin}")
+    else:
+        raise ValueError(f"不支持的 CORS origin scheme：{origin}")
+    return origin
 
 
 def _absolute(path: Path, *, base: Path | None = None) -> Path:
@@ -72,12 +109,16 @@ class AppConfig:
     startup_config_path: Path | None = None
     host: str = "127.0.0.1"
     allowed_origins: tuple[str, ...] = ()
+    session_token: str | None = None
 
     def __post_init__(self):
         if self.mode not in ("development", "desktop", "test"):
             raise ValueError(f"未知应用模式：{self.mode}")
         project_root = _absolute(Path(self.project_root))
         object.__setattr__(self, "project_root", project_root)
+        if not is_loopback_host(self.host):
+            raise ValueError(f"本地服务只允许监听 loopback 地址：{self.host}")
+        object.__setattr__(self, "host", self.host.strip().strip("[]"))
         if self.mode == "test" and self.data_root is None:
             raise ValueError("test 模式必须显式提供临时 data_root")
         if self.data_root is not None:
@@ -85,11 +126,31 @@ class AppConfig:
         if self.startup_config_path is not None:
             object.__setattr__(self, "startup_config_path",
                                _absolute(Path(self.startup_config_path)))
+        origins = tuple(dict.fromkeys(
+            _validate_origin(origin) for origin in self.allowed_origins
+        ))
+        object.__setattr__(self, "allowed_origins", origins)
+        token = (self.session_token or "").strip() or None
+        object.__setattr__(self, "session_token", token)
 
     @classmethod
-    def from_environment(cls, *, mode: AppMode = "development") -> "AppConfig":
+    def from_environment(cls, *, mode: AppMode = "development",
+                         environ: Mapping[str, str] | None = None) -> "AppConfig":
         root = Path(__file__).resolve().parent.parent
-        return cls(project_root=root, mode=mode)
+        environ = environ if environ is not None else os.environ
+        raw_origins = str(environ.get(ALLOWED_ORIGINS_ENV) or "").strip()
+        origins = (
+            tuple(origin.strip() for origin in raw_origins.split(",")
+                  if origin.strip())
+            if raw_origins
+            else (DEFAULT_DEVELOPMENT_ORIGINS if mode == "development" else ())
+        )
+        return cls(
+            project_root=root,
+            mode=mode,
+            allowed_origins=origins,
+            session_token=str(environ.get(SESSION_TOKEN_ENV) or "").strip() or None,
+        )
 
 
 @dataclass(frozen=True)
