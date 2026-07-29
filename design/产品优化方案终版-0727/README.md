@@ -39,6 +39,7 @@ AGENTS 铁律 / 已批准 ADR
 - R0 重点是 `song_id` 全链路、AppContext、Repository 写入可靠性、类型化 API、用户目录和本地服务安全；
 - 导出纵向切片已由 Application Service 接管：Router 只映射 HTTP，ExportSnapshot 冻结文档、绝对目标和来源修订，后台任务不再回读 Repository；
 - 歌曲核心写用例已由 SongApplicationService 接管：不可变 ID 为主、标题路由仅作兼容，保存使用 Repository revision/CAS，成功后追加身份完整事件；
+- 曲谱附件已由 TabApplicationService 接管：journal 协调文件、歌曲元数据和固定事件 ID，支持 CAS 失败回滚与启动恢复；详细状态机见 [`../contracts/R0.7-tab-transactions.md`](../contracts/R0.7-tab-transactions.md)；
 - R1a 使用 `grid-wrap` 验证独立海报兼容闭环并保持固定两页；R1b 用具体的 `magazine-flow` 验证自动分页，不提前建设通用运行时；
 - 海报由独立 PosterDocument 持有；LiveSession 只管理规则、点歌、队列和演唱结果；
 - Layout 与 Theme 多对多，比例和分页由 Layout 能力声明；旧 `grid-wrap` 仍固定两页兼容；

@@ -380,6 +380,7 @@ def _request_for_library(library):
     from server.repositories.events import FileEventStore
     from server.ports.repositories import StoredSnapshot
     from server.services.songs import SongApplicationService
+    from server.services.tabs import TabApplicationService
 
     class MemorySongRepository:
         def __init__(self, value):
@@ -411,6 +412,12 @@ def _request_for_library(library):
     context.song_service = SongApplicationService(
         song_repository=context.song_repository,
         event_store=context.event_store,
+    )
+    context.tab_service = TabApplicationService(
+        song_repository=context.song_repository,
+        event_store=context.event_store,
+        tabs_root=paths.tabs_dir,
+        transactions_root=os.path.join(paths.backups_dir, "tab-transactions"),
     )
     state = SimpleNamespace(library=library, settings=context.settings_repository,
                             context=context)
@@ -993,38 +1000,25 @@ def test_tabs_api_identity_collision_prefers_song_id():
 def test_tabs_api_upload_and_delete_use_resolved_song_id():
     import asyncio
     import io
-    import tempfile
     from starlette.datastructures import UploadFile
     import server.routers.songs as songs_router
 
     song = Song(title="可改名歌曲", id=_sid("曲谱主路径"))
     library = SongLibrary([song])
     request = _request_for_library(library)
-    old_save = songs_router._save_library
-    old_append = songs_router._append_event
-    old_events_path = songs_router._events_path
-    events = []
-    with tempfile.TemporaryDirectory() as data_root:
-        try:
-            request.app.state.context.paths.tabs_dir = os.path.join(data_root, "tabs")
-            songs_router._save_library = lambda context, library: None
-            songs_router._events_path = lambda context: os.path.join(data_root, "events.jsonl")
-            songs_router._append_event = lambda context, event_type, **kwargs: events.append(
-                {"type": event_type, **kwargs})
-            upload = UploadFile(io.BytesIO(b"PNG"), filename="主歌.png")
-            created = asyncio.run(songs_router.api_tab_upload(request, song.title, upload))
-            rel = created["file"]
-            assert created["song_id"] == song.id
-            assert rel == f"tabs/{song.id}/主歌.png"
-            assert os.path.isfile(os.path.join(data_root, rel))
+    context = request.app.state.context
+    data_root = os.path.dirname(context.paths.tabs_dir)
+    upload = UploadFile(io.BytesIO(b"PNG"), filename="主歌.png")
+    created = asyncio.run(songs_router.api_tab_upload(request, song.title, upload))
+    rel = created["file"]
+    assert created["song_id"] == song.id
+    assert rel == f"tabs/{song.id}/主歌.png"
+    assert os.path.isfile(os.path.join(data_root, rel))
 
-            deleted = songs_router.api_tab_delete(request, song.id, rel)
-            assert deleted["tab_files"] == []
-            assert not os.path.exists(os.path.join(data_root, rel))
-        finally:
-            songs_router._save_library = old_save
-            songs_router._append_event = old_append
-            songs_router._events_path = old_events_path
+    deleted = songs_router.api_tab_delete(request, song.id, rel)
+    assert deleted["tab_files"] == []
+    assert not os.path.exists(os.path.join(data_root, rel))
+    events = context.event_store.tail(limit=10, event_type="song_edited")
     assert [event["source"] for event in events] == ["tabs-api", "tabs-api"]
     assert all(event["song_id"] == song.id for event in events)
 
