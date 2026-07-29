@@ -64,7 +64,7 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 | 数据 | JSON + JSONL 本地文件 | songs.json v5（178 首）、events.jsonl v1/v2、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 142 项 Python 测试 + 12 项前端测试 + 16 张金标准逐像素 + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定仍待 R0 收口 |
+| 测试 | 145 项 Python 测试 + 12 项前端测试 + 16 张金标准逐像素 + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定仍待 R0 收口 |
 
 ---
 
