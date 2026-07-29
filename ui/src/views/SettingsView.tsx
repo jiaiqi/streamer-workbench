@@ -1,111 +1,145 @@
-import { useState, useEffect } from "react";
-import type { Settings, Theme } from "../types";
+import { useEffect, useState } from "react";
+import { ACCENT_OPTIONS, APPEARANCE_OPTIONS, normalizeAppearance } from "../appearance";
+import { apiRequest } from "../api/client";
+import type { SettingsUpdateResponse } from "../api/generated";
+import type { AppearanceSettings, Settings, Theme } from "../types";
 import { CANVAS_OPTIONS } from "../types";
 
-/* ---- 设置视图：输出 / 数据与安全 / 高级 三组，对接 /api/settings ---- */
-export default function SettingsView({ dark, themes }: {
+interface SettingsViewProps {
   dark: boolean;
   themes: Theme[];
-}) {
+  appearance: AppearanceSettings;
+  onAppearancePreview: (appearance: AppearanceSettings) => void;
+  onAppearanceSaved: (appearance: AppearanceSettings) => void;
+}
+
+export default function SettingsView({
+  dark,
+  themes,
+  appearance,
+  onAppearancePreview,
+  onAppearanceSaved,
+}: SettingsViewProps) {
   const [form, setForm] = useState<Settings | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [baseline, setBaseline] = useState<AppearanceSettings>(appearance);
+  const [status, setStatus] = useState<"loading" | "ready" | "saving" | "saved" | "error">("loading");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    setSaved(false);
-    fetch("/api/settings").then(r => r.json()).then(setForm);
+    let active = true;
+    apiRequest<Settings>("/api/settings")
+      .then(settings => {
+        if (!active) return;
+        const nextAppearance = normalizeAppearance(settings);
+        setForm({ ...settings, ...nextAppearance });
+        setBaseline(nextAppearance);
+        onAppearancePreview(nextAppearance);
+        setStatus("ready");
+      })
+      .catch(reason => {
+        if (!active) return;
+        setError(reason instanceof Error ? reason.message : "设置加载失败");
+        setStatus("error");
+      });
+    return () => { active = false; };
   }, []);
+
+  const updateAppearance = (next: AppearanceSettings) => {
+    setForm(current => current ? { ...current, ...next } : current);
+    onAppearancePreview(next);
+    setStatus("ready");
+    setError("");
+  };
 
   const save = async () => {
     if (!form) return;
-    setSaving(true);
+    setStatus("saving");
+    setError("");
     try {
-      const res = await fetch("/api/settings", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (res.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
-      }
-    } catch (e) {
-      console.error("设置保存失败", e);
+      const response = await apiRequest<SettingsUpdateResponse>("/api/settings", { method: "POST", body: form });
+      const nextAppearance = normalizeAppearance(response.settings);
+      setForm({ ...response.settings, ...nextAppearance });
+      setBaseline(nextAppearance);
+      onAppearanceSaved(nextAppearance);
+      setStatus("saved");
+      window.setTimeout(() => setStatus(current => current === "saved" ? "ready" : current), 2500);
+    } catch (reason) {
+      setForm(current => current ? { ...current, ...baseline } : current);
+      onAppearancePreview(baseline);
+      setError(`${reason instanceof Error ? reason.message : "设置保存失败"}，外观已恢复为上次保存状态。`);
+      setStatus("error");
     }
-    setSaving(false);
   };
 
+  if (status === "loading") {
+    return <main className="settings-view" aria-busy="true"><div className="state-panel"><span className="spinner" />正在加载设置…</div></main>;
+  }
+  if (!form) {
+    return <main className="settings-view"><div className="state-panel state-error" role="alert"><strong>无法读取设置</strong><span>{error}</span></div></main>;
+  }
+
+  const currentAppearance = normalizeAppearance(form);
+  const fieldClass = "field-control";
+
   return (
-    <main className="flex-1 overflow-y-auto p-6">
-      <h2 className={`text-lg font-semibold mb-4 ${dark ? "text-zinc-200" : "text-foreground"}`}>设置</h2>
-      {form ? (
-        <div className="max-w-xl space-y-5">
-          <section className={`rounded-xl p-4 space-y-3 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">输出</h3>
-            <label className="block text-xs text-muted-foreground">
-              输出目录
-              <input type="text" value={form.output_dir}
-                onChange={e => setForm(f => f && { ...f, output_dir: e.target.value })}
-                className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none font-mono ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block text-xs text-muted-foreground">
-                默认画布
-                <select value={form.default_canvas}
-                  onChange={e => setForm(f => f && { ...f, default_canvas: e.target.value })}
-                  className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`}>
-                  {CANVAS_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                默认主题
-                <select value={form.default_theme}
-                  onChange={e => setForm(f => f && { ...f, default_theme: e.target.value })}
-                  className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`}>
-                  {themes.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
-                </select>
-              </label>
-            </div>
-            <p className="text-[11px] text-muted-foreground">默认画布/主题在无历史使用记录（首次启动）时生效；日常使用以「启动恢复」的上次状态为准。</p>
-          </section>
+    <main className="settings-view">
+      <header className="view-heading">
+        <div><span className="eyebrow">偏好与安全</span><h1>设置</h1><p>工作台外观与海报主题彼此独立，修改应用主色不会改变导出的海报。</p></div>
+      </header>
 
-          <section className={`rounded-xl p-4 space-y-3 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">数据与安全</h3>
-            <label className="block text-xs text-muted-foreground">
-              自动备份保留份数（1-100）
-              <input type="number" min={1} max={100} value={form.backup_count}
-                onChange={e => setForm(f => f && { ...f, backup_count: Math.max(1, Math.min(100, parseInt(e.target.value, 10) || 20)) })}
-                className={`mt-1 w-24 rounded-lg px-3 py-2 text-sm outline-none text-right ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
-            </label>
-            <p className="text-[11px] text-muted-foreground">歌曲数据每次变更前自动备份到 data/backups/，超出份数滚动清理。</p>
-          </section>
+      <div className="settings-grid">
+        <section className="settings-card settings-card-wide">
+          <div className="section-heading"><span>外观</span><small>即时预览 · 保存失败自动恢复</small></div>
+          <fieldset className="appearance-options">
+            <legend>显示模式</legend>
+            {APPEARANCE_OPTIONS.map(option => (
+              <button key={option.id} type="button" aria-pressed={currentAppearance.appearanceMode === option.id}
+                className="appearance-choice" onClick={() => updateAppearance({ ...currentAppearance, appearanceMode: option.id })}>
+                <strong>{option.label}</strong><span>{option.description}</span>
+              </button>
+            ))}
+          </fieldset>
+          <fieldset className="accent-options">
+            <legend>应用主色</legend>
+            {ACCENT_OPTIONS.map(option => (
+              <button key={option.id} type="button" aria-pressed={currentAppearance.applicationAccentId === option.id}
+                className="accent-choice" onClick={() => updateAppearance({ ...currentAppearance, applicationAccentId: option.id })}>
+                <span className="accent-swatch" style={{ background: dark ? option.dark : option.light }} aria-hidden="true" />
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </fieldset>
+          <p className="field-note">传统色只用于导航、按钮、焦点与选中态；海报继续使用各主题自己的五角色 Palette。</p>
+        </section>
 
-          <section className={`rounded-xl p-4 space-y-3 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">高级</h3>
-            <label className="block text-xs text-muted-foreground">
-              字体文件路径
-              <input type="text" value={form.font_path}
-                onChange={e => setForm(f => f && { ...f, font_path: e.target.value })}
-                className={`mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none font-mono ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
-            </label>
-            <p className="text-[11px] text-muted-foreground">⚠️ 更换字体会使金标准测试失效（渲染像素必变），且需重启后端生效；当前渲染仍使用内置猫啃糖圆体。</p>
-            <label className="block text-xs text-muted-foreground">
-              渲染线程数（预留，暂未生效）
-              <input type="number" min={1} max={8} value={form.render_threads} disabled
-                className={`mt-1 w-24 rounded-lg px-3 py-2 text-sm outline-none text-right opacity-50 ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`} />
-            </label>
-          </section>
-
-          <div className="flex items-center gap-3">
-            <button onClick={save} disabled={saving}
-              className="rounded-xl px-5 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
-              {saving ? "保存中…" : "保存设置"}
-            </button>
-            {saved && <span className="text-sm text-emerald-600">✅ 已保存</span>}
+        <section className="settings-card">
+          <div className="section-heading"><span>输出</span></div>
+          <label className="field-label">输出目录<input className={fieldClass} type="text" value={form.output_dir} onChange={event => setForm({ ...form, output_dir: event.target.value })} /></label>
+          <div className="field-pair">
+            <label className="field-label">默认画布<select className={fieldClass} value={form.default_canvas} onChange={event => setForm({ ...form, default_canvas: event.target.value })}>{CANVAS_OPTIONS.map(item => <option key={item}>{item}</option>)}</select></label>
+            <label className="field-label">默认主题<select className={fieldClass} value={form.default_theme} onChange={event => setForm({ ...form, default_theme: event.target.value })}>{themes.map(theme => <option key={theme.name}>{theme.name}</option>)}</select></label>
           </div>
-        </div>
-      ) : (
-        <div className="text-muted-foreground">加载中…</div>
-      )}
+          <p className="field-note">默认值仅在没有上次工作区记录时生效。</p>
+        </section>
+
+        <section className="settings-card">
+          <div className="section-heading"><span>数据与安全</span></div>
+          <label className="field-label">自动备份保留份数<input className={`${fieldClass} short-field`} type="number" min={1} max={100} value={form.backup_count} onChange={event => setForm({ ...form, backup_count: Math.max(1, Math.min(100, Number(event.target.value) || 20)) })} /></label>
+          <p className="field-note">每次变更歌曲数据前自动备份，超出数量后滚动清理。</p>
+        </section>
+
+        <section className="settings-card settings-card-wide">
+          <div className="section-heading"><span>高级</span></div>
+          <label className="field-label">字体文件路径<input className={fieldClass} type="text" value={form.font_path} onChange={event => setForm({ ...form, font_path: event.target.value })} /></label>
+          <p className="field-note warning-note">更换字体会改变海报像素输出，且需重启后端生效；当前仍使用内置猫啃糖圆体。</p>
+          <label className="field-label">渲染线程数（规划中）<input className={`${fieldClass} short-field`} type="number" value={form.render_threads} disabled /></label>
+        </section>
+      </div>
+
+      <footer className="settings-actions">
+        <button type="button" className="primary-action" disabled={status === "saving"} onClick={save}>{status === "saving" ? "保存中…" : "保存设置"}</button>
+        <span className="save-status" aria-live="polite">{status === "saved" ? "设置已保存" : status === "error" ? error : "更改会先预览，保存后永久生效"}</span>
+      </footer>
     </main>
   );
 }

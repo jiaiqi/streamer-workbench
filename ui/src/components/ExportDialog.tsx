@@ -112,11 +112,11 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
             { id: "all", label: `全部 ${themesCount} 个主题 × ${maxPage} 页`, count: themesCount * maxPage },
           ] as const).map(opt => (
             <label key={opt.id} className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-colors ${scope === opt.id
-              ? (dark ? "bg-emerald-500/15 ring-1 ring-emerald-400/50" : "bg-primary-soft ring-1 ring-primary/40")
+              ? "bg-primary-soft ring-1 ring-primary/40"
               : (dark ? "hover:bg-zinc-700/50" : "hover:bg-muted")}`}>
               <input type="radio" name="export-scope" checked={scope === opt.id}
                 onChange={() => setScope(opt.id)} disabled={exporting}
-                className={dark ? "accent-emerald-400" : "accent-primary"} />
+                className="accent-primary" />
               <span className="flex-1">{opt.label}</span>
               <span className="text-xs text-muted-foreground tabular-nums">{opt.count} 张</span>
             </label>
@@ -167,7 +167,7 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
           </button>
           {!done && (
             <button onClick={runExport} disabled={exporting || !selTheme}
-              className="rounded-xl px-5 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+              className="primary-action rounded-xl px-5 py-2 text-sm cursor-pointer disabled:opacity-50">
               {exporting ? "导出中…" : "开始导出"}
             </button>
           )}
