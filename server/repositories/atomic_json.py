@@ -95,12 +95,15 @@ class AtomicJsonWriter:
         backup_kind: str,
     ) -> str:
         target = Path(target).expanduser().resolve()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        old_exists = target.is_file()
-        old_bytes = target.read_bytes() if old_exists else None
-        fd, raw_temp = tempfile.mkstemp(
-            prefix=f".{target.name}.", suffix=".tmp", dir=target.parent,
-        )
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            old_exists = target.is_file()
+            old_bytes = target.read_bytes() if old_exists else None
+            fd, raw_temp = tempfile.mkstemp(
+                prefix=f".{target.name}.", suffix=".tmp", dir=target.parent,
+            )
+        except OSError as error:
+            raise RepositoryUnavailable("无法准备 JSON 原子写入") from error
         temp = Path(raw_temp)
         published = False
         try:
@@ -109,7 +112,9 @@ class AtomicJsonWriter:
                 json.dump(value, handle, ensure_ascii=False, indent=2)
                 handle.write("\n")
                 self._inject("after_temp_write")
+                self._inject("before_temp_flush")
                 handle.flush()
+                self._inject("before_temp_fsync")
                 os.fsync(handle.fileno())
             self._inject("after_temp_fsync")
 
@@ -122,12 +127,14 @@ class AtomicJsonWriter:
             self._inject("after_validate")
 
             if old_bytes is not None and backup_policy.enabled and backup_policy.keep > 0:
+                self._inject("before_backup_write")
                 self._create_backup(old_bytes, backup_policy, backup_kind)
             self._inject("after_backup")
             self._inject("before_replace")
             os.replace(temp, target)
             published = True
             self._inject("after_replace")
+            self._inject("before_directory_fsync")
             _fsync_directory(target.parent)
             self._inject("after_directory_fsync")
 
