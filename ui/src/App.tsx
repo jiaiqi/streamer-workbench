@@ -238,10 +238,13 @@ export default function App() {
                   }`}
                 >
                   <div className={`aspect-[9/16] relative overflow-hidden ${dark ? "bg-zinc-800" : "bg-muted"}`}>
+                    {/* 缩略图加载失败兜底：显示主题名，不露 alt 破图 */}
+                    <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-xs text-muted-foreground">{t.name}</div>
                     {/* P0-2: 缩略图端点（宽 360 JPEG），不再直出多 MB 原图 */}
                     <img src={`/api/thumb/${encodeURIComponent(t.name)}`}
-                      alt={t.name} className="w-full h-full object-cover object-bottom opacity-90 group-hover:opacity-100 transition-opacity" loading="lazy" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                      alt={t.name} className="relative w-full h-full object-cover object-bottom opacity-90 group-hover:opacity-100 transition-opacity" loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
                   </div>
                   <div className={`px-3 py-2.5 border-t ${dark ? "bg-zinc-800/80 border-zinc-700/50" : "bg-card border-border"}`}>
                     <p className={`text-[13px] font-medium truncate ${dark ? "text-zinc-200" : "text-card-foreground"}`}>{t.name}</p>
@@ -253,9 +256,9 @@ export default function App() {
           </aside>
           )}
 
-          {/* ===== CENTER: preview ===== */}
+          {/* ===== CENTER: preview（<800px 隐藏，走移动端兜底面板） ===== */}
           {view === "workspace" && (
-          <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+          <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden max-[800px]:hidden">
             {/* toolbar */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
               <div className={`flex items-center gap-1.5 rounded-xl px-3 py-2 shadow-sm transition-colors duration-500 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
@@ -372,6 +375,21 @@ export default function App() {
           </main>
           )}
 
+          {/* ===== 移动端兜底（<800px）：不裁剪桌面三栏，引导去直播速查 ===== */}
+          {view === "workspace" && (
+          <div className="flex-1 hidden max-[800px]:flex flex-col items-center justify-center gap-4 p-8 text-center">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm ${dark ? "bg-zinc-800" : "bg-muted"}`}>
+              <span className={dark ? "text-zinc-300" : "text-primary"}>{Icon.music}</span>
+            </div>
+            <p className={`text-sm font-medium ${dark ? "text-zinc-200" : "text-foreground"}`}>完整海报编辑请在电脑端打开</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">移动端提供直播速查：搜歌、看谱、今晚队列</p>
+            <a href="/quick"
+              className="flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-sm font-medium bg-primary hover:bg-primary-strong text-primary-foreground transition-all active:scale-95 no-underline">
+              打开直播速查
+            </a>
+          </div>
+          )}
+
           {/* ===== 歌曲库视图 ===== */}
           {view === "library" && (
             <LibraryView dark={dark}
@@ -391,9 +409,9 @@ export default function App() {
               onEditTargetChange={setLibDialogOpen} />
           )}
 
-          {/* ===== RIGHT: params（仅工作台视图显示） ===== */}
+          {/* ===== RIGHT: params（仅工作台视图显示，<800px 隐藏） ===== */}
           {view === "workspace" && (
-          <aside className={`w-60 shrink-0 border-l overflow-y-auto transition-colors duration-500 ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
+          <aside className={`w-60 shrink-0 border-l overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
             <div className={`px-5 py-4 border-b ${dark ? "border-zinc-700/50" : "border-border"}`}>
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">参数</h2>
             </div>
