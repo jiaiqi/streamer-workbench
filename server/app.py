@@ -61,7 +61,7 @@ def _lifespan(config: AppConfig, paths):
             try:
                 yield
             finally:
-                app.state.export_jobs.clear()
+                app.state.export_jobs.close()
                 del app.state.context
         finally:
             for resource in reversed(resources):

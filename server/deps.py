@@ -5,6 +5,7 @@ import os
 
 from core.data.songs import SongLibrary, build_default_library
 from core.themes.loader import load_themes
+from server.services.export import ExportJobManager
 
 logger = logging.getLogger("streamer-workbench")
 
@@ -45,7 +46,7 @@ def initialize_legacy_state(app, paths):
     """lifespan 内构造当前 app 私有的临时状态，无模块路径绑定。"""
     os.makedirs(paths.tabs_dir, exist_ok=True)
     app.state.themes = load_themes(str(paths.themes_dir))
-    app.state.export_jobs = {}
+    app.state.export_jobs = ExportJobManager()
     app.state.thumb_cache = {}
 
 
