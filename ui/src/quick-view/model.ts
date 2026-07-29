@@ -71,38 +71,66 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function isQueueItem(value: unknown): value is QueueItem {
   return isRecord(value)
-    && typeof value.song_id === "string"
-    && typeof value.title_snapshot === "string"
+    && isNonEmptyString(value.song_id)
+    && isNonEmptyString(value.title_snapshot)
     && typeof value.sung === "boolean"
-    && typeof value.added_at === "number";
+    && typeof value.added_at === "number"
+    && Number.isFinite(value.added_at);
 }
 
 function isPendingEvent(value: unknown): value is PendingEvent {
   return isRecord(value)
-    && typeof value.event_id === "string"
+    && isNonEmptyString(value.event_id)
     && (value.type === "queue_added" || value.type === "song_sung")
-    && typeof value.song_id === "string"
-    && typeof value.title_snapshot === "string"
-    && typeof value.occurred_at === "string"
+    && isNonEmptyString(value.song_id)
+    && isNonEmptyString(value.title_snapshot)
+    && isNonEmptyString(value.occurred_at)
     && value.source === "quick-view";
+}
+
+function isUnresolvedQueueItem(value: unknown): value is UnresolvedQueueItem {
+  return isRecord(value)
+    && isNonEmptyString(value.title)
+    && typeof value.sung === "boolean"
+    && typeof value.added_at === "number"
+    && Number.isFinite(value.added_at)
+    && (value.reason === "missing_song"
+      || value.reason === "ambiguous_title"
+      || value.reason === "invalid_item");
+}
+
+function isUnresolvedPendingEvent(value: unknown): value is UnresolvedPendingEvent {
+  return isRecord(value)
+    && isNonEmptyString(value.type)
+    && isNonEmptyString(value.title)
+    && typeof value.occurred_at === "string"
+    && (value.reason === "missing_song"
+      || value.reason === "ambiguous_title"
+      || value.reason === "invalid_item");
 }
 
 function validateV2(value: unknown): QuickViewStorageV2 {
   if (!isRecord(value) || value.version !== 2
       || !Array.isArray(value.queue) || !value.queue.every(isQueueItem)
-      || !Array.isArray(value.pending_events) || !value.pending_events.every(isPendingEvent)) {
+      || !Array.isArray(value.pending_events) || !value.pending_events.every(isPendingEvent)
+      || !Array.isArray(value.unresolved_queue)
+      || !value.unresolved_queue.every(isUnresolvedQueueItem)
+      || !Array.isArray(value.unresolved_pending_events)
+      || !value.unresolved_pending_events.every(isUnresolvedPendingEvent)) {
     throw new Error("QuickView v2 存储结构无效；原值已保留，请备份后修复或清除");
   }
   return {
     version: 2,
     queue: value.queue,
     pending_events: value.pending_events,
-    unresolved_queue: Array.isArray(value.unresolved_queue)
-      ? value.unresolved_queue as UnresolvedQueueItem[] : [],
-    unresolved_pending_events: Array.isArray(value.unresolved_pending_events)
-      ? value.unresolved_pending_events as UnresolvedPendingEvent[] : [],
+    unresolved_queue: value.unresolved_queue,
+    unresolved_pending_events: value.unresolved_pending_events,
   };
 }
 
@@ -138,7 +166,7 @@ export function migrateStorage(
   rawLegacyQueue: string | null,
   rawLegacyPending: string | null,
   songs: Song[],
-    createEvent: (type: QuickEventType, song: Song, occurredAt?: string) => PendingEvent,
+  createEvent: (type: QuickEventType, song: Song, occurredAt?: string) => PendingEvent,
 ): MigrationResult {
   try {
     if (rawV2 !== null) {

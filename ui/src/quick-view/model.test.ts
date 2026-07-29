@@ -55,6 +55,27 @@ test("v2 重复读取幂等，损坏 JSON 不产生覆盖值", () => {
   assert.deepEqual(loadStorageV2(JSON.stringify(original)).storage, original);
 });
 
+test("v2 拒绝畸形 unresolved 项与空身份字段", () => {
+  const base = {
+    version: 2, queue: [], pending_events: [], unresolved_queue: [], unresolved_pending_events: [],
+  };
+  for (const invalid of [
+    { ...base, unresolved_queue: [null] },
+    { ...base, unresolved_queue: [{ title: "旧歌", sung: false, added_at: 1, reason: "wrong_reason" }] },
+    { ...base, unresolved_pending_events: [null] },
+    { ...base, unresolved_pending_events: [{ type: "song_sung", title: "旧歌", occurred_at: "", reason: "wrong_reason" }] },
+    { ...base, queue: [{ song_id: " ", title_snapshot: "旧歌", sung: false, added_at: 1 }] },
+    { ...base, pending_events: [{
+      event_id: "", type: "song_sung", song_id: "song_a", title_snapshot: "旧歌",
+      occurred_at: "2026-01-01T00:00:00Z", source: "quick-view",
+    }] },
+  ]) {
+    const result = loadStorageV2(JSON.stringify(invalid));
+    assert.equal(result.storage, null);
+    assert.match(result.error ?? "", /结构无效/);
+  }
+});
+
 test("队列操作只使用 ID，改名显示最新标题，删除后显示快照", () => {
   const oldSong = song("song_a", "旧名");
   const newSong = song("song_a", "新名");
