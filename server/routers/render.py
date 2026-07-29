@@ -69,7 +69,7 @@ def api_render(req: Request,
                row_h: int = None, sec_gap: int = None):
     context = get_app_context(req)
     themes = context.themes
-    library = context.song_repository
+    library = context.song_repository.load().value
     font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     if theme not in themes:
         return Response(f"未知主题：{theme}", status_code=404)

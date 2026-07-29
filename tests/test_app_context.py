@@ -82,6 +82,7 @@ def test_factory_does_not_write_data_root():
 
 def test_lifespan_builds_and_releases_context():
     from server.app import create_app
+    from server.ports.repositories import RepositoryClosed
 
     async def scenario():
         with tempfile.TemporaryDirectory() as raw:
@@ -91,11 +92,20 @@ def test_lifespan_builds_and_releases_context():
             async with app.router.lifespan_context(app):
                 context = app.state.context
                 assert context.paths.data_root == data_root.resolve()
-                assert context.song_repository is app.state.library
+                song_repository = context.song_repository
+                settings_repository = context.settings_repository
+                event_store = context.event_store
                 assert context.export_job_manager is app.state.export_jobs
                 assert (data_root / "tabs").is_dir()
                 assert (data_root / "presets").is_dir()
             assert not hasattr(app.state, "context")
+            for operation in (song_repository.load, settings_repository.load,
+                              event_store.flush):
+                try:
+                    operation()
+                    assert False, "lifespan 退出后 Repository 必须关闭"
+                except RepositoryClosed:
+                    pass
 
     asyncio.run(scenario())
 
@@ -181,6 +191,33 @@ def test_nested_lifespans_http_writes_stay_in_request_app():
                     assert not (base / "b" / "events.jsonl").exists()
                     assert (base / "a" / "presets" / "only-a" / "preset.json").is_file()
                     assert not (base / "b" / "presets" / "only-a").exists()
+
+            reopened = create_app(AppConfig(project, mode="test", data_root=base / "a"))
+            async with reopened.router.lifespan_context(reopened):
+                status, songs = await request(reopened, "GET", "/api/songs/list")
+                assert status == 200
+                assert any(song["title"] == "只属于 A" for song in songs["songs"])
+
+    asyncio.run(scenario())
+
+
+def test_corrupt_song_data_blocks_startup_without_publishing_context():
+    from server.app import create_app
+    from server.ports.repositories import RepositoryCorrupt
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            data_root = Path(raw)
+            (data_root / "songs.json").write_text(
+                json.dumps({"version": 999, "songs": []}), encoding="utf-8")
+            app = create_app(AppConfig(Path(__file__).resolve().parent.parent,
+                                       mode="test", data_root=data_root))
+            try:
+                async with app.router.lifespan_context(app):
+                    assert False, "损坏数据必须阻止启动"
+            except RepositoryCorrupt:
+                pass
+            assert not hasattr(app.state, "context")
 
     asyncio.run(scenario())
 

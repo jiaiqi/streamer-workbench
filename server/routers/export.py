@@ -54,8 +54,8 @@ def api_export(req: Request,
                row_h: int = None, sec_gap: int = None):
     context = get_app_context(req)
     themes = context.themes
-    library = context.song_repository
-    settings = context.settings_repository
+    library = context.song_repository.load().value
+    settings = context.settings_repository.load().value
     font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     if theme not in themes:
         return Response(f"未知主题：{theme}", status_code=404)
@@ -95,8 +95,8 @@ def api_export_batch(req: Request,
                      canvas: str = "抖音全屏 9:20", avoid: bool = True):
     context = get_app_context(req)
     themes = context.themes
-    library = context.song_repository
-    settings = context.settings_repository
+    library = context.song_repository.load().value
+    settings = context.settings_repository.load().value
     font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     try:
         layout_plugin = get_layout(layout)
@@ -132,7 +132,7 @@ def api_export_job(job_id: str, req: Request):
 
 @router.post("/api/export/open")
 def api_export_open(req: Request):
-    settings = get_app_context(req).settings_repository
+    settings = get_app_context(req).settings_repository.load().value
     out_dir = settings["output_dir"]
     os.makedirs(out_dir, exist_ok=True)
     try:

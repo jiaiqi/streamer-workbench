@@ -3,6 +3,7 @@
 覆盖设计结论 §9.1 要求的主题校验异常路径、Song 模型生命周期、
 分组规则（section 标记 + 字数回退）。
 """
+import copy
 import os
 import sys
 
@@ -212,7 +213,6 @@ def test_migration_chain_v1_to_v5():
     assert out["version"] == 5
 
 def test_migration_v4_to_v5_is_deterministic():
-    import copy
     source = {"version": 4, "songs": [{"title": "知足"}, {"title": "枫"}]}
     first = SongLibrary._migrate(copy.deepcopy(source))
     second = SongLibrary._migrate(copy.deepcopy(source))
@@ -376,6 +376,23 @@ def test_event_v1_read_compatibility():
 def _request_for_library(library):
     from types import SimpleNamespace
     import tempfile
+    import copy
+    from server.repositories.events import FileEventStore
+    from server.ports.repositories import StoredSnapshot
+
+    class MemorySongRepository:
+        def __init__(self, value):
+            self.value = value
+            self.revision = "memory-1"
+
+        def load(self):
+            return StoredSnapshot(self.value, self.revision)
+
+        def save(self, value, *, expected_revision):
+            self.value = value
+            self.revision = "memory-2"
+            return self.load()
+
     root = tempfile.mkdtemp(prefix="streamer-workbench-test-")
     paths = SimpleNamespace(
         songs_json=os.path.join(root, "songs.json"),
@@ -385,7 +402,8 @@ def _request_for_library(library):
         settings_json=os.path.join(root, "settings.json"),
         presets_dir=os.path.join(root, "presets"),
     )
-    context = SimpleNamespace(song_repository=library,
+    context = SimpleNamespace(song_repository=MemorySongRepository(library),
+                              event_store=FileEventStore(paths.events_jsonl),
                               settings_repository={"backup_count": 20},
                               preset_repository=paths.presets_dir,
                               paths=paths)
@@ -401,18 +419,18 @@ def test_song_id_api_rename_keeps_identity_and_event_link():
     saved = []
     events = []
     old_save = songs_router._save_library
-    old_append = songs_router.append_event
+    old_append = songs_router._append_event
     old_events_path = songs_router._events_path
     try:
-        songs_router._save_library = lambda context: saved.append(context.song_repository)
+        songs_router._save_library = lambda context, library: saved.append(library)
         songs_router._events_path = lambda context: "unused-events.jsonl"
-        songs_router.append_event = lambda path, event_type, **kwargs: events.append(
+        songs_router._append_event = lambda context, event_type, **kwargs: events.append(
             {"type": event_type, **kwargs})
         result = songs_router.api_song_update_by_id(
             request, "song_stable", {"title": "新歌名", "key": "G"})
     finally:
         songs_router._save_library = old_save
-        songs_router.append_event = old_append
+        songs_router._append_event = old_append
         songs_router._events_path = old_events_path
     assert result["ok"] is True
     assert result["song"]["id"] == "song_stable"
@@ -430,7 +448,7 @@ def test_song_id_api_rename_conflict_does_not_save():
     saves = []
     old_save = songs_router._save_library
     try:
-        songs_router._save_library = lambda context: saves.append(context.song_repository)
+        songs_router._save_library = lambda context, library: saves.append(library)
         response = songs_router.api_song_update_by_id(
             request, "song_first", {"title": "第二首"})
     finally:
@@ -446,17 +464,17 @@ def test_song_id_api_delete_preserves_snapshot_in_event():
     request = _request_for_library(library)
     events = []
     old_save = songs_router._save_library
-    old_append = songs_router.append_event
+    old_append = songs_router._append_event
     old_events_path = songs_router._events_path
     try:
-        songs_router._save_library = lambda context: None
+        songs_router._save_library = lambda context, library: None
         songs_router._events_path = lambda context: "unused-events.jsonl"
-        songs_router.append_event = lambda path, event_type, **kwargs: events.append(
+        songs_router._append_event = lambda context, event_type, **kwargs: events.append(
             {"type": event_type, **kwargs})
         result = songs_router.api_song_delete_by_id(request, "song_delete")
     finally:
         songs_router._save_library = old_save
-        songs_router.append_event = old_append
+        songs_router._append_event = old_append
         songs_router._events_path = old_events_path
     assert result["song_id"] == "song_delete"
     assert result["title_snapshot"] == "待删除"
@@ -486,26 +504,19 @@ def test_event_report_explicit_song_id_requires_complete_v2_envelope():
 def test_event_report_complete_v2_refreshes_title_and_keeps_client_identity():
     import server.routers.events as events_router
     request = _request_for_library(SongLibrary([Song(title="新歌名", id="song_known")]))
-    captured = []
-    old_append = events_router.append_event
-    try:
-        events_router.append_event = lambda path, event_type, **kwargs: captured.append(
-            {"type": event_type, **kwargs}) or {"event_id": kwargs["event_id"]}
-        result = events_router.api_events_report(request, {
+    result = events_router.api_events_report(request, {
             "type": "song_sung",
             "event_id": "evt_client_fixed",
             "song_id": "song_known",
             "title_snapshot": "旧歌名",
             "occurred_at": "2026-07-28T20:00:00+08:00",
             "source": "quick-view",
-        })
-    finally:
-        events_router.append_event = old_append
+    })
     assert result["ok"] is True
-    assert captured[0]["event_id"] == "evt_client_fixed"
-    assert captured[0]["song_id"] == "song_known"
-    assert captured[0]["title_snapshot"] == "新歌名"
-    assert captured[0]["occurred_at"] == "2026-07-28T20:00:00+08:00"
+    assert result["event"]["event_id"] == "evt_client_fixed"
+    assert result["event"]["song_id"] == "song_known"
+    assert result["event"]["title_snapshot"] == "新歌名"
+    assert result["event"]["occurred_at"] == "2026-07-28T20:00:00+08:00"
 
 def test_event_report_legacy_title_must_resolve_to_song_id():
     import server.routers.events as events_router
@@ -536,7 +547,7 @@ def test_song_title_compat_rename_conflict_matches_id_api():
     saves = []
     old_save = songs_router._save_library
     try:
-        songs_router._save_library = lambda context: saves.append(context.song_repository)
+        songs_router._save_library = lambda context, library: saves.append(library)
         response = songs_router.api_songs_update(
             request, {"title": "第一首", "fields": {"title": "第二首"}})
     finally:
@@ -1018,15 +1029,15 @@ def test_tabs_api_upload_and_delete_use_resolved_song_id():
     library = SongLibrary([song])
     request = _request_for_library(library)
     old_save = songs_router._save_library
-    old_append = songs_router.append_event
+    old_append = songs_router._append_event
     old_events_path = songs_router._events_path
     events = []
     with tempfile.TemporaryDirectory() as data_root:
         try:
             request.app.state.context.paths.tabs_dir = os.path.join(data_root, "tabs")
-            songs_router._save_library = lambda context: None
+            songs_router._save_library = lambda context, library: None
             songs_router._events_path = lambda context: os.path.join(data_root, "events.jsonl")
-            songs_router.append_event = lambda path, event_type, **kwargs: events.append(
+            songs_router._append_event = lambda context, event_type, **kwargs: events.append(
                 {"type": event_type, **kwargs})
             upload = UploadFile(io.BytesIO(b"PNG"), filename="主歌.png")
             created = asyncio.run(songs_router.api_tab_upload(request, song.title, upload))
@@ -1040,7 +1051,7 @@ def test_tabs_api_upload_and_delete_use_resolved_song_id():
             assert not os.path.exists(os.path.join(data_root, rel))
         finally:
             songs_router._save_library = old_save
-            songs_router.append_event = old_append
+            songs_router._append_event = old_append
             songs_router._events_path = old_events_path
     assert [event["source"] for event in events] == ["tabs-api", "tabs-api"]
     assert all(event["song_id"] == song.id for event in events)

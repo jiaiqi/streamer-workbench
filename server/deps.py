@@ -37,14 +37,15 @@ def save_settings(path, settings: dict):
         json.dump(settings, stream, ensure_ascii=False, indent=2)
 
 
+def default_settings(paths) -> dict:
+    return {**DEFAULT_SETTINGS, "output_dir": str(paths.output_dir),
+            "font_path": str(paths.fonts_dir / "MaokenAssortedSans.ttf")}
+
+
 def initialize_legacy_state(app, paths):
     """lifespan 内构造当前 app 私有的临时状态，无模块路径绑定。"""
     os.makedirs(paths.tabs_dir, exist_ok=True)
     app.state.themes = load_themes(str(paths.themes_dir))
-    app.state.library = build_default_library(json_path=str(paths.songs_json))
-    app.state.settings = load_settings(
-        str(paths.settings_json), output_dir=paths.output_dir,
-        font_path=paths.fonts_dir / "MaokenAssortedSans.ttf")
     app.state.export_jobs = {}
     app.state.thumb_cache = {}
     app.state.presets_dir = init_presets(str(paths.data_root))

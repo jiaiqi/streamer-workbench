@@ -12,6 +12,10 @@ from core.engine import render_page
 from server.config import AppConfig, build_app_paths
 from server.context import AppContext
 from server.dependencies import get_app_context
+from server.ports.repositories import BackupPolicy
+from server.repositories.events import FileEventStore
+from server.repositories.settings import FileSettingsRepository
+from server.repositories.songs import FileSongRepository
 
 logger = logging.getLogger("streamer-workbench")
 
@@ -20,26 +24,43 @@ def _lifespan(config: AppConfig, paths):
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # R0.6 第一切片沿用 deps 作为临时适配器；初始化被严格延后到 lifespan。
-        from server.deps import initialize_legacy_state
+        from server.deps import default_settings, initialize_legacy_state
 
         initialize_legacy_state(app, paths)
-        context = AppContext(
-            config=config,
-            paths=paths,
-            song_repository=app.state.library,
-            event_store=paths.events_jsonl,
-            preset_repository=app.state.presets_dir,
-            settings_repository=app.state.settings,
-            render_service=render_page,
-            export_job_manager=app.state.export_jobs,
-            themes=app.state.themes,
-        )
-        app.state.context = context
+        resources = []
         try:
-            yield
+            song_repository = FileSongRepository(
+                paths.songs_json, BackupPolicy(paths.backups_dir / "songs"))
+            resources.append(song_repository)
+            settings_repository = FileSettingsRepository(
+                paths.settings_json, BackupPolicy(paths.backups_dir / "settings"),
+                defaults=default_settings(paths))
+            resources.append(settings_repository)
+            event_store = FileEventStore(paths.events_jsonl)
+            resources.append(event_store)
+            # 启动时完成 Schema 校验，损坏数据阻止 context 发布。
+            song_repository.load()
+            settings_repository.load()
+            context = AppContext(
+                config=config, paths=paths,
+                song_repository=song_repository, event_store=event_store,
+                preset_repository=app.state.presets_dir,
+                settings_repository=settings_repository,
+                render_service=render_page,
+                export_job_manager=app.state.export_jobs, themes=app.state.themes,
+            )
+            app.state.context = context
+            try:
+                yield
+            finally:
+                app.state.export_jobs.clear()
+                del app.state.context
         finally:
-            app.state.export_jobs.clear()
-            del app.state.context
+            for resource in reversed(resources):
+                try:
+                    resource.close()
+                except Exception:
+                    logger.exception("关闭 Repository 资源失败")
 
     return lifespan
 
@@ -77,7 +98,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.get("/api/health")
     def health(request: Request):
         context = get_app_context(request)
-        library = context.song_repository
+        library = context.song_repository.load().value
         return {"ok": True, "themes": len(context.themes),
                 "songs": len(library.mastered())}
 
