@@ -161,6 +161,31 @@ class FilePresetRepositoryTests(unittest.TestCase):
             self.assertFalse(recovered.get("first").value.is_default)
             self.assertTrue(recovered.get("second").value.is_default)
 
+    def test_committed_transaction_rejects_tampered_non_summary_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            presets_root = root / "presets"
+            base = FilePresetRepository(presets_root, backup_policy(root))
+            saved = base.save(make_preset("scene", "场景"), expected_revision=MISSING_REVISION)
+            base.close()
+            crashing = FilePresetRepository(
+                presets_root,
+                backup_policy(root),
+                fault_injector=PresetFaultInjector("after_committed"),
+            )
+            changed = copy.deepcopy(saved.value)
+            changed.params = {"margin": 99}
+            with self.assertRaises(RepositoryUnavailable):
+                crashing.save(changed, expected_revision=saved.revision)
+            crashing.close()
+
+            active_path = presets_root / "scene" / "preset.json"
+            active = json.loads(active_path.read_text(encoding="utf-8"))
+            active["params"] = {"margin": -1}
+            active_path.write_text(json.dumps(active, ensure_ascii=False, indent=2), encoding="utf-8")
+            with self.assertRaises(RepositoryRecoveryRequired):
+                FilePresetRepository(presets_root, backup_policy(root))
+
     def test_same_revision_concurrency_exactly_one_succeeds(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

@@ -253,6 +253,11 @@ class FilePresetRepository:
             "phase": "staging",
             "item_ids": sorted(changes),
             "delete_ids": sorted(item_id for item_id, value in changes.items() if value is None),
+            "manifest_next_revision": json_revision(manifest_next),
+            "item_next_revisions": {
+                item_id: json_revision(value) if value is not None else None
+                for item_id, value in changes.items()
+            },
         }
         try:
             self._stage_json(transaction_dir / "transaction.json", journal, disabled)
@@ -264,6 +269,7 @@ class FilePresetRepository:
                     self._stage_json(transaction_dir / "before" / f"{item_id}.json", before, disabled)
                 if payload is not None:
                     self._stage_json(transaction_dir / "next" / f"{item_id}.json", payload, disabled)
+            self._validate_transaction_staging(transaction_dir, journal)
             self._inject("before_prepared")
             journal = self._set_phase(transaction_dir, journal, "prepared", disabled)
             self._inject("after_prepared")
@@ -307,6 +313,7 @@ class FilePresetRepository:
         if phase not in {"prepared", "items_published", "manifest_published", "committed"}:
             raise RepositoryRecoveryRequired(f"Preset 事务阶段未知：{phase}")
         manifest_next = self._read_json(transaction_dir / "manifest.next.json", "next manifest")
+        self._validate_transaction_staging(transaction_dir, journal)
         if phase != "committed":
             self._publish_items(transaction_dir, journal)
             self._publish_manifest(transaction_dir)
@@ -316,6 +323,7 @@ class FilePresetRepository:
             if active_manifest != manifest_next:
                 raise RepositoryRecoveryRequired("已提交 Preset 事务与活动 manifest 不一致")
             self._validate_consistency(active_manifest)
+        self._validate_committed_targets(journal, manifest_next)
         shutil.rmtree(transaction_dir)
         self._merge_report(
             detected=(f"transaction:{transaction_id}:{phase}",),
@@ -359,6 +367,40 @@ class FilePresetRepository:
             backup_policy=self._backup_policy,
             backup_kind="preset-manifest",
         )
+
+    def _validate_transaction_staging(self, transaction_dir: Path, journal: dict[str, Any]) -> None:
+        manifest_next = self._read_json(transaction_dir / "manifest.next.json", "next manifest")
+        if json_revision(manifest_next) != journal.get("manifest_next_revision"):
+            raise RepositoryRecoveryRequired("Preset staged manifest 摘要不匹配")
+        revisions = journal.get("item_next_revisions")
+        if not isinstance(revisions, dict) or set(revisions) != set(journal.get("item_ids", [])):
+            raise RepositoryRecoveryRequired("Preset journal item revision 集合无效")
+        delete_ids = set(journal.get("delete_ids", []))
+        for item_id, expected in revisions.items():
+            if item_id in delete_ids:
+                if expected is not None:
+                    raise RepositoryRecoveryRequired("Preset delete item 不应有 next revision")
+                continue
+            payload = self._read_json(transaction_dir / "next" / f"{item_id}.json", "next preset")
+            if json_revision(payload) != expected:
+                raise RepositoryRecoveryRequired(f"Preset staged item 摘要不匹配：{item_id}")
+
+    def _validate_committed_targets(
+        self,
+        journal: dict[str, Any],
+        manifest_next: dict[str, Any],
+    ) -> None:
+        if json_revision(manifest_next) != journal.get("manifest_next_revision"):
+            raise RepositoryRecoveryRequired("Preset committed manifest 摘要不匹配")
+        delete_ids = set(journal.get("delete_ids", []))
+        for item_id, expected in journal.get("item_next_revisions", {}).items():
+            if item_id in delete_ids:
+                if self._item_dir(item_id).exists():
+                    raise RepositoryRecoveryRequired(f"Preset 删除项仍存在：{item_id}")
+                continue
+            active = self._read_item_payload(item_id)
+            if json_revision(active) != expected:
+                raise RepositoryRecoveryRequired(f"Preset committed item 摘要不匹配：{item_id}")
 
     def _ready_manifest(self) -> dict[str, Any]:
         self._ensure_open()
