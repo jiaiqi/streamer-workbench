@@ -86,7 +86,10 @@ class FileSongRepository:
     def _current_revision(self) -> str:
         if not self._path.exists():
             return MISSING_REVISION
-        return json_revision(self._read_raw())
+        raw = self._read_raw()
+        # 即使调用方选择无条件写入，也不得覆盖语义损坏或未来版本的用户数据。
+        self._decode(raw)
+        return json_revision(raw)
 
     def _read_raw(self) -> dict[str, Any]:
         if not self._path.is_file():

@@ -18,6 +18,7 @@ from server.ports.repositories import (
     BackupPolicy,
     RepositoryClosed,
     RepositoryConflict,
+    RepositoryCorrupt,
     RepositoryUnavailable,
 )
 from server.repositories.atomic_json import AtomicJsonWriter, FaultInjector, _fsync_directory
@@ -93,6 +94,30 @@ class AtomicJsonWriterTests(unittest.TestCase):
 
 
 class FileSongRepositoryTests(unittest.TestCase):
+    def test_invalid_v5_and_future_version_cannot_be_overwritten(self) -> None:
+        bad_documents = (
+            {
+                "version": 5,
+                "songs": [
+                    {"id": "song_same", "title": "甲"},
+                    {"id": "song_same", "title": "乙"},
+                ],
+            },
+            {"version": 999, "songs": []},
+        )
+        for document in bad_documents:
+            with self.subTest(version=document["version"]), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                path = root / "songs.json"
+                original = json.dumps(document, ensure_ascii=False, indent=2).encode("utf-8")
+                path.write_bytes(original)
+                repository = FileSongRepository(path, policy(root))
+
+                with self.assertRaises(RepositoryCorrupt):
+                    repository.save(SongLibrary([Song(title="新数据")]), expected_revision=None)
+
+                self.assertEqual(path.read_bytes(), original)
+
     def test_v4_load_is_read_only_and_first_save_backs_up_original(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -177,6 +202,34 @@ class FileSongRepositoryTests(unittest.TestCase):
 
 
 class FileSettingsRepositoryTests(unittest.TestCase):
+    def test_data_root_is_rejected_and_cas_conflict_preserves_current(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repository = FileSettingsRepository(root / "settings.json", policy(root))
+            initial = repository.save({"name": "初始"}, expected_revision="missing")
+            current = repository.save({"name": "当前"}, expected_revision=initial.revision)
+
+            with self.assertRaises(RepositoryConflict):
+                repository.save({"name": "过期"}, expected_revision=initial.revision)
+            self.assertEqual(repository.load(), current)
+
+            with self.assertRaises(RepositoryCorrupt):
+                repository.save({"data_root": "/tmp/forbidden"}, expected_revision=current.revision)
+            self.assertEqual(repository.load(), current)
+
+    def test_corrupt_json_cannot_be_overwritten(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            path = root / "settings.json"
+            original = b'{"broken":'
+            path.write_bytes(original)
+            repository = FileSettingsRepository(path, policy(root))
+            with self.assertRaises(RepositoryCorrupt):
+                repository.load()
+            with self.assertRaises(RepositoryCorrupt):
+                repository.save({"name": "new"}, expected_revision=None)
+            self.assertEqual(path.read_bytes(), original)
+
     def test_defaults_and_unknown_fields_are_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
