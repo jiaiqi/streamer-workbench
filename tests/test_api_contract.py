@@ -74,6 +74,26 @@ def test_event_openapi_uses_named_request_and_response_models():
     }
 
 
+def test_songs_openapi_uses_named_models_for_id_and_title_compat_routes():
+    from server.app import create_app
+
+    with tempfile.TemporaryDirectory() as raw:
+        app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+        schema = app.openapi()
+    id_patch = schema["paths"]["/api/songs/{song_id}"]["patch"]
+    legacy_update = schema["paths"]["/api/songs/update"]["post"]
+    assert id_patch["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/SongEditableFields"
+    )
+    assert id_patch["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/SongUpdateResponse"
+    )
+    assert legacy_update["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/SongLegacyUpdateRequest"
+    )
+    assert schema["components"]["schemas"]["SongEditableFields"]["additionalProperties"] is False
+
+
 async def _request(app, method: str, path: str, payload: dict | None = None,
                    headers: dict[str, str] | None = None):
     body = (json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -140,6 +160,43 @@ def test_event_report_rejects_unknown_fields_before_business_logic():
                 assert body["error"]["code"] == "validation_error"
                 assert body["error"]["details"]["issues"][0]["type"] == "extra_forbidden"
                 assert body["error"]["request_id"] == headers["x-request-id"]
+
+    asyncio.run(scenario())
+
+
+def test_songs_reject_unknown_fields_and_keep_title_compatibility_routes():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+            async with app.router.lifespan_context(app):
+                status, body, _ = await _request(
+                    app, "POST", "/api/songs/add",
+                    {"title": "契约测试歌", "unexpected": True},
+                )
+                assert status == 422
+                assert body["error"]["code"] == "validation_error"
+
+                status, created, _ = await _request(
+                    app, "POST", "/api/songs/add", {"title": "契约测试歌"})
+                assert status == 200
+                assert created["song"]["title"] == "契约测试歌"
+
+                status, updated, _ = await _request(
+                    app, "POST", "/api/songs/update",
+                    {"title": "契约测试歌", "fields": {"title": "兼容路径新名"}},
+                )
+                assert status == 200
+                assert updated["song"]["id"] == created["song"]["id"]
+                assert updated["song"]["title"] == "兼容路径新名"
+
+                status, changed, _ = await _request(
+                    app, "POST", "/api/songs/status",
+                    {"title": "兼容路径新名", "status": "active"},
+                )
+                assert status == 200
+                assert changed["status"] == "active"
 
     asyncio.run(scenario())
 
