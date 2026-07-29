@@ -1,7 +1,10 @@
 """事件流路由（/api/events*）。"""
 from fastapi import APIRouter, Request, Response
 
-from core.data.events import EVENT_TYPES, append_event, iter_events, tail as events_tail
+from datetime import datetime
+import uuid
+from core.data.events import EVENT_TYPES, _normalize_timestamp
+from server.ports.repositories import EventQuery, RepositoryError
 from server.dependencies import get_app_context
 
 router = APIRouter()
@@ -12,14 +15,14 @@ CLIENT_REPORTABLE = ("queue_added", "song_sung", "practice_logged")
 @router.get("/api/events")
 def api_events(req: Request,
                type: str = None, since: str = None, limit: int = 50):
-    events_path = str(get_app_context(req).paths.events_jsonl)
+    store = get_app_context(req).event_store
     if type and type not in EVENT_TYPES:
         return Response(f"未知事件类型：{type}", status_code=400)
     limit = max(1, min(500, int(limit)))
     if since:
-        events = list(iter_events(events_path, type=type, since=since))[:500]
+        events = list(store.iter(EventQuery(event_type=type, since=since)))[:500]
     else:
-        events = events_tail(events_path, n=limit, type=type)
+        events = list(store.tail(limit=limit, event_type=type))
     return {"total": len(events), "events": events}
 
 
@@ -29,7 +32,7 @@ def api_events_report(req: Request, payload: dict):
     etype = (payload.get("type") or "").strip()
     if etype not in CLIENT_REPORTABLE:
         return Response(f"不可上报的事件类型：{etype}（允许 {CLIENT_REPORTABLE}）", status_code=400)
-    library = context.song_repository
+    library = context.song_repository.load().value
     song_id = str(payload.get("song_id") or "").strip() or None
     title = payload.get("title_snapshot", payload.get("title"))
     title = str(title).strip() if title is not None else None
@@ -62,10 +65,17 @@ def api_events_report(req: Request, payload: dict):
     event_id = str(payload.get("event_id") or "").strip() or None
     source = str(payload.get("source") or "quick-view").strip()
     try:
-        event = append_event(
-            str(context.paths.events_jsonl), etype, song_id=song_id, title_snapshot=title,
-            meta=meta, occurred_at=occurred_at, event_id=event_id, source=source,
-        )
-    except ValueError as e:
+        event = {
+            "schema_version": 2,
+            "event_id": event_id or f"evt_{uuid.uuid4().hex}",
+            "occurred_at": _normalize_timestamp(occurred_at),
+            "recorded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "type": etype, "source": source, "song_id": song_id,
+            "title_snapshot": title,
+        }
+        if meta:
+            event["meta"] = meta
+        event = context.event_store.append(event).event
+    except (ValueError, RepositoryError) as e:
         return Response(str(e), status_code=400)
     return {"ok": True, "event": event}
