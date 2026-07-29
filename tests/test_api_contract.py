@@ -228,6 +228,39 @@ def test_songs_reject_unknown_fields_and_keep_title_compatibility_routes():
     asyncio.run(scenario())
 
 
+def test_song_write_router_delegates_to_application_service():
+    from core.data.songs import Song
+    from server.app import create_app
+
+    class RecordingSongService:
+        def __init__(self):
+            self.payloads = []
+
+        def create(self, payload):
+            self.payloads.append(payload)
+            return SimpleNamespace(
+                song=Song("委托歌曲", id="song_delegated", status="draft"),
+                active=0,
+                draft=1,
+            )
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+            async with app.router.lifespan_context(app):
+                service = RecordingSongService()
+                app.state.context.song_service = service
+                status, body, _ = await _request(
+                    app, "POST", "/api/songs/add",
+                    {"title": "委托歌曲", "status": "draft"})
+                assert status == 200
+                assert body["song"]["id"] == "song_delegated"
+                assert service.payloads == [{
+                    "title": "委托歌曲", "status": "draft"}]
+
+    asyncio.run(scenario())
+
+
 def test_settings_and_presets_are_typed_without_losing_compatible_fields():
     from server.app import create_app
 

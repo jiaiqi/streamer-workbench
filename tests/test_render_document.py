@@ -281,6 +281,7 @@ import server.repositories.presets
 import server.repositories.events
 import server.services.render_document
 import server.services.export
+import server.services.songs
 after = {p.name for p in pathlib.Path.cwd().iterdir()}
 print(json.dumps({"created": sorted(after-before), "threads": len(threading.enumerate())-threads}))
 """

@@ -379,6 +379,7 @@ def _request_for_library(library):
     import copy
     from server.repositories.events import FileEventStore
     from server.ports.repositories import StoredSnapshot
+    from server.services.songs import SongApplicationService
 
     class MemorySongRepository:
         def __init__(self, value):
@@ -407,6 +408,10 @@ def _request_for_library(library):
                               settings_repository={"backup_count": 20},
                               preset_repository=paths.presets_dir,
                               paths=paths)
+    context.song_service = SongApplicationService(
+        song_repository=context.song_repository,
+        event_store=context.event_store,
+    )
     state = SimpleNamespace(library=library, settings=context.settings_repository,
                             context=context)
     return SimpleNamespace(app=SimpleNamespace(state=state))
@@ -416,27 +421,15 @@ def test_song_id_api_rename_keeps_identity_and_event_link():
     song = Song(title="旧歌名", id="song_stable")
     library = SongLibrary([song])
     request = _request_for_library(library)
-    saved = []
-    events = []
-    old_save = songs_router._save_library
-    old_append = songs_router._append_event
-    old_events_path = songs_router._events_path
-    try:
-        songs_router._save_library = lambda context, library: saved.append(library)
-        songs_router._events_path = lambda context: "unused-events.jsonl"
-        songs_router._append_event = lambda context, event_type, **kwargs: events.append(
-            {"type": event_type, **kwargs})
-        result = songs_router.api_song_update_by_id(
-            request, "song_stable", {"title": "新歌名", "key": "G"})
-    finally:
-        songs_router._save_library = old_save
-        songs_router._append_event = old_append
-        songs_router._events_path = old_events_path
+    result = songs_router.api_song_update_by_id(
+        request, "song_stable", {"title": "新歌名", "key": "G"})
+    events = request.app.state.context.event_store.tail(
+        limit=10, event_type="song_edited")
     assert result["ok"] is True
     assert result["song"]["id"] == "song_stable"
     assert result["song"]["title"] == "新歌名"
     assert library.get_by_id("song_stable").title == "新歌名"
-    assert len(saved) == 1
+    assert request.app.state.context.song_repository.revision == "memory-2"
     assert events[0]["song_id"] == "song_stable"
     assert events[0]["title_snapshot"] == "新歌名"
 
@@ -445,42 +438,27 @@ def test_song_id_api_rename_conflict_does_not_save():
     first = Song(title="第一首", id="song_first")
     library = SongLibrary([first, Song(title="第二首", id="song_second")])
     request = _request_for_library(library)
-    saves = []
-    old_save = songs_router._save_library
-    try:
-        songs_router._save_library = lambda context, library: saves.append(library)
-        response = songs_router.api_song_update_by_id(
-            request, "song_first", {"title": "第二首"})
-    finally:
-        songs_router._save_library = old_save
+    response = songs_router.api_song_update_by_id(
+        request, "song_first", {"title": "第二首"})
     assert response.status_code == 409
     assert library.get_by_id("song_first").title == "第一首"
-    assert saves == []
+    assert request.app.state.context.song_repository.revision == "memory-1"
 
 def test_song_id_api_delete_preserves_snapshot_in_event():
     import server.routers.songs as songs_router
     song = Song(title="待删除", id="song_delete")
     library = SongLibrary([song])
     request = _request_for_library(library)
-    events = []
-    old_save = songs_router._save_library
-    old_append = songs_router._append_event
-    old_events_path = songs_router._events_path
-    try:
-        songs_router._save_library = lambda context, library: None
-        songs_router._events_path = lambda context: "unused-events.jsonl"
-        songs_router._append_event = lambda context, event_type, **kwargs: events.append(
-            {"type": event_type, **kwargs})
-        result = songs_router.api_song_delete_by_id(request, "song_delete")
-    finally:
-        songs_router._save_library = old_save
-        songs_router._append_event = old_append
-        songs_router._events_path = old_events_path
+    result = songs_router.api_song_delete_by_id(request, "song_delete")
+    events = request.app.state.context.event_store.tail(
+        limit=10, event_type="song_deleted")
     assert result["song_id"] == "song_delete"
     assert result["title_snapshot"] == "待删除"
     assert library.get_by_id("song_delete") is None
-    assert events == [{"type": "song_deleted", "song_id": "song_delete",
-                       "title_snapshot": "待删除", "source": "songs-api"}]
+    assert len(events) == 1
+    assert events[0]["song_id"] == "song_delete"
+    assert events[0]["title_snapshot"] == "待删除"
+    assert events[0]["source"] == "songs-api"
 
 def test_event_report_rejects_unknown_explicit_song_id():
     import server.routers.events as events_router
@@ -544,17 +522,11 @@ def test_song_title_compat_rename_conflict_matches_id_api():
         Song(title="第二首", id="song_second"),
     ])
     request = _request_for_library(library)
-    saves = []
-    old_save = songs_router._save_library
-    try:
-        songs_router._save_library = lambda context, library: saves.append(library)
-        response = songs_router.api_songs_update(
-            request, {"title": "第一首", "fields": {"title": "第二首"}})
-    finally:
-        songs_router._save_library = old_save
+    response = songs_router.api_songs_update(
+        request, {"title": "第一首", "fields": {"title": "第二首"}})
     assert response.status_code == 409
     assert library.get_by_id("song_first").title == "第一首"
-    assert saves == []
+    assert request.app.state.context.song_repository.revision == "memory-1"
 
 
 # ═══════ 曲谱存储（core/data/tabs.py）═══════
