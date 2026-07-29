@@ -1,7 +1,7 @@
 {
-  "_comment": "歌单海报生成器 · 设计令牌单源真值（v2 — 双品牌体系）。2026-07-27 从晨光纸感单品牌升级为「暗色舞台 Cinematic Stage × 画廊白 Art Gallery」双品牌。shared.css / React Tailwind @theme / 落地页 tokens.css 均由此派生。",
-  "_version": 2,
-  "_updated": "2026-07-27",
+  "_comment": "主播工作台 · 设计令牌单源真值（v3 — 双外观模式 + 可选应用主色）。应用主色只影响工作台交互语义，不进入海报 Palette。shared.css / React Tailwind @theme / 落地页 tokens.css 均由此派生。",
+  "_version": 3,
+  "_updated": "2026-07-29",
 
   "brands": {
     "stage": {
@@ -12,6 +12,17 @@
       "label": "画廊白",
       "description": "日间品牌——暖纸白底，海洋青 accent，博物馆留白，干净专业"
     }
+  },
+
+  "applicationAccents": {
+    "bambooMoon": { "label": "竹月青", "light": "#287D69", "strongLight": "#1F6756", "dark": "#49B89C", "strongDark": "#62CBB1", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(40,125,105,0.12)" },
+    "rainSky": { "label": "雨过天青", "light": "#356A8A", "strongLight": "#295671", "dark": "#6FA4C5", "strongDark": "#87B7D3", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(53,106,138,0.12)" },
+    "distantMountain": { "label": "远山黛", "light": "#465E65", "strongLight": "#35494F", "dark": "#879AA0", "strongDark": "#A0AFB3", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(70,94,101,0.12)" },
+    "rouge": { "label": "胭脂红", "light": "#A13D50", "strongLight": "#843142", "dark": "#D77A8B", "strongDark": "#E692A0", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(161,61,80,0.12)" },
+    "begonia": { "label": "海棠褐", "light": "#9A4F36", "strongLight": "#7D3E2A", "dark": "#D78869", "strongDark": "#E69E84", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(154,79,54,0.12)" },
+    "wisteria": { "label": "藤萝紫", "light": "#66528A", "strongLight": "#51416F", "dark": "#9B88C1", "strongDark": "#B09ED0", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(102,82,138,0.12)" },
+    "amber": { "label": "琥珀金", "light": "#8A5A16", "strongLight": "#70470F", "dark": "#D0A04D", "strongDark": "#DEB465", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(138,90,22,0.12)" },
+    "pineFlower": { "label": "松花绿", "light": "#5D6F32", "strongLight": "#495827", "dark": "#98AA67", "strongDark": "#ADBC80", "onLight": "#FFFFFF", "onDark": "#07100D", "soft": "rgba(93,111,50,0.12)" }
   },
 
   "colors": {

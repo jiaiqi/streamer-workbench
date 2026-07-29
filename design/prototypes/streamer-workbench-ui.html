@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="主播工作台 UI/UX 交互原型">
+  <title>主播工作台 · 交互原型</title>
+  <style>
+    :root {
+      --bg: #f4f2ee;
+      --bg-raised: #faf9f7;
+      --surface: rgba(255,255,255,.86);
+      --surface-solid: #fff;
+      --surface-subtle: #efede8;
+      --surface-hover: #e8f2ee;
+      --text: #17211d;
+      --text-2: #57645e;
+      --text-3: #7b8781;
+      --line: rgba(30,48,40,.10);
+      --line-strong: rgba(30,48,40,.17);
+      --primary: #287d69;
+      --primary-strong: #1f6756;
+      --primary-soft: rgba(40,125,105,.11);
+      --on-primary: #fff;
+      --accent: #d57953;
+      --accent-soft: rgba(213,121,83,.12);
+      --spot: #c78b2f;
+      --spot-soft: rgba(199,139,47,.13);
+      --success: #2f8b55;
+      --danger: #c34c4c;
+      --shadow-1: 0 1px 2px rgba(16,30,24,.04), 0 8px 24px rgba(16,30,24,.05);
+      --shadow-2: 0 18px 55px rgba(16,30,24,.13);
+      --radius-sm: 10px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+      --sidebar: 244px;
+      --inspector: 304px;
+      --ease: cubic-bezier(.22,1,.36,1);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    }
+
+    html[data-theme="dark"] {
+      --bg: #09100d;
+      --bg-raised: #0d1511;
+      --surface: rgba(20,29,25,.88);
+      --surface-solid: #141d19;
+      --surface-subtle: #1b2621;
+      --surface-hover: #22342d;
+      --text: #f3f0eb;
+      --text-2: #aab4ae;
+      --text-3: #818d87;
+      --line: rgba(232,244,237,.10);
+      --line-strong: rgba(232,244,237,.17);
+      --primary: #49b89c;
+      --primary-strong: #62cbb1;
+      --primary-soft: rgba(73,184,156,.14);
+      --on-primary: #07100d;
+      --accent: #ea9876;
+      --accent-soft: rgba(234,152,118,.14);
+      --spot: #edb14d;
+      --spot-soft: rgba(237,177,77,.16);
+      --success: #61c487;
+      --danger: #ef7770;
+      --shadow-1: 0 1px 2px rgba(0,0,0,.25), 0 8px 28px rgba(0,0,0,.26);
+      --shadow-2: 0 22px 70px rgba(0,0,0,.5);
+    }
+
+    html[data-accent="rain-sky"] { --primary:#356a8a; --primary-strong:#295671; --primary-soft:rgba(53,106,138,.12); }
+    html[data-accent="distant-mountain"] { --primary:#465e65; --primary-strong:#35494f; --primary-soft:rgba(70,94,101,.12); }
+    html[data-accent="rouge"] { --primary:#a13d50; --primary-strong:#843142; --primary-soft:rgba(161,61,80,.12); }
+    html[data-accent="begonia"] { --primary:#9a4f36; --primary-strong:#7d3e2a; --primary-soft:rgba(154,79,54,.12); }
+    html[data-accent="wisteria"] { --primary:#66528a; --primary-strong:#51416f; --primary-soft:rgba(102,82,138,.12); }
+    html[data-accent="amber"] { --primary:#8a5a16; --primary-strong:#70470f; --primary-soft:rgba(138,90,22,.12); }
+    html[data-accent="pine-flower"] { --primary:#5d6f32; --primary-strong:#495827; --primary-soft:rgba(93,111,50,.12); }
+    html[data-theme="dark"][data-accent="rain-sky"] { --primary:#6fa4c5; --primary-strong:#87b7d3; }
+    html[data-theme="dark"][data-accent="distant-mountain"] { --primary:#879aa0; --primary-strong:#a0afb3; }
+    html[data-theme="dark"][data-accent="rouge"] { --primary:#d77a8b; --primary-strong:#e692a0; }
+    html[data-theme="dark"][data-accent="begonia"] { --primary:#d78869; --primary-strong:#e69e84; }
+    html[data-theme="dark"][data-accent="wisteria"] { --primary:#9b88c1; --primary-strong:#b09ed0; }
+    html[data-theme="dark"][data-accent="amber"] { --primary:#d0a04d; --primary-strong:#deb465; }
+    html[data-theme="dark"][data-accent="pine-flower"] { --primary:#98aa67; --primary-strong:#adbc80; }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: var(--bg); scroll-behavior: smooth; }
+    body { margin: 0; min-height: 100dvh; color: var(--text); background: var(--bg); font: 400 15px/1.5 var(--font); letter-spacing: -.01em; }
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button, input, select, [tabindex] { outline: none; }
+    :focus-visible { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--primary) !important; }
+    ::selection { background: var(--primary-soft); color: var(--text); }
+    .skip-link { position: fixed; left: 16px; top: -60px; z-index: 1000; padding: 10px 16px; color: #fff; background: var(--primary); border-radius: 10px; transition: top .2s; }
+    .skip-link:focus { top: 16px; }
+
+    .icon { width: 20px; height: 20px; flex: 0 0 auto; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-sm { width: 16px; height: 16px; }
+    .icon-lg { width: 24px; height: 24px; }
+
+    .app-shell { min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar) minmax(0,1fr); }
+    .sidebar { position: sticky; top: 0; height: 100dvh; padding: 20px 14px 18px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--bg-raised) 88%, transparent); backdrop-filter: blur(28px) saturate(1.2); z-index: 30; display: flex; flex-direction: column; }
+    .brand { height: 52px; padding: 0 10px; display: flex; align-items: center; gap: 11px; }
+    .brand-mark { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: white; background: linear-gradient(145deg, color-mix(in srgb,var(--primary) 82%,white), var(--primary-strong)); box-shadow: 0 8px 18px color-mix(in srgb,var(--primary) 28%,transparent); }
+    .brand-mark .icon { width: 19px; height: 19px; stroke-width: 2.2; }
+    .brand-name { font-weight: 650; font-size: 16px; letter-spacing: -.025em; }
+    .brand-sub { color: var(--text-3); font-size: 11px; margin-top: -2px; }
+    .nav-label { margin: 20px 12px 8px; color: var(--text-3); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; }
+    .nav { display: grid; gap: 4px; }
+    .nav-btn { min-height: 46px; width: 100%; padding: 0 12px; border: 0; border-radius: 13px; color: var(--text-2); background: transparent; display: flex; align-items: center; gap: 12px; text-align: left; font-weight: 540; transition: color .2s, background .2s, transform .15s; }
+    .nav-btn:hover { color: var(--text); background: var(--surface-subtle); }
+    .nav-btn:active { transform: scale(.985); }
+    .nav-btn[aria-current="page"] { color: var(--primary-strong); background: var(--primary-soft); font-weight: 650; }
+    .nav-btn .badge { margin-left: auto; min-width: 19px; height: 19px; padding: 0 6px; display: grid; place-items: center; border-radius: 999px; color: var(--primary-strong); background: color-mix(in srgb, var(--primary) 17%, transparent); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .sidebar-foot { margin-top: auto; display: grid; gap: 10px; }
+    .live-mini { padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-1); }
+    .live-mini-top { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 620; }
+    .pulse { width: 7px; height: 7px; border-radius: 99px; background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 15%, transparent); }
+    .live-mini strong { display: block; margin-top: 7px; font-size: 14px; }
+    .live-mini p { margin: 1px 0 10px; color: var(--text-3); font-size: 12px; }
+
+    .main-wrap { min-width: 0; display: flex; flex-direction: column; }
+    .topbar { position: sticky; top: 0; z-index: 25; height: 72px; padding: 0 30px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(24px) saturate(1.2); display: flex; align-items: center; gap: 16px; }
+    .mobile-brand { display: none; font-weight: 650; }
+    .crumb { color: var(--text-3); font-size: 13px; }
+    .crumb strong { color: var(--text); font-weight: 620; }
+    .top-spacer { flex: 1; }
+    .status-pill { min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text-2); background: var(--surface); display: inline-flex; align-items: center; gap: 8px; font-size: 12px; }
+    .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+    .icon-btn { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 13px; color: var(--text-2); background: var(--surface); transition: color .2s, background .2s, transform .15s; }
+    .icon-btn:hover { color: var(--text); background: var(--surface-subtle); }
+    .icon-btn:active { transform: scale(.95); }
+    .avatar { color: #fff; background: linear-gradient(145deg,#d98964,#b65d46); border-color: transparent; font-weight: 650; }
+
+    .page { display: none; padding: 28px 30px 90px; animation: reveal .32s var(--ease) both; }
+    .page.active { display: block; }
+    @keyframes reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .page-head { max-width: 1440px; margin: 0 auto 22px; display: flex; align-items: flex-end; gap: 16px; }
+    .eyebrow { color: var(--primary); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 4px 0 2px; font-size: clamp(28px,3vw,38px); line-height: 1.12; letter-spacing: -.04em; }
+    .page-desc { margin: 0; color: var(--text-2); font-size: 14px; }
+    .head-actions { margin-left: auto; display: flex; gap: 10px; }
+    .btn { min-height: 44px; padding: 0 17px; border: 1px solid var(--line); border-radius: 13px; color: var(--text); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; transition: transform .15s, background .2s, border-color .2s, box-shadow .2s; }
+    .btn:hover { background: var(--surface-subtle); border-color: var(--line-strong); }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { color: var(--on-primary); background: var(--primary); border-color: transparent; box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 24%, transparent); }
+    .btn-primary:hover { background: var(--primary-strong); border-color: transparent; }
+    .btn-quiet { border-color: transparent; background: transparent; color: var(--text-2); box-shadow: none; }
+    .btn-small { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; }
+    .btn-danger { color: var(--danger); }
+
+    .workspace { max-width: 1440px; margin: auto; display: grid; grid-template-columns: 278px minmax(360px,1fr) var(--inspector); gap: 16px; align-items: start; }
+    .panel { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-1); overflow: clip; }
+    .panel-head { min-height: 58px; padding: 0 17px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+    .panel-title { font-size: 14px; font-weight: 660; }
+    .panel-meta { margin-left: auto; color: var(--text-3); font-size: 12px; }
+    .panel-body { padding: 16px; }
+    .session-card { position: relative; margin-bottom: 14px; padding: 17px; border-radius: 17px; overflow: hidden; color: #f8f4ed; background: linear-gradient(145deg,#19251f,#0c1411); box-shadow: var(--shadow-1); }
+    .session-card::after { content:""; position:absolute; width:160px; height:160px; right:-65px; top:-80px; border-radius:50%; background:rgba(232,163,61,.23); filter:blur(12px); }
+    .session-card > * { position: relative; z-index: 1; }
+    .session-kicker { color: #eeb45e; font-size: 11px; font-weight: 720; letter-spacing: .08em; text-transform: uppercase; }
+    .session-card h2 { margin: 8px 0 2px; font-size: 20px; letter-spacing: -.03em; }
+    .session-card p { margin: 0; color: #aeb8b2; font-size: 12px; }
+    .session-stats { margin-top: 15px; display: flex; gap: 16px; }
+    .session-stats span { color: #aeb8b2; font-size: 11px; }
+    .session-stats strong { display: block; color: white; font-size: 15px; font-variant-numeric: tabular-nums; }
+
+    .field-label { display: flex; align-items: center; justify-content: space-between; margin: 16px 2px 7px; color: var(--text-2); font-size: 12px; font-weight: 650; }
+    .search { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-raised); display: flex; align-items: center; gap: 9px; }
+    .search input { width: 100%; border: 0; background: transparent; font-size: 14px; }
+    .search input::placeholder { color: var(--text-3); }
+    .source-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .chip { min-height: 35px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--text-2); background: transparent; font-size: 12px; transition: .2s; }
+    .chip:hover { color: var(--text); background: var(--surface-subtle); }
+    .chip.active { color: var(--primary-strong); border-color: color-mix(in srgb, var(--primary) 35%, transparent); background: var(--primary-soft); font-weight: 650; }
+    .song-stack { margin: 10px -5px 0; display: grid; gap: 3px; }
+    .song-row { min-height: 47px; padding: 7px 8px; border: 0; border-radius: 11px; background: transparent; display: flex; align-items: center; gap: 10px; text-align: left; transition: background .18s; }
+    .song-row:hover { background: var(--surface-subtle); }
+    .drag { color: var(--text-3); }
+    .song-index { width: 22px; color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+    .song-main { min-width: 0; flex: 1; }
+    .song-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 590; }
+    .song-sub { color: var(--text-3); font-size: 11px; }
+    .song-remove { opacity: 0; width: 34px; height: 34px; border: 0; border-radius: 9px; color: var(--text-3); background: transparent; display: grid; place-items: center; }
+    .song-row:hover .song-remove, .song-remove:focus-visible { opacity: 1; }
+    .add-song { width: 100%; margin-top: 9px; color: var(--primary); border-style: dashed; }
+
+    .stage { min-height: 680px; padding: 16px; background: color-mix(in srgb, var(--surface-subtle) 75%, var(--bg)); display: flex; flex-direction: column; }
+    .stage-toolbar { min-height: 42px; display: flex; align-items: center; gap: 8px; }
+    .segmented { padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); display: flex; }
+    .segmented button { min-height: 32px; padding: 0 11px; border: 0; border-radius: 8px; color: var(--text-3); background: transparent; font-size: 12px; }
+    .segmented button.active { color: var(--text); background: var(--surface-subtle); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .zoom { margin-left: auto; color: var(--text-3); font-size: 12px; }
+    .poster-wrap { flex: 1; display: grid; place-items: center; padding: 16px; }
+    .poster { position: relative; width: min(350px,75%); aspect-ratio: .45; padding: 9% 8%; border-radius: 5px; overflow: hidden; color: #f7f2ea; background: linear-gradient(160deg,#15251f 0%,#0d1613 48%,#23372f 100%); box-shadow: 0 28px 70px rgba(0,0,0,.27); transition: transform .35s var(--ease), box-shadow .35s; }
+    .poster:hover { transform: translateY(-3px); box-shadow: 0 36px 86px rgba(0,0,0,.32); }
+    .poster::before { content:""; position:absolute; inset:-15% -45% auto; height:42%; background:radial-gradient(ellipse,rgba(238,177,77,.42),transparent 65%); transform:rotate(-8deg); }
+    .poster-ring { position:absolute; right:-25%; bottom:4%; width:75%; aspect-ratio:1; border:1px solid rgba(255,255,255,.12); border-radius:50%; box-shadow:0 0 0 18px rgba(255,255,255,.025),0 0 0 42px rgba(255,255,255,.02); }
+    .poster-content { position: relative; z-index: 1; }
+    .poster-date { color:#e6b766; font-size:9px; letter-spacing:.18em; text-transform:uppercase; }
+    .poster h3 { margin:8px 0 5px; font-size:clamp(18px,2.1vw,28px); line-height:1.08; letter-spacing:-.04em; }
+    .poster-note { color:#a9bbb3; font-size:8px; }
+    .poster-divider { width:36px; height:2px; margin:18px 0 14px; background:#43aa8f; }
+    .poster-songs { columns:2; column-gap:17px; font-size:9px; line-height:1.95; }
+    .poster-songs span { display:block; break-inside:avoid; white-space:nowrap; }
+    .poster-footer { position:absolute; z-index:2; left:8%; right:8%; bottom:5.5%; padding-top:8px; border-top:1px solid rgba(255,255,255,.13); color:#82958c; font-size:7px; letter-spacing:.06em; display:flex; justify-content:space-between; }
+    .stage-status { min-height: 39px; padding: 0 4px; color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 7px; }
+
+    .setting-block { padding: 4px 0 15px; border-bottom: 1px solid var(--line); }
+    .setting-block:last-child { border: 0; padding-bottom: 2px; }
+    .select { width: 100%; min-height: 44px; padding: 0 38px 0 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); background: var(--bg-raised); appearance: none; }
+    .select-wrap { position: relative; }
+    .select-wrap::after { content:"⌄"; position:absolute; right:13px; top:10px; color:var(--text-3); pointer-events:none; }
+    .template-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .template { min-width:0; padding:4px; border:1px solid var(--line); border-radius:11px; background:transparent; transition:.2s; }
+    .template:hover { border-color:var(--line-strong); }
+    .template.active { border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft); }
+    .template-thumb { aspect-ratio:.7; border-radius:7px; background:linear-gradient(145deg,#15251f,#253a31); }
+    .template:nth-child(2) .template-thumb { background:linear-gradient(145deg,#e8ddcc,#a4c5b6); }
+    .template:nth-child(3) .template-thumb { background:linear-gradient(145deg,#223447,#6d87a1); }
+    .template:nth-child(4) .template-thumb { background:linear-gradient(145deg,#f4e7c9,#c89567); }
+    .template:nth-child(5) .template-thumb { background:linear-gradient(145deg,#a8dcbf,#eaf7d7); }
+    .template:nth-child(6) .template-thumb { background:linear-gradient(145deg,#eadfca,#d6b69b); }
+    .template:nth-child(7) .template-thumb { background:linear-gradient(145deg,#c9e5f4,#8575bd); }
+    .template span { display:block; padding:5px 2px 1px; overflow:hidden; text-overflow:ellipsis; color:var(--text-2); font-size:10px; white-space:nowrap; }
+    .choice-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .choice-card { min-height:62px; padding:10px; border:1px solid var(--line); border-radius:12px; color:var(--text-2); background:transparent; text-align:left; transition:.2s var(--ease); }
+    .choice-card:hover { border-color:var(--line-strong); background:var(--surface-subtle); }
+    .choice-card.active { border-color:var(--primary); color:var(--primary-strong); background:var(--primary-soft); box-shadow:0 0 0 2px var(--primary-soft); }
+    .choice-card strong,.choice-card small { display:block; }
+    .choice-card strong { font-size:12px; }
+    .choice-card small { margin-top:3px; color:var(--text-3); font-size:10px; line-height:1.35; }
+    .compatibility { display:inline-flex; min-height:23px; padding:0 7px; align-items:center; border-radius:999px; color:var(--primary-strong); background:var(--primary-soft); font-size:10px; font-weight:650; }
+    .page-controls { display:flex; align-items:center; gap:7px; }
+    .page-controls .segmented { min-width:0; max-width:320px; overflow:auto; scrollbar-width:none; }
+    .page-controls .segmented::-webkit-scrollbar { display:none; }
+    .page-action { min-width:34px; min-height:34px; padding:0 9px; border:1px solid var(--line); border-radius:9px; color:var(--text-2); background:var(--surface); }
+    .page-action:disabled { opacity:.38; cursor:not-allowed; }
+    .capability-note { margin-top:7px; padding:8px 10px; border-radius:10px; color:var(--text-2); background:var(--surface-subtle); font-size:10px; line-height:1.45; }
+    .toggle-row { min-height:48px; display:flex; align-items:center; gap:10px; }
+    .toggle-row-copy { flex:1; }
+    .toggle-row strong { display:block; font-size:13px; }
+    .toggle-row small { color:var(--text-3); font-size:11px; }
+    .switch { position:relative; width:44px; height:26px; flex:0 0 auto; }
+    .switch input { position:absolute; opacity:0; }
+    .switch span { position:absolute; inset:0; border-radius:999px; background:var(--line-strong); transition:.25s var(--ease); }
+    .switch span::after { content:""; position:absolute; width:20px; height:20px; left:3px; top:3px; border-radius:50%; background:white; box-shadow:0 2px 6px rgba(0,0,0,.2); transition:.25s var(--ease); }
+    .switch input:checked + span { background:var(--primary); }
+    .switch input:checked + span::after { transform:translateX(18px); }
+    details { border-bottom:1px solid var(--line); }
+    details:last-child { border:0; }
+    summary { min-height:48px; list-style:none; cursor:pointer; display:flex; align-items:center; gap:9px; font-weight:600; font-size:13px; }
+    summary::-webkit-details-marker { display:none; }
+    summary::after { content:""; width:7px; height:7px; margin-left:auto; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); transition:.2s; }
+    details[open] summary::after { transform:rotate(225deg); }
+    .details-body { padding:0 0 14px; color:var(--text-2); font-size:12px; }
+    .export-bar { max-width:1440px; margin:16px auto 0; padding:14px 16px; border:1px solid var(--line); border-radius:17px; background:var(--surface); box-shadow:var(--shadow-1); display:flex; align-items:center; gap:12px; }
+    .export-summary { min-width:0; flex:1; }
+    .export-summary strong { display:block; font-size:13px; }
+    .export-summary span { display:block; overflow:hidden; color:var(--text-3); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+
+    .content-grid { max-width:1440px; margin:auto; display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; align-items:start; }
+    .stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+    .stat { padding:18px; border:1px solid var(--line); border-radius:17px; background:var(--surface); box-shadow:var(--shadow-1); }
+    .stat-label { color:var(--text-3); font-size:12px; }
+    .stat-value { margin-top:4px; font-size:28px; font-weight:680; letter-spacing:-.04em; font-variant-numeric:tabular-nums; }
+    .stat-delta { margin-top:4px; color:var(--success); font-size:11px; }
+    .table-toolbar { padding:14px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; }
+    .table-toolbar .search { max-width:360px; flex:1; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:13px 16px; border-bottom:1px solid var(--line); text-align:left; }
+    th { color:var(--text-3); font-size:11px; font-weight:650; letter-spacing:.04em; }
+    td { font-size:13px; }
+    tbody tr { transition:background .18s; }
+    tbody tr:hover { background:var(--surface-subtle); }
+    .status { display:inline-flex; min-height:25px; padding:0 8px; align-items:center; gap:5px; border-radius:999px; color:var(--success); background:color-mix(in srgb,var(--success) 10%,transparent); font-size:11px; font-weight:650; }
+    .status.draft { color:var(--spot); background:var(--spot-soft); }
+    .status::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
+    .side-card { padding:18px; }
+    .side-card h3 { margin:0 0 4px; font-size:16px; }
+    .side-card p { margin:0 0 14px; color:var(--text-2); font-size:12px; }
+    .progress { height:7px; margin:8px 0 5px; border-radius:99px; overflow:hidden; background:var(--surface-subtle); }
+    .progress span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--primary),#66c9ae); }
+
+    .live-layout { max-width:1200px; margin:auto; display:grid; grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr); gap:16px; }
+    .now-playing { min-height:320px; padding:28px; position:relative; overflow:hidden; color:#f7f2ec; background:linear-gradient(145deg,#101c17,#1b2f27); }
+    .now-playing::after { content:""; position:absolute; width:340px; height:340px; right:-140px; bottom:-190px; border-radius:50%; border:1px solid rgba(255,255,255,.12); box-shadow:0 0 0 40px rgba(255,255,255,.025),0 0 0 90px rgba(255,255,255,.015); }
+    .now-playing > * { position:relative; z-index:1; }
+    .live-label { color:#edb14d; font-size:11px; font-weight:700; letter-spacing:.09em; }
+    .now-playing h2 { margin:36px 0 2px; font-size:38px; letter-spacing:-.045em; }
+    .now-playing p { margin:0; color:#9eaea6; }
+    .key-cap { margin-top:20px; display:inline-flex; padding:5px 9px; border:1px solid rgba(255,255,255,.13); border-radius:8px; color:#ccd4d0; background:rgba(255,255,255,.05); font:12px/1.3 ui-monospace,SFMono-Regular,monospace; }
+    .queue { display:grid; gap:8px; }
+    .queue-item { min-height:57px; padding:8px 11px; border:1px solid var(--line); border-radius:13px; background:var(--surface); display:flex; align-items:center; gap:10px; }
+    .queue-no { width:28px; color:var(--text-3); font-size:12px; font-variant-numeric:tabular-nums; text-align:center; }
+    .queue-item.active { border-color:color-mix(in srgb,var(--primary) 35%,transparent); background:var(--primary-soft); }
+    .request-context { margin-top:22px; padding:12px; border:1px solid rgba(255,255,255,.12); border-radius:14px; background:rgba(255,255,255,.055); display:flex; align-items:center; gap:10px; }
+    .request-avatar { width:36px; height:36px; flex:0 0 auto; border-radius:50%; color:#11231c; background:#d7b36c; display:grid; place-items:center; font-size:13px; font-weight:750; }
+    .request-copy { min-width:0; flex:1; }
+    .request-copy strong,.request-copy small { display:block; }
+    .request-copy strong { font-size:13px; }
+    .request-copy small { margin-top:1px; color:#9eaea6; font-size:10px; }
+    .request-badges,.queue-meta { display:flex; flex-wrap:wrap; gap:5px; }
+    .request-badge { min-height:22px; padding:0 7px; border:1px solid var(--line); border-radius:999px; color:var(--text-2); background:var(--surface-subtle); display:inline-flex; align-items:center; font-size:9px; font-weight:650; }
+    .request-badge.gift { color:#9b6111; background:#fff3d7; border-color:#f0d49c; }
+    .request-badge.member { color:#7556a8; background:#f0e9ff; border-color:#d9caf3; }
+    [data-theme="dark"] .request-badge.gift { color:#f1c572; background:#3a2c15; border-color:#62491f; }
+    [data-theme="dark"] .request-badge.member { color:#d6c0ff; background:#2d2340; border-color:#4a3867; }
+    .now-actions { margin-top:18px; display:flex; flex-wrap:wrap; gap:8px; }
+    .now-actions .btn { color:#eef5f1; border-color:rgba(255,255,255,.16); background:rgba(255,255,255,.06); }
+    .now-actions .btn-primary { border-color:transparent; background:#2f8e75; }
+    .queue-item .song-main { min-width:0; }
+    .queue-meta { margin-top:4px; }
+    .live-insights { max-width:1200px; margin:16px auto 0; display:grid; grid-template-columns:1.15fr .85fr .85fr; gap:16px; align-items:start; }
+    .insight-card { min-height:220px; }
+    .history-list,.signal-list { display:grid; gap:8px; }
+    .history-row,.signal-row { min-height:48px; padding:8px 10px; border:1px solid var(--line); border-radius:12px; display:flex; align-items:center; gap:9px; }
+    .history-time { width:38px; color:var(--text-3); font:10px ui-monospace,SFMono-Regular,monospace; }
+    .history-main { min-width:0; flex:1; }
+    .history-main strong,.history-main small { display:block; }
+    .history-main strong { font-size:12px; }
+    .history-main small { margin-top:2px; color:var(--text-3); font-size:10px; }
+    .outcome { min-height:23px; padding:0 7px; border-radius:999px; color:var(--success); background:color-mix(in srgb,var(--success) 10%,transparent); display:inline-flex; align-items:center; font-size:9px; font-weight:700; }
+    .outcome.unknown { color:var(--spot); background:var(--spot-soft); }
+    .signal-rank { width:26px; height:26px; border-radius:8px; color:var(--primary-strong); background:var(--primary-soft); display:grid; place-items:center; font-size:10px; font-weight:750; }
+    .signal-value { margin-left:auto; color:var(--text-3); font-size:10px; text-align:right; }
+    .metric-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:10px; }
+    .metric-mini { padding:9px; border-radius:11px; background:var(--surface-subtle); }
+    .metric-mini strong,.metric-mini span { display:block; }
+    .metric-mini strong { font-size:18px; font-variant-numeric:tabular-nums; }
+    .metric-mini span { margin-top:2px; color:var(--text-3); font-size:9px; }
+    .policy-summary { max-width:1200px; margin:0 auto 16px; padding:12px 14px; border:1px solid color-mix(in srgb,var(--primary) 22%,var(--line)); border-radius:15px; background:var(--primary-soft); display:flex; align-items:center; gap:12px; }
+    .policy-summary-copy { min-width:0; flex:1; }
+    .policy-summary-copy strong { display:block; font-size:12px; }
+    .policy-summary-copy span { display:block; margin-top:2px; color:var(--text-2); font-size:10px; line-height:1.45; }
+    .priority-flag { min-height:23px; padding:0 7px; border-radius:999px; color:#a65416; background:#fff0dd; display:inline-flex; align-items:center; font-size:9px; font-weight:750; }
+    [data-theme="dark"] .priority-flag { color:#ffc27c; background:#382615; }
+    .rule-list { display:grid; gap:10px; }
+    .rule-card { padding:12px; border:1px solid var(--line); border-radius:14px; background:var(--surface-subtle); }
+    .rule-head { display:flex; align-items:center; gap:10px; }
+    .rule-head-copy { min-width:0; flex:1; }
+    .rule-head-copy strong,.rule-head-copy small { display:block; }
+    .rule-head-copy strong { font-size:13px; }
+    .rule-head-copy small { margin-top:2px; color:var(--text-3); font-size:10px; line-height:1.4; }
+    .rule-config { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .rule-config .form-row label { font-size:10px; }
+    .entitlement-preview { padding:10px 12px; border-radius:12px; color:var(--text-2); background:var(--primary-soft); font-size:11px; line-height:1.5; }
+    .entitlement-preview strong { color:var(--primary-strong); }
+
+    .learning-grid { max-width:1200px; margin:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .learning-card { padding:18px; border:1px solid var(--line); border-radius:18px; background:var(--surface); box-shadow:var(--shadow-1); }
+    .learning-top { display:flex; align-items:center; gap:11px; }
+    .difficulty { width:42px; height:42px; display:grid; place-items:center; border-radius:12px; color:var(--primary-strong); background:var(--primary-soft); font-weight:700; }
+    .learning-card h3 { margin:0; font-size:15px; }
+    .learning-card p { margin:1px 0 0; color:var(--text-3); font-size:11px; }
+    .learning-meta { margin:16px 0; display:flex; justify-content:space-between; color:var(--text-2); font-size:11px; }
+    .learning-actions { display:flex; gap:8px; }
+
+    .chart { height:220px; padding:18px 16px 12px; display:flex; align-items:flex-end; gap:12px; }
+    .bar { flex:1; min-width:10px; height:var(--h); border-radius:8px 8px 3px 3px; background:linear-gradient(180deg,#54baa0,var(--primary)); position:relative; transition:filter .2s, transform .2s; }
+    .bar:hover { filter:brightness(1.08); transform:translateY(-3px); }
+    .bar::after { content:attr(data-label); position:absolute; left:50%; bottom:-24px; transform:translateX(-50%); color:var(--text-3); font-size:10px; }
+    .rank-list { display:grid; gap:6px; }
+    .rank { min-height:46px; display:flex; align-items:center; gap:10px; }
+    .rank b { width:24px; color:var(--text-3); font:600 12px ui-monospace,monospace; text-align:center; }
+    .rank-name { flex:1; font-size:13px; }
+    .rank-meter { width:80px; height:5px; border-radius:99px; background:var(--surface-subtle); overflow:hidden; }
+    .rank-meter span { display:block; height:100%; border-radius:inherit; background:var(--primary); }
+
+    .settings-layout { max-width:1000px; margin:auto; display:grid; gap:14px; }
+    .settings-section { display:grid; grid-template-columns:220px minmax(0,1fr); gap:28px; padding:24px; }
+    .settings-section h2 { margin:0; font-size:17px; }
+    .settings-section > div:first-child p { margin:4px 0 0; color:var(--text-3); font-size:12px; }
+    .form-grid { display:grid; gap:14px; }
+    .form-row label { display:block; margin:0 0 6px; font-size:12px; font-weight:650; }
+    .input { width:100%; min-height:44px; padding:0 12px; border:1px solid var(--line); border-radius:12px; background:var(--bg-raised); }
+    .helper { margin:5px 0 0; color:var(--text-3); font-size:11px; }
+    .accent-options { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    .accent-option { min-height:56px; padding:7px 9px; border:1px solid var(--line); border-radius:12px; color:var(--text-2); background:var(--bg-raised); display:flex; align-items:center; gap:8px; text-align:left; transition:border-color .18s,background .18s,box-shadow .18s; }
+    .accent-option:hover { border-color:var(--line-strong); background:var(--surface-hover); }
+    .accent-option.active { color:var(--text); border-color:color-mix(in srgb,var(--primary) 55%,var(--line)); background:var(--primary-soft); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 16%,transparent); }
+    .accent-swatch { width:24px; height:24px; flex:0 0 auto; border-radius:8px; background:var(--swatch); box-shadow:inset 0 0 0 1px rgba(0,0,0,.12); }
+    .accent-option span:last-child { font-size:11px; font-weight:650; line-height:1.25; }
+
+    .mobile-nav { display:none; }
+    .scrim { position:fixed; inset:0; z-index:80; padding:20px; background:rgba(0,0,0,.48); display:none; place-items:center; }
+    .scrim.open { display:grid; animation:fade .18s ease-out both; }
+    @keyframes fade { from { opacity:0; } to { opacity:1; } }
+    .dialog { width:min(520px,100%); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid var(--line); border-radius:24px; background:var(--surface-solid); box-shadow:var(--shadow-2); animation:dialog-in .3s var(--ease) both; }
+    @keyframes dialog-in { from { opacity:0; transform:translateY(14px) scale(.97); } to { opacity:1; transform:none; } }
+    .dialog-head { padding:20px 22px 14px; display:flex; align-items:flex-start; gap:12px; }
+    .dialog-head h2 { margin:0; font-size:21px; }
+    .dialog-head p { margin:2px 0 0; color:var(--text-3); font-size:12px; }
+    .dialog-head .icon-btn { margin-left:auto; }
+    .dialog-body { padding:4px 22px 20px; }
+    .dialog-actions { padding:14px 22px 20px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px; }
+    .export-progress { display:none; padding:14px; border-radius:14px; background:var(--primary-soft); }
+    .export-progress.show { display:block; }
+    .export-progress-line { height:7px; margin-top:8px; overflow:hidden; border-radius:99px; background:var(--line); }
+    .export-progress-line span { display:block; width:0; height:100%; border-radius:inherit; background:var(--primary); transition:width .4s var(--ease); }
+    .toast { position:fixed; z-index:120; left:50%; bottom:26px; min-width:240px; max-width:calc(100% - 32px); padding:12px 16px; border:1px solid var(--line); border-radius:14px; color:var(--text); background:var(--surface-solid); box-shadow:var(--shadow-2); display:flex; align-items:center; gap:10px; opacity:0; pointer-events:none; transform:translate(-50%,14px); transition:.25s var(--ease); }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+
+    @media (max-width: 1180px) {
+      :root { --sidebar: 82px; }
+      .brand-copy,.nav-btn span,.nav-label,.sidebar .badge,.live-mini { display:none; }
+      .brand { justify-content:center; padding:0; }
+      .nav-btn { justify-content:center; padding:0; }
+      .workspace { grid-template-columns:250px minmax(360px,1fr); }
+      .inspector { grid-column:1 / -1; display:grid; grid-template-columns:repeat(3,1fr); }
+      .inspector .panel-head { grid-column:1/-1; }
+      .inspector .panel-body { display:contents; }
+      .inspector .setting-block { padding:16px; border-right:1px solid var(--line); border-bottom:0; }
+      .content-grid { grid-template-columns:1fr; }
+      .content-grid > aside { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+    }
+
+    @media (max-width: 800px) {
+      .app-shell { display:block; }
+      .sidebar { display:none; }
+      .topbar { height:62px; padding:0 16px; }
+      .mobile-brand { display:block; }
+      .crumb,.status-pill { display:none; }
+      .page { padding:20px 16px 96px; }
+      .page-head { align-items:flex-start; }
+      .head-actions .btn:not(.btn-primary) { display:none; }
+      .workspace { display:block; }
+      .source-panel { margin-bottom:14px; }
+      .source-panel .panel-body { max-height:300px; overflow:auto; }
+      .stage { min-height:560px; }
+      .poster { width:min(285px,78%); }
+      .inspector { margin-top:14px; display:block; }
+      .inspector .panel-body { display:block; }
+      .inspector .setting-block { border-right:0; border-bottom:1px solid var(--line); }
+      .export-bar { position:sticky; bottom:76px; z-index:20; }
+      .stats-grid { grid-template-columns:repeat(2,1fr); }
+      .live-layout,.learning-grid,.live-insights { grid-template-columns:1fr; }
+      .content-grid > aside { display:block; }
+      .content-grid > aside .panel { margin-top:14px; }
+      .table-scroll { overflow-x:auto; }
+      table { min-width:680px; }
+      .settings-section { grid-template-columns:1fr; gap:16px; padding:18px; }
+      .mobile-nav { position:fixed; z-index:60; left:10px; right:10px; bottom:10px; min-height:64px; padding:6px; border:1px solid var(--line); border-radius:19px; background:color-mix(in srgb,var(--surface-solid) 90%,transparent); backdrop-filter:blur(24px); box-shadow:var(--shadow-2); display:grid; grid-template-columns:repeat(6,1fr); }
+      .mobile-nav button { min-width:0; min-height:50px; padding:3px; border:0; border-radius:13px; color:var(--text-3); background:transparent; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:9px; }
+      .mobile-nav button .icon { width:19px; height:19px; }
+      .mobile-nav button.active { color:var(--primary-strong); background:var(--primary-soft); }
+    }
+
+    @media (max-width: 520px) {
+      h1 { font-size:27px; }
+      .page-desc { max-width:260px; }
+      .stats-grid { grid-template-columns:1fr 1fr; gap:8px; }
+      .stat { padding:14px; }
+      .stat-value { font-size:24px; }
+      .page-head { margin-bottom:16px; }
+      .template-grid { grid-template-columns:repeat(3,1fr); }
+      .now-playing { min-height:270px; padding:22px; }
+      .now-playing h2 { font-size:31px; }
+      .export-bar { padding:10px; }
+      .export-bar .export-summary,
+      .export-bar .btn:not(.btn-primary) { display:none; }
+      .export-bar .btn-primary { width:100%; }
+      .policy-summary { align-items:flex-start; }
+      .policy-summary > .btn { flex:0 0 auto; }
+      .rule-config { grid-template-columns:1fr; }
+      .accent-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M6 17V6l11-2v11"/><circle cx="4" cy="17" r="2"/><circle cx="15" cy="15" r="2"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+    <symbol id="i-live" viewBox="0 0 24 24"><path d="M8.5 8.5a5 5 0 0 0 0 7M5.5 5.5a9 9 0 0 0 0 13M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v17H7.5A3.5 3.5 0 0 0 4 22zM20 5.5A3.5 3.5 0 0 0 16.5 2H13v17h3.5A3.5 3.5 0 0 1 20 22z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 16V3M7 8l5-5 5 5M5 13v7h14v-7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="9" cy="17" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="17" r="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <div class="brand-mark"><svg class="icon"><use href="#i-logo"/></svg></div>
+        <div class="brand-copy"><div class="brand-name">主播工作台</div><div class="brand-sub">Streamer Workbench</div></div>
+      </div>
+      <div class="nav-label">工作空间</div>
+      <nav class="nav">
+        <button class="nav-btn" data-page="poster" aria-current="page"><svg class="icon"><use href="#i-home"/></svg><span>海报</span></button>
+        <button class="nav-btn" data-page="songs"><svg class="icon"><use href="#i-music"/></svg><span>歌曲</span><span class="badge">178</span></button>
+        <button class="nav-btn" data-page="live"><svg class="icon"><use href="#i-live"/></svg><span>直播</span><span class="badge">5</span></button>
+        <button class="nav-btn" data-page="learning"><svg class="icon"><use href="#i-book"/></svg><span>学歌</span><span class="badge">12</span></button>
+        <button class="nav-btn" data-page="stats"><svg class="icon"><use href="#i-chart"/></svg><span>统计</span></button>
+        <button class="nav-btn" data-page="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="live-mini">
+          <div class="live-mini-top"><span class="pulse"></span>直播准备中</div>
+          <strong>今晚 20:00</strong>
+          <p>8 首计划 · 5 首待唱</p>
+          <button class="btn btn-small btn-primary" data-page-jump="live" style="width:100%"><svg class="icon icon-sm"><use href="#i-play"/></svg>进入直播</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-wrap">
+      <header class="topbar">
+        <div class="mobile-brand">主播工作台</div>
+        <div class="crumb">工作区&nbsp; / &nbsp;<strong id="crumbTitle">海报</strong></div>
+        <div class="top-spacer"></div>
+        <div class="status-pill"><span class="sync-dot"></span><span id="saveState">所有更改已保存</span></div>
+        <button class="icon-btn" id="themeToggle" aria-label="切换明暗主题" title="切换明暗主题"><svg class="icon"><use href="#i-sun"/></svg></button>
+        <button class="icon-btn avatar" aria-label="打开个人菜单" title="个人菜单">琪</button>
+      </header>
+
+      <main id="main">
+        <section class="page active" id="page-poster" aria-labelledby="title-poster">
+          <div class="page-head">
+            <div><div class="eyebrow">Playlist Studio</div><h1 id="title-poster" tabindex="-1">歌单海报</h1><p class="page-desc">按你的节奏维护歌单，需要分享时再设计与导出，不与某场直播绑定。</p></div>
+            <div class="head-actions"><button class="btn"><svg class="icon icon-sm"><use href="#i-clock"/></svg>作品与导出记录</button><button class="btn btn-primary" id="newPoster"><svg class="icon icon-sm"><use href="#i-plus"/></svg>新建设计</button></div>
+          </div>
+
+          <div class="workspace">
+            <section class="panel source-panel" aria-label="歌曲集合">
+              <div class="panel-body">
+                <article class="session-card">
+                  <div class="session-kicker">当前设计 · 自动保存</div><h2>我的常用歌单</h2><p>上次编辑于今天 18:42 · 未关联直播</p>
+                  <div class="session-stats"><span><strong id="songCount">23</strong>首歌曲</span><span><strong id="pageCount">3</strong>页海报</span><span><strong>3</strong>次导出</span></div>
+                </article>
+                <div class="field-label"><span>歌曲来源</span><button class="btn-quiet" style="border:0;background:none;color:var(--primary)">管理</button></div>
+                <div class="source-chips"><button class="chip active">手动选择</button><button class="chip">全部已会</button><button class="chip">最近学会</button><button class="chip">点歌 TOP</button></div>
+                <div class="field-label"><span>海报歌曲</span><span id="songCountLabel">23 首</span></div>
+                <div class="search"><svg class="icon icon-sm"><use href="#i-search"/></svg><input id="workspaceSearch" aria-label="搜索歌曲" placeholder="搜索并加入歌曲"></div>
+                <div class="song-stack" id="workspaceSongs">
+                  <div class="song-row"><svg class="icon icon-sm drag"><use href="#i-grip"/></svg><span class="song-index">01</span><div class="song-main"><div class="song-name">知足</div><div class="song-sub">五月天 · C</div></div><button class="song-remove" aria-label="移除知足"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div>
+                  <div class="song-row"><svg class="icon icon-sm drag"><use href="#i-grip"/></svg><span class="song-index">02</span><div class="song-main"><div class="song-name">慢冷</div><div class="song-sub">梁静茹 · D</div></div><button class="song-remove" aria-label="移除慢冷"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div>
+                  <div class="song-row"><svg class="icon icon-sm drag"><use href="#i-grip"/></svg><span class="song-index">03</span><div class="song-main"><div class="song-name">如果可以</div><div class="song-sub">韦礼安 · E♭</div></div><button class="song-remove" aria-label="移除如果可以"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div>
+                  <div class="song-row"><svg class="icon icon-sm drag"><use href="#i-grip"/></svg><span class="song-index">04</span><div class="song-main"><div class="song-name">晴天</div><div class="song-sub">周杰伦 · G</div></div><button class="song-remove" aria-label="移除晴天"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div>
+                  <div class="song-row"><svg class="icon icon-sm drag"><use href="#i-grip"/></svg><span class="song-index">05</span><div class="song-main"><div class="song-name">唯一</div><div class="song-sub">告五人 · A</div></div><button class="song-remove" aria-label="移除唯一"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div>
+                </div>
+                <button class="btn add-song" id="addSong"><svg class="icon icon-sm"><use href="#i-plus"/></svg>添加歌曲</button>
+              </div>
+            </section>
+
+            <section class="panel stage" aria-label="海报预览">
+              <div class="stage-toolbar">
+                <div class="page-controls"><div class="segmented" id="pageTabs" role="group" aria-label="预览页面"></div><button class="page-action" id="addPage" aria-label="新增页面" title="自定义布局可新增页面" disabled>＋</button><button class="page-action" id="deletePage" aria-label="删除当前页面" title="自定义布局可删除页面" disabled>−</button></div>
+                <button class="btn btn-small btn-quiet">适合窗口</button><div class="zoom">45%</div>
+              </div>
+              <div class="poster-wrap">
+                <article class="poster" aria-label="海报预览：我的常用歌单">
+                  <div class="poster-ring"></div><div class="poster-content"><div class="poster-date">QI'S PLAYLIST · VOL. 01</div><h3>我的<br>歌单</h3><div class="poster-note">想听的歌，都在这里。</div><div class="poster-divider"></div><div class="poster-songs"><span>01 知足</span><span>02 慢冷</span><span>03 如果可以</span><span>04 晴天</span><span>05 唯一</span><span>06 突然好想你</span><span>07 爱人错过</span><span>08 这世界那么多人</span></div></div>
+                  <div class="poster-footer"><span>QI MUSIC</span><span>PLAYLIST</span></div>
+                </article>
+              </div>
+              <div class="stage-status"><span class="sync-dot"></span><span id="stageStatus">预览已更新 · 23 首歌曲 · 自动生成 3 页</span></div>
+            </section>
+
+            <aside class="panel inspector" aria-label="海报设置">
+              <div class="panel-head"><div class="panel-title">海报设置</div><div class="panel-meta">已自动保存</div></div>
+              <div class="panel-body">
+                <div class="setting-block"><div class="field-label"><span>布局</span><span class="compatibility" id="layoutCapability">支持 3 种比例</span></div><div class="choice-grid" id="layoutChoices"><button class="choice-card active" data-layout="grid-wrap"><strong>经典网格</strong><small>原有 grid-wrap · 自动分页</small></button><button class="choice-card" data-layout="editorial"><strong>编辑分栏</strong><small>适合分类较多的长歌单</small></button><button class="choice-card" data-layout="spotlight"><strong>主视觉榜单</strong><small>突出 TOP 与精选曲目</small></button><button class="choice-card" data-layout="custom"><strong>自定义布局</strong><small>自由编排 · 支持手动分页</small></button></div></div>
+                <div class="setting-block"><div class="field-label"><span>主题</span><span class="compatibility" id="themeCompatibility">7 个兼容主题</span></div><div class="template-grid"><button class="template active" data-theme-name="轻复古唱片"><div class="template-thumb"></div><span>轻复古唱片</span></button><button class="template" data-theme-name="奶油花园"><div class="template-thumb"></div><span>奶油花园</span></button><button class="template" data-theme-name="海洋柔光"><div class="template-thumb"></div><span>海洋柔光</span></button><button class="template" data-theme-name="奶油玻璃"><div class="template-thumb"></div><span>奶油玻璃</span></button><button class="template" data-theme-name="青提气泡"><div class="template-thumb"></div><span>青提气泡</span></button><button class="template" data-theme-name="卡通音符"><div class="template-thumb"></div><span>卡通音符</span></button><button class="template" data-theme-name="梦幻海洋"><div class="template-thumb"></div><span>梦幻海洋</span></button></div><div class="capability-note">主题独立于布局；这里展示当前布局可用的全部主题，后续新增主题无需复制布局。</div></div>
+                <div class="setting-block"><div class="field-label"><span>画布与分页</span></div><div class="form-grid"><div class="form-row"><label for="ratioSelect">海报比例</label><div class="select-wrap"><select class="select" id="ratioSelect"></select></div><p class="helper" id="ratioHelp">比例由当前布局算法声明。</p></div><div class="form-row"><label for="paginationMode">分页方式</label><div class="select-wrap"><select class="select" id="paginationMode"><option value="auto">根据歌曲数量自动分页</option><option value="manual" disabled>手动管理页面 · 仅自定义布局</option></select></div><p class="helper" id="paginationHelp">经典网格每页最多 8 首，当前自动生成 3 页。</p></div></div><div class="toggle-row"><div class="toggle-row-copy"><strong>避让直播 UI</strong><small>仅影响支持该能力的竖屏比例</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div></div>
+                <div class="setting-block"><details open><summary>分类与排序</summary><div class="details-body"><div class="form-grid"><div class="form-row"><label for="groupBy">歌曲分类</label><div class="select-wrap"><select class="select" id="groupBy"><option value="none">不分类 · 连续排列</option><option value="artist">按歌手</option><option value="length">按歌名字数</option><option value="genre">按歌曲类型</option><option value="language">按语言</option><option value="initial">按首字母</option><option value="mastery">按掌握状态</option><option value="tag">按自定义标签</option></select></div><p class="helper" id="groupHelp">歌曲将按当前手动顺序连续排列。</p></div><div class="form-row"><label for="sortBy">分类内排序</label><div class="select-wrap"><select class="select" id="sortBy"><option>手动顺序</option><option>歌名</option><option>歌手</option><option>最近更新</option><option>点歌热度</option></select></div></div></div></div></details><details><summary>高级设置</summary><div class="details-body">布局间距、标题字号、柔光、水印与分类标题样式。自定义布局上线后可进入可视化编辑器。</div></details></div>
+              </div>
+            </aside>
+          </div>
+          <div class="export-bar"><div class="export-summary"><strong id="exportTitleSummary">我的常用歌单 · 经典网格 · 轻复古唱片 · 9:20</strong><span id="exportDetailSummary">设计已保存 · 23 首歌曲 · 将导出 3 张 PNG</span></div><button class="btn">复制为新设计</button><button class="btn btn-primary" data-open-export><svg class="icon icon-sm"><use href="#i-export"/></svg><span id="exportButtonLabel">导出 3 页</span></button></div>
+        </section>
+
+        <section class="page" id="page-songs" aria-labelledby="title-songs">
+          <div class="page-head"><div><div class="eyebrow">Song Library</div><h1 id="title-songs">歌曲</h1><p class="page-desc">管理曲库、状态、调性与曲谱附件。</p></div><div class="head-actions"><button class="btn btn-primary" id="newSong"><svg class="icon icon-sm"><use href="#i-plus"/></svg>新建歌曲</button></div></div>
+          <div class="stats-grid"><div class="stat"><div class="stat-label">全部歌曲</div><div class="stat-value">178</div><div class="stat-delta">身份数据完整</div></div><div class="stat"><div class="stat-label">已经学会</div><div class="stat-value">146</div><div class="stat-delta">本月 +6</div></div><div class="stat"><div class="stat-label">学习中</div><div class="stat-value">12</div><div class="stat-delta" style="color:var(--spot)">3 首待复习</div></div><div class="stat"><div class="stat-label">有曲谱</div><div class="stat-value">94</div><div class="stat-delta">覆盖 53%</div></div></div>
+          <div class="content-grid">
+            <section class="panel"><div class="table-toolbar"><div class="search"><svg class="icon icon-sm"><use href="#i-search"/></svg><input id="librarySearch" aria-label="搜索曲库" placeholder="搜索歌名、歌手、拼音"></div><button class="btn btn-small">筛选</button><button class="btn btn-small">排序</button></div><div class="table-scroll"><table><thead><tr><th>歌曲</th><th>歌手</th><th>调性</th><th>状态</th><th>曲谱</th><th>最近更新</th></tr></thead><tbody id="songTable"><tr><td><strong>知足</strong></td><td>五月天</td><td>C</td><td><span class="status">已会</span></td><td>2 份</td><td>今天</td></tr><tr><td><strong>慢冷</strong></td><td>梁静茹</td><td>D</td><td><span class="status">已会</span></td><td>1 份</td><td>昨天</td></tr><tr><td><strong>唯一</strong></td><td>告五人</td><td>A</td><td><span class="status draft">学习中</span></td><td>2 份</td><td>3 天前</td></tr><tr><td><strong>这世界那么多人</strong></td><td>莫文蔚</td><td>E♭</td><td><span class="status">已会</span></td><td>—</td><td>5 天前</td></tr><tr><td><strong>爱人错过</strong></td><td>告五人</td><td>G</td><td><span class="status">已会</span></td><td>1 份</td><td>1 周前</td></tr></tbody></table></div></section>
+            <aside><section class="panel side-card"><h3>曲库健康度</h3><p>身份、关系和曲谱完整度</p><div style="display:flex;justify-content:space-between;font-size:12px"><span>整体完整度</span><strong>86%</strong></div><div class="progress"><span style="width:86%"></span></div><button class="btn btn-small" style="width:100%;margin-top:12px">查看待完善项目</button></section><section class="panel side-card" style="margin-top:14px"><h3>快速创建</h3><p>用筛选结果开始下一张海报</p><button class="btn btn-primary" style="width:100%">创建歌曲集合</button></section></aside>
+          </div>
+        </section>
+
+        <section class="page" id="page-live" aria-labelledby="title-live">
+          <div class="page-head"><div><div class="eyebrow">Live Control</div><h1 id="title-live">直播</h1><p class="page-desc">按当前主播规则识别免费点歌与插队资格；每次核销和调序都会留下记录。</p></div><div class="head-actions"><button class="btn" id="openRules">点歌规则</button><button class="btn btn-primary" id="openRequest"><svg class="icon icon-sm"><use href="#i-plus"/></svg>记录点歌</button></div></div>
+          <div class="policy-summary"><div class="policy-summary-copy"><strong>当前规则 · 主播默认方案</strong><span>新入团 1 首 · 主播会员每日 1 首 · 墨镜或等值礼物 1 首 · 高价值礼物可申请插队，最终由主播确认</span></div><button class="btn btn-small" id="editRules">编辑规则</button></div>
+          <div class="live-layout"><section class="panel now-playing"><div class="live-label">NOW PLAYING · 当前歌曲</div><h2 id="nowSong">知足</h2><p id="nowSongMeta">五月天 · C 调 · 变调夹 0</p><div class="request-context" id="nowRequest"><div class="request-avatar">满</div><div class="request-copy"><strong>小满 点的歌</strong><small>20:18 加入 · 本场第 3 次点歌</small></div><div class="request-badges"><span class="request-badge gift">礼物点歌</span><span class="request-badge">小心心 ×10</span></div></div><div class="now-actions"><button class="btn btn-primary" id="finishSong"><svg class="icon icon-sm"><use href="#i-check"/></svg>标记已唱</button><button class="btn" id="unknownSong">不会唱</button><button class="btn" id="skipSong">稍后再唱</button><span class="key-cap">Space 已唱</span></div></section><aside class="panel"><div class="panel-head"><div class="panel-title">今晚队列</div><div class="panel-meta" id="queueCount">5 首待处理</div></div><div class="panel-body queue" id="liveQueue"><div class="queue-item active" data-requester="小满" data-source="礼物点歌" data-detail="小心心 ×10"><div class="queue-no">01</div><div class="song-main"><div class="song-name">知足</div><div class="song-sub">五月天</div><div class="queue-meta"><span class="request-badge gift">小满 · 礼物点歌</span></div></div><span class="status">当前</span></div><div class="queue-item" data-requester="阿澈" data-source="会员每日权益" data-detail="今日额度 1/1"><div class="queue-no">02</div><div class="song-main"><div class="song-name">慢冷</div><div class="song-sub">梁静茹</div><div class="queue-meta"><span class="request-badge member">阿澈 · 会员每日免费</span></div></div></div><div class="queue-item" data-requester="" data-source="" data-detail=""><div class="queue-no">03</div><div class="song-main"><div class="song-name">如果可以</div><div class="song-sub">韦礼安</div><div class="queue-meta"><span class="request-badge">自主安排</span></div></div></div><div class="queue-item" data-requester="橘子汽水" data-source="新入团权益" data-detail="首次入团"><div class="queue-no">04</div><div class="song-main"><div class="song-name">晴天</div><div class="song-sub">周杰伦</div><div class="queue-meta"><span class="request-badge member">橘子汽水 · 新入团免费</span></div></div></div><div class="queue-item" data-requester="小满" data-source="高价值礼物" data-detail="礼物价值 520"><div class="queue-no">05</div><div class="song-main"><div class="song-name">唯一</div><div class="song-sub">告五人</div><div class="queue-meta"><span class="request-badge gift">小满 · 高价值礼物</span><span class="priority-flag">主播确认插队</span></div></div></div></div></aside></div>
+          <div class="live-insights"><section class="panel insight-card"><div class="panel-head"><div><div class="panel-title">本场演唱历史</div><div class="panel-meta">退出直播后仍可回看</div></div><button class="btn btn-small">查看完整记录</button></div><div class="panel-body"><div class="metric-strip"><div class="metric-mini"><strong id="sungMetric">7</strong><span>已唱</span></div><div class="metric-mini"><strong id="unknownMetric">2</strong><span>不会 / 待学</span></div><div class="metric-mini"><strong>6m</strong><span>平均等待</span></div></div><div class="history-list" id="sungHistory"><div class="history-row"><span class="history-time">20:12</span><div class="history-main"><strong>后来</strong><small>阿梨 · 会员特权 · 等待 4 分钟</small></div><span class="outcome">已唱</span></div><div class="history-row"><span class="history-time">20:06</span><div class="history-main"><strong>安静</strong><small>自主安排 · 演唱 4 分 52 秒</small></div><span class="outcome">已唱</span></div><div class="history-row"><span class="history-time">19:58</span><div class="history-main"><strong>恶作剧</strong><small>橘子汽水 · 普通点歌</small></div><span class="outcome unknown">不会唱</span></div></div></div></section><section class="panel insight-card"><div class="panel-head"><div><div class="panel-title">高频点歌人</div><div class="panel-meta">跨场累计</div></div></div><div class="panel-body signal-list"><div class="signal-row"><span class="signal-rank">1</span><div class="history-main"><strong>小满</strong><small>近 30 天 · 8 场出现</small></div><span class="signal-value">26 次<br>履约 92%</span></div><div class="signal-row"><span class="signal-rank">2</span><div class="history-main"><strong>橘子汽水</strong><small>近 30 天 · 6 场出现</small></div><span class="signal-value">18 次<br>履约 83%</span></div><div class="signal-row"><span class="signal-rank">3</span><div class="history-main"><strong>阿澈</strong><small>近 30 天 · 会员点歌</small></div><span class="signal-value">12 次<br>履约 100%</span></div></div></section><section class="panel insight-card"><div class="panel-head"><div><div class="panel-title">不会唱的点歌</div><div class="panel-meta">自动进入待学线索</div></div><button class="btn btn-small">加入学歌</button></div><div class="panel-body signal-list" id="unknownHistory"><div class="history-row"><span class="history-time">本场</span><div class="history-main"><strong>恶作剧</strong><small>橘子汽水点歌 · 第 2 次被请求</small></div><span class="outcome unknown">待学</span></div><div class="history-row"><span class="history-time">3 场</span><div class="history-main"><strong>你要的爱</strong><small>累计 5 人点过 · 礼物 2 次</small></div><span class="outcome unknown">高频</span></div><div class="capability-note">同时记录跳过、取消、重复点歌、等待时长和最终履约结果，统计时不会把“没唱”误算成“没发生”。</div></div></section></div>
+        </section>
+
+        <section class="page" id="page-learning" aria-labelledby="title-learning">
+          <div class="page-head"><div><div class="eyebrow">Learning Loop</div><h1 id="title-learning">学歌</h1><p class="page-desc">把练习变成清晰的下一步，而不是又一张任务清单。</p></div><div class="head-actions"><button class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-plus"/></svg>记录练习</button></div></div>
+          <div class="learning-grid"><article class="learning-card"><div class="learning-top"><div class="difficulty">72</div><div><h3>唯一</h3><p>告五人 · 学习中</p></div></div><div class="learning-meta"><span>练习 6 次</span><span>上次：昨天</span></div><div class="progress"><span style="width:72%"></span></div><div class="learning-actions"><button class="btn btn-small" style="flex:1">继续练习</button><button class="btn btn-small btn-primary" style="flex:1">标记学会</button></div></article><article class="learning-card"><div class="learning-top"><div class="difficulty" style="color:var(--spot);background:var(--spot-soft)">48</div><div><h3>给你一瓶魔法药水</h3><p>告五人 · 学习中</p></div></div><div class="learning-meta"><span>练习 3 次</span><span>上次：3 天前</span></div><div class="progress"><span style="width:48%;background:var(--spot)"></span></div><div class="learning-actions"><button class="btn btn-small" style="width:100%">继续练习</button></div></article><article class="learning-card"><div class="learning-top"><div class="difficulty">61</div><div><h3>想见你想见你想见你</h3><p>八三夭 · 学习中</p></div></div><div class="learning-meta"><span>练习 4 次</span><span>上次：5 天前</span></div><div class="progress"><span style="width:61%"></span></div><div class="learning-actions"><button class="btn btn-small" style="width:100%">继续练习</button></div></article></div>
+        </section>
+
+        <section class="page" id="page-stats" aria-labelledby="title-stats">
+          <div class="page-head"><div><div class="eyebrow">Insights</div><h1 id="title-stats">统计</h1><p class="page-desc">只展示能帮助下一场直播和下一张海报的数据。</p></div><div class="head-actions"><button class="btn btn-primary">用本月新学创建海报</button></div></div>
+          <div class="stats-grid"><div class="stat"><div class="stat-label">本月新学</div><div class="stat-value">6</div><div class="stat-delta">比上月多 2 首</div></div><div class="stat"><div class="stat-label">练习次数</div><div class="stat-value">24</div><div class="stat-delta">保持稳定</div></div><div class="stat"><div class="stat-label">演唱歌曲</div><div class="stat-value">38</div><div class="stat-delta">8 场直播</div></div><div class="stat"><div class="stat-label">点歌记录</div><div class="stat-value">61</div><div class="stat-delta">数据正在积累</div></div></div>
+          <div class="content-grid"><section class="panel"><div class="panel-head"><div class="panel-title">最近 7 天练习</div><div class="panel-meta">共 9 次</div></div><div class="chart" aria-label="最近七天练习柱状图"><div class="bar" style="--h:28%" data-label="一"></div><div class="bar" style="--h:52%" data-label="二"></div><div class="bar" style="--h:20%" data-label="三"></div><div class="bar" style="--h:76%" data-label="四"></div><div class="bar" style="--h:44%" data-label="五"></div><div class="bar" style="--h:92%" data-label="六"></div><div class="bar" style="--h:58%" data-label="日"></div></div></section><aside class="panel side-card"><h3>近期常唱</h3><p>按演唱与点歌综合排序</p><div class="rank-list"><div class="rank"><b>01</b><div class="rank-name">知足</div><div class="rank-meter"><span style="width:92%"></span></div></div><div class="rank"><b>02</b><div class="rank-name">慢冷</div><div class="rank-meter"><span style="width:76%"></span></div></div><div class="rank"><b>03</b><div class="rank-name">晴天</div><div class="rank-meter"><span style="width:63%"></span></div></div><div class="rank"><b>04</b><div class="rank-name">唯一</div><div class="rank-meter"><span style="width:48%"></span></div></div></div></aside></div>
+        </section>
+
+        <section class="page" id="page-settings" aria-labelledby="title-settings">
+          <div class="page-head"><div><div class="eyebrow">Preferences</div><h1 id="title-settings">设置</h1><p class="page-desc">数据、输出和桌面行为，都保持清楚可恢复。</p></div></div>
+          <div class="settings-layout"><section class="panel settings-section"><div><h2>外观</h2><p>明暗模式与主色互相独立，适应白天创作和夜间直播。</p></div><div class="form-grid"><div class="form-row"><label for="appearance">界面模式</label><div class="select-wrap"><select class="select" id="appearance"><option value="system">跟随系统</option><option value="light">画廊白</option><option value="dark">暗色舞台</option></select></div></div><fieldset class="form-row" style="margin:0;padding:0;border:0"><legend style="margin-bottom:7px;font-size:12px;font-weight:650">应用主色</legend><div class="accent-options" id="accentOptions"><button class="accent-option active" data-accent="bamboo-moon" aria-pressed="true"><span class="accent-swatch" style="--swatch:#287d69"></span><span>竹月青</span></button><button class="accent-option" data-accent="rain-sky" aria-pressed="false"><span class="accent-swatch" style="--swatch:#356a8a"></span><span>雨过天青</span></button><button class="accent-option" data-accent="distant-mountain" aria-pressed="false"><span class="accent-swatch" style="--swatch:#465e65"></span><span>远山黛</span></button><button class="accent-option" data-accent="rouge" aria-pressed="false"><span class="accent-swatch" style="--swatch:#a13d50"></span><span>胭脂红</span></button><button class="accent-option" data-accent="begonia" aria-pressed="false"><span class="accent-swatch" style="--swatch:#9a4f36"></span><span>海棠褐</span></button><button class="accent-option" data-accent="wisteria" aria-pressed="false"><span class="accent-swatch" style="--swatch:#66528a"></span><span>藤萝紫</span></button><button class="accent-option" data-accent="amber" aria-pressed="false"><span class="accent-swatch" style="--swatch:#8a5a16"></span><span>琥珀金</span></button><button class="accent-option" data-accent="pine-flower" aria-pressed="false"><span class="accent-swatch" style="--swatch:#5d6f32"></span><span>松花绿</span></button></div><p class="helper">只改变导航、主按钮、焦点和进度等界面交互色，不改变海报主题、语义状态色或导出结果。</p></fieldset><div class="toggle-row"><div class="toggle-row-copy"><strong>减少动态效果</strong><small>系统开启 reduced motion 时自动生效</small></div><label class="switch"><input type="checkbox"><span></span></label></div></div></section><section class="panel settings-section"><div><h2>数据与输出</h2><p>后端是核心用户数据的唯一写入方。</p></div><div class="form-grid"><div class="form-row"><label for="dataPath">数据目录</label><input class="input" id="dataPath" readonly value="~/Library/Application Support/streamer-workbench"><p class="helper">切换前会验证目录，失败时继续使用当前目录。</p></div><div class="form-row"><label for="outputPath">默认输出目录</label><input class="input" id="outputPath" readonly value="~/Pictures/主播工作台"><p class="helper">导出对话框中仍可为单次任务选择其他位置。</p></div><button class="btn" style="width:max-content"><svg class="icon icon-sm"><use href="#i-folder"/></svg>管理目录</button></div></section><section class="panel settings-section"><div><h2>安全与诊断</h2><p>本地服务只接受受信任来源。</p></div><div class="form-grid"><div class="toggle-row"><div class="toggle-row-copy"><strong>启动时自动检查数据</strong><small>发现损坏时阻止写入并提供恢复建议</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><button class="btn" style="width:max-content">打开日志目录</button></div></section></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <nav class="mobile-nav" aria-label="移动端主导航">
+    <button class="active" data-page="poster"><svg class="icon"><use href="#i-home"/></svg><span>海报</span></button><button data-page="songs"><svg class="icon"><use href="#i-music"/></svg><span>歌曲</span></button><button data-page="live"><svg class="icon"><use href="#i-live"/></svg><span>直播</span></button><button data-page="learning"><svg class="icon"><use href="#i-book"/></svg><span>学歌</span></button><button data-page="stats"><svg class="icon"><use href="#i-chart"/></svg><span>统计</span></button><button data-page="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></button>
+  </nav>
+
+  <div class="scrim" id="rulesDialog" role="dialog" aria-modal="true" aria-labelledby="rulesTitle">
+    <div class="dialog" style="width:min(680px,100%)"><div class="dialog-head"><div><h2 id="rulesTitle">点歌规则</h2><p>默认采用当前主播方案；所有额度、门槛和插队方式都可以修改。</p></div><button class="icon-btn" data-close-rules aria-label="关闭点歌规则"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="dialog-body"><div class="rule-list"><article class="rule-card"><div class="rule-head"><div class="rule-head-copy"><strong>新加入粉丝团</strong><small>首次加入时获得一次免费点歌权益</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><div class="rule-config"><div class="form-row"><label for="fanQuota">赠送首数</label><input class="input" id="fanQuota" type="number" min="0" value="1"></div><div class="form-row"><label for="fanValidity">有效期</label><div class="select-wrap"><select class="select" id="fanValidity"><option>本场直播</option><option>24 小时</option><option>永久有效</option></select></div></div></div></article><article class="rule-card"><div class="rule-head"><div class="rule-head-copy"><strong>主播会员每日权益</strong><small>有效会员每天可免费点歌，按自然日核销</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><div class="rule-config"><div class="form-row"><label for="memberQuota">每日首数</label><input class="input" id="memberQuota" type="number" min="0" value="1"></div><div class="form-row"><label for="memberReset">重置方式</label><div class="select-wrap"><select class="select" id="memberReset"><option>每日 00:00</option><option>每场直播</option><option>连续 24 小时</option></select></div></div></div></article><article class="rule-card"><div class="rule-head"><div class="rule-head-copy"><strong>墨镜或等价值礼物</strong><small>达到基础礼物价值即可兑换一首普通排队点歌</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><div class="rule-config"><div class="form-row"><label for="giftName">基准礼物</label><input class="input" id="giftName" value="墨镜"></div><div class="form-row"><label for="giftValue">等值门槛</label><input class="input" id="giftValue" type="number" min="0" value="99"></div></div></article><article class="rule-card"><div class="rule-head"><div class="rule-head-copy"><strong>高价值礼物申请插队</strong><small>达到门槛只获得申请资格，是否插队仍由主播确认</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><div class="rule-config"><div class="form-row"><label for="priorityValue">申请门槛</label><input class="input" id="priorityValue" type="number" min="0" value="299"></div><div class="form-row"><label for="priorityPosition">确认后的默认位置</label><div class="select-wrap"><select class="select" id="priorityPosition"><option value="next">当前歌曲之后</option><option value="third">队列第 3 位</option><option value="manual">每次手动选择</option></select></div></div></div></article><article class="rule-card"><div class="rule-head"><div class="rule-head-copy"><strong>队列公平保护</strong><small>避免连续插队导致普通点歌长期无法演唱</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><div class="rule-config"><div class="form-row"><label for="priorityLimit">连续插队上限</label><input class="input" id="priorityLimit" type="number" min="1" value="2"></div><div class="form-row"><label for="cooldown">之后至少唱普通队列</label><input class="input" id="cooldown" type="number" min="1" value="1"></div></div></article></div></div><div class="dialog-actions"><button class="btn" data-close-rules>取消</button><button class="btn btn-primary" id="saveRules">保存并启用</button></div></div>
+  </div>
+
+  <div class="scrim" id="requestDialog" role="dialog" aria-modal="true" aria-labelledby="requestTitle">
+    <div class="dialog"><div class="dialog-head"><div><h2 id="requestTitle">记录一条点歌</h2><p>系统会按当前规则计算免费权益和插队资格，主播保留最终决定权。</p></div><button class="icon-btn" data-close-request aria-label="关闭点歌对话框"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="dialog-body"><div class="form-grid"><div class="form-row"><label for="requestSong">歌曲或观众输入</label><input class="input" id="requestSong" value="想见你想见你想见你"></div><div class="form-row"><label for="requesterName">点歌人昵称（选填）</label><input class="input" id="requesterName" placeholder="例如：小满"></div><div class="form-row"><label for="requestSource">点歌权益（选填）</label><div class="select-wrap"><select class="select" id="requestSource"><option value="">未记录 / 主播安排</option><option value="新入团权益">新加入粉丝团 · 免费 1 首</option><option value="会员每日权益">主播会员 · 今日免费 1 首</option><option value="礼物点歌">墨镜或等值礼物 · 免费 1 首</option><option value="高价值礼物">高价值礼物 · 可申请插队</option><option value="普通点歌">普通点歌</option><option value="活动奖励">活动奖励</option></select></div></div><div class="form-row"><label for="requestDetail">礼物或权益详情（选填）</label><input class="input" id="requestDetail" placeholder="例如：墨镜 ×1、礼物价值 520"></div><div class="entitlement-preview" id="entitlementPreview"><strong>暂未选择权益</strong><br>将按普通队列加入，不核销免费额度。</div><div class="form-row"><label for="queuePosition">加入位置</label><div class="select-wrap"><select class="select" id="queuePosition"><option value="end">普通排队 · 队尾</option><option value="next" disabled>插队 · 当前歌曲之后（需高价值礼物）</option><option value="third" disabled>插入队列第 3 位（需高价值礼物）</option></select></div><p class="helper" id="positionHelp">普通权益不会自动插队。</p></div><p class="helper">系统会记录规则版本、权益核销、原队列位置、插队原因、确认人和最终结果，便于后续对账与统计。</p></div></div><div class="dialog-actions"><button class="btn" data-close-request>取消</button><button class="btn btn-primary" id="confirmRequest">加入队列</button></div></div>
+  </div>
+
+  <div class="scrim" id="exportDialog" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+    <div class="dialog"><div class="dialog-head"><div><h2 id="exportTitle">导出这份设计</h2><p>页数由歌曲数量、布局、比例和分页方式共同决定，不与直播场次关联。</p></div><button class="icon-btn" data-close-dialog aria-label="关闭导出对话框"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="dialog-body"><div class="form-grid"><div class="form-row"><label for="filename">文件名</label><input class="input" id="filename" value="我的常用歌单"></div><div class="form-row"><label for="exportFormat">格式</label><div class="select-wrap"><select class="select" id="exportFormat"><option>PNG · 高清</option><option>JPEG · 适合分享</option></select></div></div><div class="form-row"><label for="exportPath">保存位置</label><input class="input" id="exportPath" readonly value="~/Pictures/主播工作台"></div><div class="export-progress" id="exportProgress"><strong id="progressText">正在冻结渲染输入…</strong><div class="export-progress-line"><span id="progressBar"></span></div></div></div></div><div class="dialog-actions"><button class="btn" data-close-dialog>稍后再说</button><button class="btn btn-primary" id="confirmExport"><svg class="icon icon-sm"><use href="#i-export"/></svg><span id="confirmExportLabel">导出 3 张 PNG</span></button></div></div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"><svg class="icon" style="color:var(--success)"><use href="#i-check"/></svg><span id="toastText">操作已完成</span></div>
+
+  <script>
+    (() => {
+      const titles = {poster:'海报',songs:'歌曲',live:'直播',learning:'学歌',stats:'统计',settings:'设置'};
+      const pages = [...document.querySelectorAll('.page')];
+      const navButtons = [...document.querySelectorAll('[data-page]')];
+      const toast = document.getElementById('toast');
+      let toastTimer;
+      const escapeHTML = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+
+      function showToast(message) {
+        document.getElementById('toastText').textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+      }
+
+      function navigate(id) {
+        pages.forEach(page => page.classList.toggle('active', page.id === `page-${id}`));
+        navButtons.forEach(button => {
+          const active = button.dataset.page === id;
+          button.classList.toggle('active', active);
+          if (button.closest('.sidebar')) active ? button.setAttribute('aria-current','page') : button.removeAttribute('aria-current');
+        });
+        document.getElementById('crumbTitle').textContent = titles[id];
+        history.replaceState(null,'',`#${id}`);
+        document.getElementById(`title-${id}`)?.focus({preventScroll:true});
+        window.scrollTo({top:0,behavior:'smooth'});
+      }
+
+      navButtons.forEach(button => button.addEventListener('click', () => navigate(button.dataset.page)));
+      document.querySelectorAll('[data-page-jump]').forEach(button => button.addEventListener('click', () => navigate(button.dataset.pageJump)));
+
+      const storedTheme = localStorage.getItem('sw-prototype-theme');
+      if (storedTheme) document.documentElement.dataset.theme = storedTheme;
+      document.getElementById('themeToggle').addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem('sw-prototype-theme',next);
+        showToast(next === 'dark' ? '已切换到暗色舞台' : '已切换到画廊白');
+      });
+      document.getElementById('appearance').addEventListener('change', event => {
+        if (event.target.value === 'system') return showToast('外观将跟随系统');
+        document.documentElement.dataset.theme = event.target.value;
+        localStorage.setItem('sw-prototype-theme',event.target.value);
+      });
+
+      const accentNames = {'bamboo-moon':'竹月青','rain-sky':'雨过天青','distant-mountain':'远山黛',rouge:'胭脂红',begonia:'海棠褐',wisteria:'藤萝紫',amber:'琥珀金','pine-flower':'松花绿'};
+      const accentButtons = [...document.querySelectorAll('[data-accent]')];
+      function applyAccent(accent,announce=false) {
+        const safeAccent = accentNames[accent] ? accent : 'bamboo-moon';
+        document.documentElement.dataset.accent = safeAccent;
+        accentButtons.forEach(button => {
+          const active = button.dataset.accent === safeAccent;
+          button.classList.toggle('active',active);
+          button.setAttribute('aria-pressed',String(active));
+        });
+        localStorage.setItem('sw-prototype-accent',safeAccent);
+        if (announce) showToast(`应用主色已切换为「${accentNames[safeAccent]}」`);
+      }
+      applyAccent(localStorage.getItem('sw-prototype-accent') || 'bamboo-moon');
+      accentButtons.forEach(button => button.addEventListener('click',() => applyAccent(button.dataset.accent,true)));
+
+      const layoutConfig = {
+        'grid-wrap': { name:'经典网格', ratios:[['9:20','抖音全屏 · 9:20',8],['3:4','标准竖版 · 3:4',10],['4:5','社交竖版 · 4:5',12]], themes:7, manual:false },
+        editorial: { name:'编辑分栏', ratios:[['3:4','标准竖版 · 3:4',14],['4:5','社交竖版 · 4:5',16],['A4','打印页面 · A4',20]], themes:6, manual:false },
+        spotlight: { name:'主视觉榜单', ratios:[['9:16','故事竖屏 · 9:16',6],['3:4','标准竖版 · 3:4',8]], themes:5, manual:false },
+        custom: { name:'自定义布局', ratios:[['9:20','抖音全屏 · 9:20',8],['9:16','故事竖屏 · 9:16',8],['3:4','标准竖版 · 3:4',10],['4:5','社交竖版 · 4:5',12],['1:1','方形 · 1:1',10],['A4','打印页面 · A4',18]], themes:7, manual:true }
+      };
+      const groupDescriptions = {
+        none:'歌曲将按当前手动顺序连续排列。', artist:'同一歌手的歌曲会归入同一分类。', length:'按歌名字数分为短、中、长三组。', genre:'按流行、民谣、摇滚等歌曲类型分类。', language:'按国语、粤语、英语等语言分类。', initial:'按歌名首字母区间分类。', mastery:'按已会、学习中和想学分类。', tag:'使用你维护的自定义标签分类。'
+      };
+      let currentLayout = 'grid-wrap';
+      let currentTheme = '轻复古唱片';
+      let songTotal = 23;
+      let pageTotal = 3;
+      let activePage = 1;
+      const ratioSelect = document.getElementById('ratioSelect');
+      const paginationMode = document.getElementById('paginationMode');
+      const manualOption = paginationMode.querySelector('[value="manual"]');
+      const addPage = document.getElementById('addPage');
+      const deletePage = document.getElementById('deletePage');
+
+      function currentRatio() { return layoutConfig[currentLayout].ratios.find(item => item[0] === ratioSelect.value) || layoutConfig[currentLayout].ratios[0]; }
+      function calculatePages() { return Math.max(1, Math.ceil(songTotal / currentRatio()[2])); }
+      function renderPages() {
+        const tabs = document.getElementById('pageTabs');
+        activePage = Math.min(activePage,pageTotal);
+        tabs.innerHTML = Array.from({length:pageTotal},(_,index) => `<button class="${index + 1 === activePage ? 'active' : ''}" data-preview-page="${index + 1}">第 ${index + 1} 页</button>`).join('');
+        tabs.querySelectorAll('button').forEach(button => button.addEventListener('click',() => { activePage=Number(button.dataset.previewPage); renderPages(); showToast(`正在预览第 ${activePage} 页`); }));
+        document.getElementById('pageCount').textContent=pageTotal;
+        document.getElementById('songCount').textContent=songTotal;
+        document.getElementById('songCountLabel').textContent=`${songTotal} 首`;
+        const automatic = paginationMode.value === 'auto';
+        document.getElementById('stageStatus').textContent=`预览已更新 · ${songTotal} 首歌曲 · ${automatic ? '自动生成' : '手动编排'} ${pageTotal} 页`;
+        document.getElementById('paginationHelp').textContent=automatic ? `${layoutConfig[currentLayout].name}在当前比例下每页最多 ${currentRatio()[2]} 首，当前自动生成 ${pageTotal} 页。` : `当前由你手动管理 ${pageTotal} 页，可随时新增或删除。`;
+        document.getElementById('exportDetailSummary').textContent=`设计已保存 · ${songTotal} 首歌曲 · 将导出 ${pageTotal} 张 PNG`;
+        document.getElementById('exportButtonLabel').textContent=`导出 ${pageTotal} 页`;
+        document.getElementById('confirmExportLabel').textContent=`导出 ${pageTotal} 张 PNG`;
+        deletePage.disabled = automatic || pageTotal <= 1;
+      }
+      function updateLayout(layout) {
+        currentLayout=layout;
+        const config=layoutConfig[layout];
+        ratioSelect.innerHTML=config.ratios.map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
+        manualOption.disabled=!config.manual;
+        paginationMode.value=config.manual ? 'manual' : 'auto';
+        addPage.disabled=!config.manual;
+        document.getElementById('layoutCapability').textContent=`支持 ${config.ratios.length} 种比例`;
+        document.getElementById('themeCompatibility').textContent=`${config.themes} 个兼容主题`;
+        document.getElementById('ratioHelp').textContent=`${config.name}当前支持 ${config.ratios.map(item=>item[0]).join('、')}；切换布局时会重新校验。`;
+        pageTotal=config.manual ? Math.max(pageTotal,1) : calculatePages();
+        document.getElementById('exportTitleSummary').textContent=`我的常用歌单 · ${config.name} · ${currentTheme} · ${ratioSelect.value}`;
+        renderPages();
+      }
+      document.querySelectorAll('[data-layout]').forEach(button => button.addEventListener('click',() => {
+        document.querySelectorAll('[data-layout]').forEach(item=>item.classList.toggle('active',item===button));
+        updateLayout(button.dataset.layout);
+        showToast(`已切换布局：${layoutConfig[currentLayout].name}`);
+      }));
+      ratioSelect.addEventListener('change',() => { if (paginationMode.value==='auto') pageTotal=calculatePages(); document.getElementById('exportTitleSummary').textContent=`我的常用歌单 · ${layoutConfig[currentLayout].name} · ${currentTheme} · ${ratioSelect.value}`; renderPages(); showToast(`已切换比例：${ratioSelect.value}`); });
+      paginationMode.addEventListener('change',() => { pageTotal=paginationMode.value==='auto' ? calculatePages() : pageTotal; addPage.disabled=paginationMode.value!=='manual'; renderPages(); });
+      addPage.addEventListener('click',() => { pageTotal+=1; activePage=pageTotal; renderPages(); showToast(`已新增第 ${pageTotal} 页`); });
+      deletePage.addEventListener('click',() => { if (pageTotal<=1) return; const removed=activePage; pageTotal-=1; activePage=Math.min(activePage,pageTotal); renderPages(); showToast(`已删除第 ${removed} 页`); });
+      document.getElementById('groupBy').addEventListener('change',event => { document.getElementById('groupHelp').textContent=groupDescriptions[event.target.value]; showToast(`已更新分类：${event.target.options[event.target.selectedIndex].text}`); });
+
+      document.querySelectorAll('.template').forEach(button => button.addEventListener('click', () => {
+        document.querySelectorAll('.template').forEach(item => item.classList.remove('active'));
+        button.classList.add('active');
+        currentTheme=button.dataset.themeName;
+        document.getElementById('exportTitleSummary').textContent=`我的常用歌单 · ${layoutConfig[currentLayout].name} · ${currentTheme} · ${ratioSelect.value}`;
+        document.getElementById('saveState').textContent = '正在保存…';
+        setTimeout(() => { document.getElementById('saveState').textContent = '所有更改已保存'; showToast(`已应用主题：${currentTheme}`); }, 650);
+      }));
+
+      document.querySelectorAll('.song-remove').forEach(button => button.addEventListener('click', event => {
+        const row = event.currentTarget.closest('.song-row');
+        const name = row.querySelector('.song-name').textContent;
+        row.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(-12px)'}],{duration:180,easing:'ease-out'}).onfinish = () => row.remove();
+        songTotal=Math.max(0,songTotal-1); if (paginationMode.value==='auto') pageTotal=calculatePages(); renderPages();
+        showToast(`已从当前海报移除「${name}」`);
+      }));
+      document.getElementById('addSong').addEventListener('click', () => { songTotal+=1; if (paginationMode.value==='auto') pageTotal=calculatePages(); renderPages(); showToast('已加入一首歌曲，页数已重新计算'); });
+      document.getElementById('newPoster').addEventListener('click', () => showToast('已准备一份空白设计，当前作品仍会保留'));
+
+      const librarySearch = document.getElementById('librarySearch');
+      librarySearch.addEventListener('input', () => {
+        const value = librarySearch.value.trim().toLowerCase();
+        document.querySelectorAll('#songTable tr').forEach(row => row.hidden = !row.innerText.toLowerCase().includes(value));
+      });
+
+      const dialog = document.getElementById('exportDialog');
+      let lastFocus;
+      function openDialog() { lastFocus = document.activeElement; dialog.classList.add('open'); document.getElementById('filename').focus(); }
+      function closeDialog() { dialog.classList.remove('open'); document.getElementById('exportProgress').classList.remove('show'); document.getElementById('progressBar').style.width='0'; lastFocus?.focus(); }
+      document.querySelectorAll('[data-open-export]').forEach(button => button.addEventListener('click',openDialog));
+      document.querySelectorAll('[data-close-dialog]').forEach(button => button.addEventListener('click',closeDialog));
+      dialog.addEventListener('click', event => { if (event.target === dialog) closeDialog(); });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape' && dialog.classList.contains('open')) closeDialog(); });
+      document.getElementById('confirmExport').addEventListener('click', () => {
+        const progress = document.getElementById('exportProgress');
+        const bar = document.getElementById('progressBar');
+        const text = document.getElementById('progressText');
+        const button = document.getElementById('confirmExport');
+        progress.classList.add('show'); button.disabled = true; bar.style.width='28%';
+        setTimeout(() => { text.textContent='正在渲染第 1 页…'; bar.style.width='58%'; },450);
+        setTimeout(() => { text.textContent='正在原子发布文件…'; bar.style.width='88%'; },950);
+        setTimeout(() => { bar.style.width='100%'; text.textContent='导出完成'; button.disabled=false; setTimeout(closeDialog,380); showToast(`已导出 ${pageTotal} 张 PNG 到默认输出目录`); },1450);
+      });
+
+      const rulesDialog = document.getElementById('rulesDialog');
+      let rulesLastFocus;
+      function openRulesDialog(){ rulesLastFocus=document.activeElement; rulesDialog.classList.add('open'); document.getElementById('fanQuota').focus(); }
+      function closeRulesDialog(){ rulesDialog.classList.remove('open'); rulesLastFocus?.focus(); }
+      document.getElementById('openRules').addEventListener('click',openRulesDialog);
+      document.getElementById('editRules').addEventListener('click',openRulesDialog);
+      document.querySelectorAll('[data-close-rules]').forEach(button=>button.addEventListener('click',closeRulesDialog));
+      rulesDialog.addEventListener('click',event=>{ if(event.target===rulesDialog) closeRulesDialog(); });
+      document.getElementById('saveRules').addEventListener('click',()=>{
+        const fan=document.getElementById('fanQuota').value;
+        const member=document.getElementById('memberQuota').value;
+        const gift=document.getElementById('giftName').value.trim()||'指定礼物';
+        const priority=document.getElementById('priorityValue').value;
+        document.querySelector('.policy-summary-copy span').textContent=`新入团 ${fan} 首 · 主播会员每日 ${member} 首 · ${gift}或等值礼物 1 首 · 礼物价值 ${priority}+ 可申请插队，最终由主播确认`;
+        closeRulesDialog(); showToast('点歌规则已保存，新请求将使用最新版本');
+      });
+
+      const requestDialog = document.getElementById('requestDialog');
+      let requestLastFocus;
+      function openRequestDialog() { requestLastFocus=document.activeElement; requestDialog.classList.add('open'); document.getElementById('requestSong').focus(); }
+      function closeRequestDialog() { requestDialog.classList.remove('open'); requestLastFocus?.focus(); }
+      document.getElementById('openRequest').addEventListener('click',openRequestDialog);
+      document.querySelectorAll('[data-close-request]').forEach(button=>button.addEventListener('click',closeRequestDialog));
+      requestDialog.addEventListener('click',event=>{ if(event.target===requestDialog) closeRequestDialog(); });
+      document.addEventListener('keydown',event=>{ if(event.key==='Escape'&&requestDialog.classList.contains('open')) closeRequestDialog(); if(event.key==='Escape'&&rulesDialog.classList.contains('open')) closeRulesDialog(); });
+      const requestSource=document.getElementById('requestSource');
+      const queuePosition=document.getElementById('queuePosition');
+      requestSource.addEventListener('change',()=>{
+        const source=requestSource.value;
+        const priority=source==='高价值礼物';
+        [...queuePosition.options].forEach(option=>{ if(option.value!=='end') option.disabled=!priority; });
+        queuePosition.value='end';
+        const descriptions={
+          '新入团权益':'符合新入团规则：免费额度 1 首，本次核销后标记为已使用。',
+          '会员每日权益':'符合会员每日权益：今日免费额度 1 首，将在加入队列时核销。',
+          '礼物点歌':'达到墨镜或等值礼物门槛：可免费点 1 首，默认正常排队。',
+          '高价值礼物':'达到高价值礼物门槛：可以申请插队，但必须由主播明确选择位置。',
+          '普通点歌':'普通点歌不核销权益，按队尾顺序等待。',
+          '活动奖励':'活动奖励按普通队列处理，除非主播手动调整。'
+        };
+        document.getElementById('entitlementPreview').innerHTML=`<strong>${priority?'具备插队申请资格':source?'权益规则已匹配':'暂未选择权益'}</strong><br>${descriptions[source]||'将按普通队列加入，不核销免费额度。'}`;
+        document.getElementById('positionHelp').textContent=priority?'主播可选择正常排队或确认插队；系统会记录调整前后位置。':'普通权益不会自动插队。';
+      });
+
+      const finishSong = document.getElementById('finishSong');
+      function queueItems() { return [...document.querySelectorAll('#liveQueue .queue-item')]; }
+      function updateQueueNumbers() {
+        queueItems().forEach((item,index)=>item.querySelector('.queue-no').textContent=String(index+1).padStart(2,'0'));
+        document.getElementById('queueCount').textContent=`${queueItems().length} 首待处理`;
+      }
+      function updateNowPlaying() {
+        const active = document.querySelector('#liveQueue .queue-item.active');
+        if(!active) { document.getElementById('nowSong').textContent='队列已完成'; document.getElementById('nowSongMeta').textContent='可以继续记录新的点歌'; document.getElementById('nowRequest').innerHTML='<div class="request-copy"><strong>本场暂时没有待处理歌曲</strong><small>所有请求结果均已保存</small></div>'; return; }
+        document.getElementById('nowSong').textContent=active.querySelector('.song-name').textContent;
+        document.getElementById('nowSongMeta').textContent=`${active.querySelector('.song-sub').textContent} · 曲库信息已就绪`;
+        const requester=active.dataset.requester;
+        const source=active.dataset.source;
+        const detail=active.dataset.detail;
+        const sourceClass=['礼物点歌','高价值礼物'].includes(source)?'gift':['会员每日权益','新入团权益'].includes(source)?'member':'';
+        document.getElementById('nowRequest').innerHTML=requester ? `<div class="request-avatar">${escapeHTML(requester.slice(0,1))}</div><div class="request-copy"><strong>${escapeHTML(requester)} 点的歌</strong><small>本场请求 · 来源信息已记录</small></div><div class="request-badges">${source?`<span class="request-badge ${sourceClass}">${escapeHTML(source)}</span>`:''}${detail?`<span class="request-badge">${escapeHTML(detail)}</span>`:''}</div>` : '<div class="request-copy"><strong>自主安排</strong><small>未记录点歌人或权益来源</small></div>';
+      }
+      function appendHistory(item,outcome) {
+        const requester=item.dataset.requester;
+        const source=item.dataset.source;
+        const now=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
+        const cls=outcome==='不会唱'?'outcome unknown':'outcome';
+        document.getElementById('sungHistory').insertAdjacentHTML('afterbegin',`<div class="history-row"><span class="history-time">${now}</span><div class="history-main"><strong>${escapeHTML(item.querySelector('.song-name').textContent)}</strong><small>${requester?`${escapeHTML(requester)}${source?` · ${escapeHTML(source)}`:''}`:'自主安排'} · 结果已记录</small></div><span class="${cls}">${outcome}</span></div>`);
+      }
+      function advanceQueue(outcome) {
+        const active=document.querySelector('#liveQueue .queue-item.active');
+        if(!active) return showToast('今晚队列已经完成');
+        const next=active.nextElementSibling;
+        appendHistory(active,outcome);
+        if(outcome==='已唱') document.getElementById('sungMetric').textContent=Number(document.getElementById('sungMetric').textContent)+1;
+        if(outcome==='不会唱') {
+          document.getElementById('unknownMetric').textContent=Number(document.getElementById('unknownMetric').textContent)+1;
+          document.getElementById('unknownHistory').insertAdjacentHTML('afterbegin',`<div class="history-row"><span class="history-time">本场</span><div class="history-main"><strong>${escapeHTML(active.querySelector('.song-name').textContent)}</strong><small>${active.dataset.requester?`${escapeHTML(active.dataset.requester)}点歌`:'未记录点歌人'} · 新增待学线索</small></div><span class="outcome unknown">待学</span></div>`);
+        }
+        active.remove();
+        if(next) { next.classList.add('active'); next.insertAdjacentHTML('beforeend','<span class="status">当前</span>'); }
+        updateQueueNumbers(); updateNowPlaying();
+        showToast(outcome==='已唱'?'已保存演唱记录，进入下一首':'已记录不会唱，并加入待学线索');
+      }
+      function markSung() { advanceQueue('已唱'); }
+      function postponeSong() {
+        const active=document.querySelector('#liveQueue .queue-item.active');
+        const next=active?.nextElementSibling;
+        if(!active||!next) return showToast('当前没有可延后的下一首歌曲');
+        active.querySelector('.status')?.remove(); active.classList.remove('active'); active.dataset.postponed='true';
+        document.getElementById('liveQueue').appendChild(active);
+        next.classList.add('active'); next.insertAdjacentHTML('beforeend','<span class="status">当前</span>');
+        updateQueueNumbers(); updateNowPlaying(); showToast('已记录延后，本首移到队尾');
+      }
+      finishSong.addEventListener('click',markSung);
+      document.getElementById('unknownSong').addEventListener('click',()=>advanceQueue('不会唱'));
+      document.getElementById('skipSong').addEventListener('click',postponeSong);
+      document.getElementById('confirmRequest').addEventListener('click',()=>{
+        const song=document.getElementById('requestSong').value.trim();
+        if(!song) { showToast('请先填写歌曲名称'); document.getElementById('requestSong').focus(); return; }
+        const requester=document.getElementById('requesterName').value.trim();
+        const source=document.getElementById('requestSource').value;
+        const detail=document.getElementById('requestDetail').value.trim();
+        const position=queuePosition.value;
+        const badgeClass=['礼物点歌','高价值礼物'].includes(source)?'gift':['会员每日权益','新入团权益'].includes(source)?'member':'';
+        const item=document.createElement('div'); item.className='queue-item'; item.dataset.requester=requester; item.dataset.source=source; item.dataset.detail=detail; item.dataset.ruleVersion='主播默认方案 v1'; item.dataset.originalPosition=String(queueItems().length+1); item.dataset.priority=position==='end'?'false':'true';
+        item.innerHTML=`<div class="queue-no"></div><div class="song-main"><div class="song-name">${escapeHTML(song)}</div><div class="song-sub">待匹配曲库</div><div class="queue-meta"><span class="request-badge ${badgeClass}">${escapeHTML(requester||'匿名')}${source?` · ${escapeHTML(source)}`:' · 来源未记录'}</span>${position!=='end'?'<span class="priority-flag">主播确认插队</span>':''}</div></div>`;
+        const queue=document.getElementById('liveQueue');
+        if(position==='next') queue.insertBefore(item,document.querySelector('#liveQueue .queue-item.active')?.nextElementSibling||null);
+        else if(position==='third') queue.insertBefore(item,queueItems()[2]||null);
+        else queue.appendChild(item);
+        updateQueueNumbers(); if(queueItems().length===1){item.classList.add('active');item.insertAdjacentHTML('beforeend','<span class="status">当前</span>');updateNowPlaying();}
+        closeRequestDialog(); showToast(position==='end'?`已记录「${song}」并加入队尾`:`已确认插队，「${song}」进入优先位置`);
+      });
+      document.addEventListener('keydown', event => { if (event.code === 'Space' && document.getElementById('page-live').classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) { event.preventDefault(); markSung(); } });
+
+      document.getElementById('newSong').addEventListener('click', () => showToast('新建歌曲表单将在右侧面板打开'));
+      updateLayout('grid-wrap');
+      const hash = location.hash.slice(1);
+      if (titles[hash]) navigate(hash);
+    })();
+  </script>
+</body>
+</html>

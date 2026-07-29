@@ -2,7 +2,7 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-29）**：旧 `grid-wrap` 金标准保持 16/16 diff=0；S1–S3.5、R0.1–R0.6 已完成。R0.7 的四类文件 Repository、Preset 崩溃恢复、EventStore 索引、冻结导出输入及跨 app 组合可靠性证据已经落地；Application Service 全面接管与 ExportSnapshot 边界尚未闭合，因此仍标为进行中。R0.8 仅完成错误/API 合约基础，用户数据目录和本地服务安全仍待后续阶段。下一条用户可见主线是使用现有 `grid-wrap` 跑通“样例数据 → 本场 → 歌曲集合 → 模板 → 导出”。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
+> **进度快照（2026-07-29）**：旧 `grid-wrap` 金标准保持 16/16 diff=0；S1–S3.5、R0.1–R0.6 已完成。R0.7 的四类文件 Repository、Preset 崩溃恢复、EventStore 索引、冻结导出输入及跨 app 组合可靠性证据已经落地；Application Service 全面接管与 ExportSnapshot 边界尚未闭合，因此仍标为进行中。R0.8 仅完成错误/API 合约基础，用户数据目录和本地服务安全仍待后续阶段。下一条用户可见主线是使用现有 `grid-wrap` 跑通“样例数据 → 独立海报 → 歌曲集合 → 布局/主题/比例 → 自动分页 → 导出”。海报不依赖直播场次；直播点歌使用独立的规则、权益、队列和结果台账。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >
 > **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `.archive/design-docs/`（原 `design-docs/`，点号开头表示已归档；完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `.archive/design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
@@ -10,7 +10,7 @@
 - **渲染引擎**：Python + PIL（纯函数，金标准：与现有成品逐像素一致，当前 16/16 diff=0）
 - **后端**：FastAPI 本地服务（`server/`，开发期 uvicorn 8000 端口）；MVP 后期由 Electron 打包成桌面 App（Python 作 child_process，引擎不重写）
 - **前端**：React 19 + Vite 6 + Tailwind 4（`ui/`）；开发期另有 `web/index.html` 原生验证页
-- **视觉系统**：`design/design-tokens.json` v2 是当前单源真值；React 工作台默认使用画廊白 Art Gallery，QuickView/演出模式使用暗色舞台 Cinematic Stage；`.archive/design-docs/歌单海报生成器-界面设计/` 仅作历史参考
+- **视觉系统**：`design/design-tokens.json` v3 是当前单源真值；React 工作台支持画廊白/暗色舞台与独立可选应用主色，应用主色不影响海报 Theme/Palette；`.archive/design-docs/歌单海报生成器-界面设计/` 仅作历史参考
 - **铁律**：`core/` 禁止 import 任何 UI/服务器框架；React 只通过 FastAPI 访问核心业务和渲染能力
 - ~~PySide6 (Qt)~~：已移除（2026-07-23 晚决策，理由见设计结论）
 
@@ -75,8 +75,8 @@ cd ui; npx tsc --noEmit
 
 ## 文档状态
 
-- 当前目标：`design/产品优化方案终版-0727/产品优化方案终版.md`；
+- 当前目标：`design/产品优化方案终版-0727/产品优化方案终版.md`；2026-07-29 详细增量规格：`design/产品优化方案终版-0727/产品与技术规格-v3.md`；
 - 当前顺序：`design/产品优化方案终版-0727/路线图.md`；
 - 数据口径：`design/roadmap-data-stats.md`；
-- 架构决策：`ADR-001.md`–`ADR-005.md`；
+- 架构决策：`ADR-001.md`–`ADR-008.md`；
 - `design/archive/` 和 `.archive/` 中的文档均已退役，不得作为当前执行依据。
