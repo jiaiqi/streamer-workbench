@@ -2,6 +2,11 @@
 
 from .repositories import (
     BackupPolicy,
+    AppendResult,
+    EventQuery,
+    EventRecord,
+    EventStore,
+    EventV2,
     RepositoryClosed,
     RepositoryConflict,
     RepositoryCorrupt,
@@ -9,6 +14,7 @@ from .repositories import (
     RepositoryNotFound,
     RepositoryRecoveryRequired,
     RepositoryUnavailable,
+    RecoveryReport,
     SettingsDocument,
     SettingsRepository,
     SongRepository,
@@ -17,6 +23,11 @@ from .repositories import (
 
 __all__ = [
     "BackupPolicy",
+    "AppendResult",
+    "EventQuery",
+    "EventRecord",
+    "EventStore",
+    "EventV2",
     "RepositoryClosed",
     "RepositoryConflict",
     "RepositoryCorrupt",
@@ -24,6 +35,7 @@ __all__ = [
     "RepositoryNotFound",
     "RepositoryRecoveryRequired",
     "RepositoryUnavailable",
+    "RecoveryReport",
     "SettingsDocument",
     "SettingsRepository",
     "SongRepository",

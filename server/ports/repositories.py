@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Generic, Protocol, TypeAlias, TypeVar
+from typing import Any, Generic, Iterator, Literal, Protocol, TypeAlias, TypeVar
 
 from core.data.songs import SongLibrary
 
 
 T = TypeVar("T")
 SettingsDocument: TypeAlias = dict[str, Any]
+EventRecord: TypeAlias = dict[str, Any]
+EventV2: TypeAlias = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,27 @@ class BackupPolicy:
         if self.keep < 0:
             raise ValueError("backup keep 不能为负数")
         object.__setattr__(self, "root", Path(self.root).expanduser().resolve())
+
+
+@dataclass(frozen=True)
+class EventQuery:
+    event_type: str | None = None
+    since: str | None = None
+    until: str | None = None
+
+
+@dataclass(frozen=True)
+class AppendResult:
+    status: Literal["appended", "already_exists"]
+    event: EventRecord
+
+
+@dataclass(frozen=True)
+class RecoveryReport:
+    detected: tuple[str, ...] = ()
+    recovered: tuple[str, ...] = ()
+    quarantined: tuple[str, ...] = ()
+    unresolved: tuple[str, ...] = ()
 
 
 class RepositoryError(Exception):
@@ -85,5 +108,27 @@ class SettingsRepository(Protocol):
         *,
         expected_revision: str | None,
     ) -> StoredSnapshot[SettingsDocument]: ...
+
+    def close(self) -> None: ...
+
+
+class EventStore(Protocol):
+    @property
+    def recovery_report(self) -> RecoveryReport: ...
+
+    def append(self, event: EventV2) -> AppendResult: ...
+
+    def get_by_id(self, event_id: str) -> EventV2 | None: ...
+
+    def iter(self, query: EventQuery) -> Iterator[EventRecord]: ...
+
+    def tail(
+        self,
+        *,
+        limit: int,
+        event_type: str | None = None,
+    ) -> tuple[EventRecord, ...]: ...
+
+    def flush(self) -> None: ...
 
     def close(self) -> None: ...
