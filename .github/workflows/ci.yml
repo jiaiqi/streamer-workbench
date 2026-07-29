@@ -56,6 +56,9 @@ jobs:
       - name: EventStore 索引与恢复测试
         run: .venv/bin/python tests/test_event_store.py
 
+      - name: PresetRepository 跨文件事务测试
+        run: .venv/bin/python tests/test_preset_repository.py
+
       # ---- 门 2：金标准逐像素对比（参照图随仓库检出）----
       - name: 金标准测试（diff=0 死线）
         run: PYTHONPATH=. .venv/bin/python tests/test_golden.py
