@@ -6,6 +6,9 @@ import LibraryView from "./views/LibraryView";
 import LearningView from "./views/LearningView";
 import SettingsView from "./views/SettingsView";
 import ExportDialog from "./components/ExportDialog";
+import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
+import { apiRequest } from "./api/client";
+import type { AppearanceSettings } from "./types";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -24,7 +27,12 @@ export default function App() {
   const [canvas, setCanvas] = useState<string>("抖音全屏 9:20");
   const [zoom, setZoom] = useState(45);
   const [loading, setLoading] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [appearance, setAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
+  const [savedAppearance, setSavedAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
+  const [appearanceSaving, setAppearanceSaving] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
+  const [resourceError, setResourceError] = useState("");
   const [renderKey, setRenderKey] = useState(0);
   // P0-1: 排版参数受控（初始为 grid-wrap 默认值，ParamSpec 拉取后合并）
   const [params, setParams] = useState<Record<string, number>>({
@@ -43,6 +51,14 @@ export default function App() {
   const [libDialogOpen, setLibDialogOpen] = useState(false);
   // Phase 2: 启动恢复
   const [restored, setRestored] = useState(false);
+  const dark = resolveAppearance(appearance.appearanceMode, systemDark) === "dark";
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setSystemDark(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   // Phase 2: 启动恢复
   useEffect(() => {
@@ -69,33 +85,60 @@ export default function App() {
   }, [selTheme, page, canvas, avoid, params, restored]);
 
   useEffect(() => {
-    // 先拉设置：无 localStorage 恢复记录时应用默认画布/默认主题
-    const savedWorkspace = localStorage.getItem("gp-workspace");
-    fetch("/api/settings").then(r => r.json()).then((st: Settings) => {
-      if (!savedWorkspace && st.default_canvas) setCanvas(st.default_canvas);
-      fetch("/api/themes").then(r => r.json()).then((d: Theme[]) => {
-        setThemes(d);
-        if (d.length && !selTheme) {
-          const def = !savedWorkspace && d.find(t => t.name === st.default_theme);
-          setSelTheme(def ? def.name : d[0].name);
+    let active = true;
+    const load = async () => {
+      try {
+        const savedWorkspace = localStorage.getItem("gp-workspace");
+        const [st, themeData, layoutData, songs, specs] = await Promise.all([
+          apiRequest<Settings>("/api/settings"),
+          apiRequest<Theme[]>("/api/themes"),
+          apiRequest<Layout[]>("/api/layouts"),
+          apiRequest<SongsData>("/api/songs/list"),
+          apiRequest<ParamSpec[]>("/api/layouts/grid-wrap/params"),
+        ]);
+        if (!active) return;
+        const nextAppearance = normalizeAppearance(st);
+        setAppearance(nextAppearance);
+        setSavedAppearance(nextAppearance);
+        if (!savedWorkspace && st.default_canvas) setCanvas(st.default_canvas);
+        setThemes(themeData);
+        setLayouts(layoutData);
+        setSongStats({ active: songs.active, draft: songs.draft });
+        if (themeData.length && !selTheme) {
+          const defaultTheme = savedWorkspace ? undefined : themeData.find(theme => theme.name === st.default_theme);
+          setSelTheme(defaultTheme?.name ?? themeData[0].name);
         }
-      });
-    });
-    fetch("/api/layouts").then(r => r.json()).then(setLayouts);
-    // Phase 2: 状态栏歌曲统计
-    fetch("/api/songs/list").then(r => r.json()).then((d: SongsData) =>
-      setSongStats({ active: d.active, draft: d.draft }));
-    // Phase 2: 拉取排版参数描述（ParamSpec），动态生成参数面板；
-    // 已有参数值（含 localStorage 恢复的）优先，缺的用插件默认值补齐
-    fetch("/api/layouts/grid-wrap/params").then(r => r.json()).then((specs: ParamSpec[]) => {
-      setParamSpecs(specs);
-      setParams(prev => {
-        const merged = { ...prev };
-        for (const s of specs) if (merged[s.key] === undefined) merged[s.key] = s.default;
-        return merged;
-      });
-    });
+        setParamSpecs(specs);
+        setParams(previous => {
+          const merged = { ...previous };
+          for (const spec of specs) if (merged[spec.key] === undefined) merged[spec.key] = spec.default;
+          return merged;
+        });
+        setResourceError("");
+      } catch (reason) {
+        if (active) setResourceError(reason instanceof Error ? reason.message : "工作台资源加载失败");
+      }
+    };
+    load();
+    return () => { active = false; };
   }, []);
+
+  const saveAppearance = async (next: AppearanceSettings) => {
+    if (appearanceSaving || settingsSaving || view === "settings") return;
+    const previous = savedAppearance;
+    setAppearance(next);
+    setAppearanceSaving(true);
+    try {
+      await apiRequest("/api/settings", { method: "POST", body: next });
+      setSavedAppearance(next);
+      setResourceError("");
+    } catch {
+      setAppearance(previous);
+      setResourceError("外观保存失败，已恢复为上次保存状态。");
+    } finally {
+      setAppearanceSaving(false);
+    }
+  };
 
   // Phase 2: 参数防抖（300ms）
   const [debouncedParams, setDebouncedParams] = useState(params);
@@ -125,6 +168,7 @@ export default function App() {
   // Ctrl/⌘+, 设置。输入控件聚焦时不拦截；Esc 由各对话框内部处理。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (appearanceSaving || settingsSaving) return;
       const mod = e.ctrlKey || e.metaKey;
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
@@ -150,10 +194,10 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [themes, view, maxPage, exportDialogOpen, libDialogOpen]);
+  }, [themes, view, maxPage, exportDialogOpen, libDialogOpen, appearanceSaving, settingsSaving]);
 
   return (
-    <div className={`flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${dark ? "bg-zinc-900 text-zinc-200" : "bg-background text-foreground"}`}>
+    <div className="app-shell flex h-screen w-screen overflow-hidden font-sans" data-mode={dark ? "dark" : "light"} data-accent={appearance.applicationAccentId}>
       {/* ===== paper texture (light mode) ===== */}
       {!dark && (
         <>
@@ -179,9 +223,11 @@ export default function App() {
             key={item.id}
             title={item.label}
             aria-label={item.label}
+            aria-current={item.id === view ? "page" : undefined}
+            disabled={appearanceSaving || settingsSaving}
             onClick={() => setView(item.id)}
-            className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 group ${item.id === view
-              ? (dark ? "bg-emerald-500/20 text-emerald-400" : "bg-primary-soft text-primary")
+            className={`relative flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 group ${item.id === view
+              ? "bg-primary-soft text-primary"
               : (dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
             }`}
           >
@@ -197,11 +243,15 @@ export default function App() {
         ))}
 
         <div className="mt-auto flex flex-col items-center gap-1">
-          <button onClick={() => setDark(d => !d)} title="切换亮/暗"
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+          <button onClick={() => saveAppearance({ ...appearance, appearanceMode: dark ? "light" : "dark" })}
+            disabled={appearanceSaving || settingsSaving || view === "settings"}
+            aria-busy={appearanceSaving}
+            title={view === "settings" ? "请在设置页调整外观" : dark ? "切换到画廊白" : "切换到暗色舞台"}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.sun}</button>
           <button onClick={() => setView("settings")} title="设置"
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            disabled={appearanceSaving || settingsSaving}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.settings}</button>
         </div>
       </nav>
@@ -218,22 +268,26 @@ export default function App() {
           {lastRenderMs !== null && (
             <span className="ml-auto tabular-nums hidden min-[800px]:inline">渲染 {Math.round(lastRenderMs)}ms/张</span>
           )}
+          {resourceError && <button className="resource-alert" type="button" onClick={() => window.location.reload()} title={resourceError}>资源异常 · 重试</button>}
         </header>
 
         <div className="flex flex-1 overflow-hidden">
           {/* ===== LEFT: theme list（仅工作台视图显示，<800px 隐藏） ===== */}
           {view === "workspace" && (
           <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
-            <div className="px-4 pt-4 pb-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">主题 · {themes.length}</p>
+            <div className="px-4 pt-5 pb-3">
+              <p className="eyebrow">策展资源</p>
+              <h2 className="panel-title">海报主题</h2>
+              <p className="panel-copy">主题与布局独立组合。选择后实时更新中央展品。</p>
             </div>
             <div className="px-3 pb-4 space-y-2">
+              {themes.length === 0 && !resourceError && <div className="panel-empty" aria-busy="true"><span className="spinner" />正在陈列主题…</div>}
               {themes.map(t => (
                 <button
                   key={t.name}
                   onClick={() => { setSelTheme(t.name); setPage(1); }}
                   className={`w-full text-left rounded-xl overflow-hidden transition-all duration-200 group ${selTheme === t.name
-                    ? (dark ? "ring-2 ring-emerald-400 ring-offset-1 ring-offset-zinc-900" : "ring-2 ring-primary ring-offset-1 ring-offset-background")
+                    ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
                     : "hover:ring-1 hover:ring-border"
                   }`}
                 >
@@ -258,14 +312,15 @@ export default function App() {
 
           {/* ===== CENTER: preview（<800px 隐藏，走移动端兜底面板） ===== */}
           {view === "workspace" && (
-          <main className="flex-1 flex flex-col items-center justify-center relative overflow-hidden max-[800px]:hidden">
+          <main className="workspace-gallery flex-1 flex flex-col items-center justify-center relative overflow-hidden max-[800px]:hidden">
+            <div className="gallery-room-label" aria-hidden="true">独立海报 · 画廊策展台</div>
             {/* toolbar */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
               <div className={`flex items-center gap-1.5 rounded-xl px-3 py-2 shadow-sm transition-colors duration-500 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
                 {Array.from({ length: maxPage }, (_, i) => (
                   <button key={i} onClick={() => setPage(i + 1)}
-                    className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${page === i + 1
-                      ? (dark ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground")
+                    className={`w-11 h-11 rounded-lg text-xs font-medium transition-all ${page === i + 1
+                      ? "bg-primary text-primary-foreground"
                       : (dark ? "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
                     }`}
                   >{i + 1}</button>
@@ -274,7 +329,7 @@ export default function App() {
                 <label title="避开抖音右侧评论/礼物互动区（9:20 画布右下安全区）"
                   className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-muted-foreground">
                   <input type="checkbox" checked={avoid} onChange={e => setAvoid(e.target.checked)}
-                    className={`w-3.5 h-3.5 rounded ${dark ? "accent-emerald-400" : "accent-primary"}`} />
+                    className="w-3.5 h-3.5 rounded accent-primary" />
                   避让互动区
                 </label>
               </div>
@@ -363,7 +418,7 @@ export default function App() {
                   </a>
                 )}
                 <button onClick={() => setExportDialogOpen(true)}
-                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
+                  className="primary-action flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm cursor-pointer">
                   {Icon.download} 导出…
                 </button>
                 <button onClick={() => { setLoading(true); setRenderKey(k => k + 1); }}
@@ -377,16 +432,35 @@ export default function App() {
 
           {/* ===== 移动端兜底（<800px）：不裁剪桌面三栏，引导去直播速查 ===== */}
           {view === "workspace" && (
-          <div className="flex-1 hidden max-[800px]:flex flex-col items-center justify-center gap-4 p-8 text-center">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm ${dark ? "bg-zinc-800" : "bg-muted"}`}>
-              <span className={dark ? "text-zinc-300" : "text-primary"}>{Icon.music}</span>
+          <div className="mobile-workspace flex-1 hidden max-[800px]:flex flex-col items-center gap-4 overflow-y-auto p-4 text-center">
+            <div className="mobile-workspace-heading">
+              <p className="eyebrow">轻量工作区</p>
+              <h2>预览与导出</h2>
+              <p>歌曲、布局和主题调整请在宽屏完成，移动端保留核对与导出。</p>
             </div>
-            <p className={`text-sm font-medium ${dark ? "text-zinc-200" : "text-foreground"}`}>完整海报编辑请在电脑端打开</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">移动端提供直播速查：搜歌、看谱、今晚队列</p>
-            <a href="/quick"
-              className="flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-sm font-medium bg-primary hover:bg-primary-strong text-primary-foreground transition-all active:scale-95 no-underline">
-              打开直播速查
-            </a>
+            {previewSrc ? (
+              <div className="mobile-preview-frame">
+                {previewError ? (
+                  <div className="mobile-preview-error" role="alert">
+                    <span>预览渲染失败</span>
+                    <button type="button" className="secondary-action" onClick={() => { setPreviewError(false); setLoading(true); setRenderKey(key => key + 1); }}>重试</button>
+                  </div>
+                ) : (
+                  <img src={previewSrc} alt={`${selTheme}主题，第 ${page} 页预览`}
+                    onLoad={() => setLoading(false)}
+                    onError={() => { setLoading(false); setPreviewError(true); }} />
+                )}
+                {loading && !previewError && <div className="mobile-preview-loading"><span className="spinner" />渲染中…</div>}
+              </div>
+            ) : <div className="panel-empty">尚无可预览主题</div>}
+            <div className="mobile-page-picker" aria-label="选择页码">
+              {Array.from({ length: maxPage }, (_, index) => <button key={index} type="button" aria-pressed={page === index + 1} onClick={() => setPage(index + 1)}>{index + 1}</button>)}
+            </div>
+            <div className="mobile-actions">
+              {previewSrc && <a href={previewSrc} download={`${activeTheme?.prefix ?? "poster"}-p${page}.png`} className="secondary-action">下载当前页</a>}
+              <button type="button" className="primary-action" onClick={() => setExportDialogOpen(true)}>批量导出</button>
+              <a href="/quick" className="secondary-action">直播速查</a>
+            </div>
           </div>
           )}
 
@@ -399,7 +473,10 @@ export default function App() {
 
           {/* ===== 设置视图 ===== */}
           {view === "settings" && (
-            <SettingsView dark={dark} themes={themes} />
+            <SettingsView dark={dark} themes={themes} appearance={appearance}
+              onAppearancePreview={setAppearance}
+              onAppearanceSaved={next => { setAppearance(next); setSavedAppearance(next); }}
+              onSavingChange={setSettingsSaving} />
           )}
 
           {/* ===== 学歌管理视图 ===== */}
@@ -413,10 +490,20 @@ export default function App() {
           {view === "workspace" && (
           <aside className={`w-60 shrink-0 border-l overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
             <div className={`px-5 py-4 border-b ${dark ? "border-zinc-700/50" : "border-border"}`}>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">参数</h2>
+              <p className="eyebrow">展品设置</p>
+              <h2 className="panel-title">版式与输出</h2>
             </div>
 
             <div className="px-4 py-3 space-y-3">
+              <section className="layout-picker" aria-label="布局">
+                <p className="inspector-label">布局</p>
+                <button type="button" className="layout-option active" aria-pressed="true">
+                  <span className="layout-glyph" aria-hidden="true"><i /><i /><i /><i /></span>
+                  <span><strong>经典网格</strong><small>grid-wrap · 固定 2 页兼容模式</small></span>
+                </button>
+                <button type="button" className="layout-option" disabled><span className="layout-glyph planned" aria-hidden="true" /><span><strong>自由编排</strong><small>规划中 · 暂不可用</small></span></button>
+                <p className="field-note">新布局、更多比例与自动分页会按各自算法声明能力；当前不会展示无法真实导出的选项。</p>
+              </section>
               {/* 折叠：输出参数（默认展开） */}
               <details open className="group">
                 <summary className={`flex items-center justify-between cursor-pointer py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none`}>
@@ -465,7 +552,7 @@ export default function App() {
                       {p.kind === "bool" && (
                         <input type="checkbox" checked={!!params[p.key]}
                           onChange={e => setParams(prev => ({ ...prev, [p.key]: e.target.checked ? 1 : 0 }))}
-                          className={`w-3.5 h-3.5 rounded ${dark ? "accent-emerald-400" : "accent-primary"}`} />
+                          className="w-3.5 h-3.5 rounded accent-primary" />
                       )}
                       {p.kind === "choice" && (
                         <select value={params[p.key] ?? p.default}

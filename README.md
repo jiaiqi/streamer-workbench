@@ -56,7 +56,7 @@ $env:PYTHONUTF8='1'
 cd ui; npx tsc --noEmit
 ```
 
-当前 CI 质量基线为 Python 测试 180 项、前端测试 12 项、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
+当前 CI 质量基线为 Python 测试 180 项、前端测试 15 项、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。前端已接入画廊白/暗色舞台、跟随系统及 8 种应用主色；这些应用令牌不影响海报 Palette。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
 
 ## 后端 API
 

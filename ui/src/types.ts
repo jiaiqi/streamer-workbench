@@ -53,6 +53,16 @@ export interface Settings {
   font_path: string;
   backup_count: number;
   render_threads: number;
+  appearanceMode?: AppearanceMode;
+  applicationAccentId?: ApplicationAccentId;
+}
+
+export type AppearanceMode = "system" | "light" | "dark";
+export type ApplicationAccentId = "bambooMoon" | "rainSky" | "distantMountain" | "rouge" | "begonia" | "wisteria" | "amber" | "pineFlower";
+
+export interface AppearanceSettings {
+  appearanceMode: AppearanceMode;
+  applicationAccentId: ApplicationAccentId;
 }
 
 export const CANVAS_OPTIONS = ["标准 9:16", "抖音全屏 9:20"] as const;

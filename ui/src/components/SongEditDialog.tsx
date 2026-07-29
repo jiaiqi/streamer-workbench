@@ -156,7 +156,7 @@ export default function SongEditDialog({ dark, target, onClose, onSaved }: {
             取消
           </button>
           <button onClick={save} disabled={saving}
-            className="rounded-xl px-5 py-2 text-sm transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+            className="primary-action rounded-xl px-5 py-2 text-sm cursor-pointer disabled:opacity-50">
             {saving ? "保存中…" : "保存"}
           </button>
         </div>
