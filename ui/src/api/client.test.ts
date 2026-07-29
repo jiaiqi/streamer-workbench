@@ -79,6 +79,27 @@ test("normalizes network failures", async () => {
   );
 });
 
+test("normalizes timeout but preserves caller cancellation", async () => {
+  const waitForAbort: typeof fetch = async (_url, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+  });
+  const timeoutRequest = createApiClient({ fetch: waitForAbort, timeoutMs: 1 });
+  await assert.rejects(
+    timeoutRequest("/api/slow"),
+    (error: unknown) => error instanceof ApiClientError && error.code === "request_timeout",
+  );
+
+  const controller = new AbortController();
+  const cancelled = createApiClient({ fetch: waitForAbort })("/api/cancelled", {
+    signal: controller.signal,
+  });
+  controller.abort(new DOMException("caller cancelled", "AbortError"));
+  await assert.rejects(
+    cancelled,
+    (error: unknown) => error instanceof DOMException && error.name === "AbortError",
+  );
+});
+
 test("returns undefined for 204 response", async () => {
   const request = createApiClient({
     fetch: async () => new Response(null, { status: 204 }),
