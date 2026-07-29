@@ -11,6 +11,7 @@ interface SettingsViewProps {
   appearance: AppearanceSettings;
   onAppearancePreview: (appearance: AppearanceSettings) => void;
   onAppearanceSaved: (appearance: AppearanceSettings) => void;
+  onSavingChange: (saving: boolean) => void;
 }
 
 export default function SettingsView({
@@ -19,6 +20,7 @@ export default function SettingsView({
   appearance,
   onAppearancePreview,
   onAppearanceSaved,
+  onSavingChange,
 }: SettingsViewProps) {
   const [form, setForm] = useState<Settings | null>(null);
   const [baseline, setBaseline] = useState<AppearanceSettings>(appearance);
@@ -54,6 +56,7 @@ export default function SettingsView({
   const save = async () => {
     if (!form) return;
     setStatus("saving");
+    onSavingChange(true);
     setError("");
     try {
       const response = await apiRequest<SettingsUpdateResponse>("/api/settings", { method: "POST", body: form });
@@ -68,6 +71,8 @@ export default function SettingsView({
       onAppearancePreview(baseline);
       setError(`${reason instanceof Error ? reason.message : "设置保存失败"}，外观已恢复为上次保存状态。`);
       setStatus("error");
+    } finally {
+      onSavingChange(false);
     }
   };
 
@@ -124,8 +129,8 @@ export default function SettingsView({
 
         <section className="settings-card">
           <div className="section-heading"><span>数据与安全</span></div>
-          <label className="field-label">自动备份保留份数<input className={`${fieldClass} short-field`} type="number" min={1} max={100} value={form.backup_count} onChange={event => setForm({ ...form, backup_count: Math.max(1, Math.min(100, Number(event.target.value) || 20)) })} /></label>
-          <p className="field-note">每次变更歌曲数据前自动备份，超出数量后滚动清理。</p>
+          <label className="field-label">自动备份保留份数<input className={`${fieldClass} short-field`} type="number" min={0} max={100} value={form.backup_count} onChange={event => setForm({ ...form, backup_count: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
+          <p className="field-note">每次变更歌曲数据前自动备份，超出数量后滚动清理；设为 0 可停用新备份。</p>
         </section>
 
         <section className="settings-card settings-card-wide">

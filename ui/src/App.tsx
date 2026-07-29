@@ -29,6 +29,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [appearance, setAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
   const [savedAppearance, setSavedAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
+  const [appearanceSaving, setAppearanceSaving] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const [resourceError, setResourceError] = useState("");
   const [renderKey, setRenderKey] = useState(0);
@@ -122,14 +124,19 @@ export default function App() {
   }, []);
 
   const saveAppearance = async (next: AppearanceSettings) => {
+    if (appearanceSaving || settingsSaving || view === "settings") return;
     const previous = savedAppearance;
     setAppearance(next);
+    setAppearanceSaving(true);
     try {
       await apiRequest("/api/settings", { method: "POST", body: next });
       setSavedAppearance(next);
+      setResourceError("");
     } catch {
       setAppearance(previous);
       setResourceError("外观保存失败，已恢复为上次保存状态。");
+    } finally {
+      setAppearanceSaving(false);
     }
   };
 
@@ -161,6 +168,7 @@ export default function App() {
   // Ctrl/⌘+, 设置。输入控件聚焦时不拦截；Esc 由各对话框内部处理。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (appearanceSaving || settingsSaving) return;
       const mod = e.ctrlKey || e.metaKey;
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
@@ -186,7 +194,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [themes, view, maxPage, exportDialogOpen, libDialogOpen]);
+  }, [themes, view, maxPage, exportDialogOpen, libDialogOpen, appearanceSaving, settingsSaving]);
 
   return (
     <div className="app-shell flex h-screen w-screen overflow-hidden font-sans" data-mode={dark ? "dark" : "light"} data-accent={appearance.applicationAccentId}>
@@ -216,8 +224,9 @@ export default function App() {
             title={item.label}
             aria-label={item.label}
             aria-current={item.id === view ? "page" : undefined}
+            disabled={appearanceSaving || settingsSaving}
             onClick={() => setView(item.id)}
-            className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 group ${item.id === view
+            className={`relative flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 group ${item.id === view
               ? "bg-primary-soft text-primary"
               : (dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
             }`}
@@ -234,11 +243,15 @@ export default function App() {
         ))}
 
         <div className="mt-auto flex flex-col items-center gap-1">
-          <button onClick={() => saveAppearance({ ...appearance, appearanceMode: dark ? "light" : "dark" })} title={dark ? "切换到画廊白" : "切换到暗色舞台"}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+          <button onClick={() => saveAppearance({ ...appearance, appearanceMode: dark ? "light" : "dark" })}
+            disabled={appearanceSaving || settingsSaving || view === "settings"}
+            aria-busy={appearanceSaving}
+            title={view === "settings" ? "请在设置页调整外观" : dark ? "切换到画廊白" : "切换到暗色舞台"}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.sun}</button>
           <button onClick={() => setView("settings")} title="设置"
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            disabled={appearanceSaving || settingsSaving}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.settings}</button>
         </div>
       </nav>
@@ -306,7 +319,7 @@ export default function App() {
               <div className={`flex items-center gap-1.5 rounded-xl px-3 py-2 shadow-sm transition-colors duration-500 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
                 {Array.from({ length: maxPage }, (_, i) => (
                   <button key={i} onClick={() => setPage(i + 1)}
-                    className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${page === i + 1
+                    className={`w-11 h-11 rounded-lg text-xs font-medium transition-all ${page === i + 1
                       ? "bg-primary text-primary-foreground"
                       : (dark ? "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
                     }`}
@@ -427,8 +440,17 @@ export default function App() {
             </div>
             {previewSrc ? (
               <div className="mobile-preview-frame">
-                <img src={previewSrc} alt={`${selTheme}主题，第 ${page} 页预览`} onLoad={() => setLoading(false)} onError={() => setPreviewError(true)} />
-                {loading && <div className="mobile-preview-loading"><span className="spinner" />渲染中…</div>}
+                {previewError ? (
+                  <div className="mobile-preview-error" role="alert">
+                    <span>预览渲染失败</span>
+                    <button type="button" className="secondary-action" onClick={() => { setPreviewError(false); setLoading(true); setRenderKey(key => key + 1); }}>重试</button>
+                  </div>
+                ) : (
+                  <img src={previewSrc} alt={`${selTheme}主题，第 ${page} 页预览`}
+                    onLoad={() => setLoading(false)}
+                    onError={() => { setLoading(false); setPreviewError(true); }} />
+                )}
+                {loading && !previewError && <div className="mobile-preview-loading"><span className="spinner" />渲染中…</div>}
               </div>
             ) : <div className="panel-empty">尚无可预览主题</div>}
             <div className="mobile-page-picker" aria-label="选择页码">
@@ -453,7 +475,8 @@ export default function App() {
           {view === "settings" && (
             <SettingsView dark={dark} themes={themes} appearance={appearance}
               onAppearancePreview={setAppearance}
-              onAppearanceSaved={next => { setAppearance(next); setSavedAppearance(next); }} />
+              onAppearanceSaved={next => { setAppearance(next); setSavedAppearance(next); }}
+              onSavingChange={setSettingsSaving} />
           )}
 
           {/* ===== 学歌管理视图 ===== */}

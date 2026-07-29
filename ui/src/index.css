@@ -12,6 +12,7 @@
   /* ── 品牌色（画廊白 Art Gallery · 海洋青）── */
   --color-primary: #2f8f7a;
   --color-primary-strong: #257a67;
+  --color-primary-foreground: #ffffff;
   --color-primary-soft: rgba(47, 143, 122, 0.10);
   --color-primary-softer: rgba(47, 143, 122, 0.05);
 
@@ -62,7 +63,6 @@ body {
 }
 
 button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
-button, a, input, select { min-height: 44px; }
 :focus-visible { outline: 3px solid var(--color-ring); outline-offset: 3px; }
 
 .app-shell {
@@ -180,6 +180,7 @@ button, a, input, select { min-height: 44px; }
 .mobile-preview-frame { position:relative; width:min(64vw,280px); overflow:hidden; border:1px solid var(--color-border); border-radius:16px; background:#0c110f; box-shadow:var(--shadow-lg); }
 .mobile-preview-frame img { display:block; width:100%; }
 .mobile-preview-loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:8px; background:color-mix(in srgb,var(--color-background) 72%,transparent); color:var(--color-muted-foreground); font-size:11px; }
+.mobile-preview-error { min-height:320px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--color-danger); font-size:12px; }
 .mobile-page-picker, .mobile-actions { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
 .mobile-page-picker button { width:44px; border:1px solid var(--color-border); border-radius:11px; background:var(--color-card); color:var(--color-muted-foreground); }
 .mobile-page-picker button[aria-pressed="true"] { border-color:var(--color-primary); background:var(--color-primary); color:var(--color-primary-foreground); }
