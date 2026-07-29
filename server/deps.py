@@ -63,14 +63,14 @@ def _save_settings(s: dict):
         json.dump(s, f, ensure_ascii=False, indent=2)
 
 
-def init_deps(app, root: str = None):
+def init_deps(app, root: str = None, data_root: str = None):
     """初始化所有服务依赖，挂载到 app.state。在 main.py 启动时调用一次。"""
     global ROOT, THEMES_DIR, FONT, SONGS_JSON, SETTINGS_PATH, EVENTS_JSONL, TABS_DIR, DATA_ROOT
 
     ROOT = root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     THEMES_DIR = os.path.join(ROOT, "themes")
     FONT = os.path.join(ROOT, "fonts", "MaokenAssortedSans.ttf")
-    DATA_ROOT = os.path.join(ROOT, "data")
+    DATA_ROOT = data_root or os.path.join(ROOT, "data")
     SONGS_JSON = os.path.join(DATA_ROOT, "songs.json")
     SETTINGS_PATH = os.path.join(DATA_ROOT, "settings.json")
     EVENTS_JSONL = os.path.join(DATA_ROOT, "events.jsonl")
@@ -78,7 +78,7 @@ def init_deps(app, root: str = None):
     os.makedirs(TABS_DIR, exist_ok=True)
 
     # 设置默认输出目录
-    DEFAULT_SETTINGS["output_dir"] = os.path.join(ROOT, "output")
+    DEFAULT_SETTINGS["output_dir"] = os.path.join(DATA_ROOT, "output")
     DEFAULT_SETTINGS["font_path"] = FONT
 
     # 加载主题、歌曲库、设置

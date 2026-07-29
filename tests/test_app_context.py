@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import os
 import sys
 import tempfile
@@ -66,6 +67,61 @@ def test_test_mode_requires_explicit_data_root():
         assert False, "test 模式不得回退到真实用户目录"
     except ValueError as error:
         assert "data_root" in str(error)
+
+
+def test_factory_does_not_write_data_root():
+    from server.app import create_app
+    with tempfile.TemporaryDirectory() as raw:
+        data_root = Path(raw) / "not-created"
+        app = create_app(AppConfig(Path(__file__).resolve().parent.parent,
+                                   mode="test", data_root=data_root))
+        assert app.state.paths.data_root == data_root.resolve()
+        assert not data_root.exists()
+        assert not hasattr(app.state, "context")
+
+
+def test_lifespan_builds_and_releases_context():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            data_root = Path(raw) / "data"
+            app = create_app(AppConfig(Path(__file__).resolve().parent.parent,
+                                       mode="test", data_root=data_root))
+            async with app.router.lifespan_context(app):
+                context = app.state.context
+                assert context.paths.data_root == data_root.resolve()
+                assert context.song_repository is app.state.library
+                assert context.export_job_manager is app.state.export_jobs
+                assert (data_root / "tabs").is_dir()
+                assert (data_root / "presets").is_dir()
+            assert not hasattr(app.state, "context")
+
+    asyncio.run(scenario())
+
+
+def test_two_apps_have_distinct_context_and_mutable_state():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            project = Path(__file__).resolve().parent.parent
+            app_a = create_app(AppConfig(project, mode="test", data_root=base / "a"))
+            app_b = create_app(AppConfig(project, mode="test", data_root=base / "b"))
+            async with app_a.router.lifespan_context(app_a):
+                async with app_b.router.lifespan_context(app_b):
+                    a = app_a.state.context
+                    b = app_b.state.context
+                    assert a is not b
+                    assert a.paths.data_root != b.paths.data_root
+                    assert a.song_repository is not b.song_repository
+                    assert a.settings_repository is not b.settings_repository
+                    assert a.export_job_manager is not b.export_job_manager
+                    a.export_job_manager["only-a"] = {"status": "queued"}
+                    assert "only-a" not in b.export_job_manager
+
+    asyncio.run(scenario())
 
 
 def _run():
