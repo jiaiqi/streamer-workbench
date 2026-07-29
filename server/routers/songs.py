@@ -23,9 +23,15 @@ from server.api.song_models import (
 )
 from server.dependencies import get_app_context
 from server.ports.repositories import RepositoryConflict, RepositoryError
+from server.services.songs import (
+    SongConflict,
+    SongNotFound,
+    SongServiceError,
+    SongValidationFailed,
+    song_values,
+)
 from core.data.events import append_event, _normalize_timestamp
 from core.data import tabs as tabs_store
-from core.data.songs import Song, pinyin_initials
 
 router = APIRouter()
 
@@ -37,32 +43,19 @@ def _payload_dict(payload) -> dict:
 
 
 def _song_dict(s) -> dict:
-    return {"id": s.id, "title": s.title, "status": s.status, "section": s.section,
-            "artists": s.artists, "lyricist": s.lyricist, "composer": s.composer,
-            "key": s.key, "capo": s.capo, "difficulty": s.difficulty,
-            "tabs": s.tabs, "tags": s.tags, "pinyin": s.pinyin,
-            "added_at": s.added_at, "notes": s.notes,
-            "learned_at": s.learned_at, "tab_files": s.tab_files}
+    return song_values(s)
 
 
-def _clean_song_fields(payload: dict) -> dict:
-    from core.data.songs import SongLibrary
-    fields = {}
-    for k in SongLibrary.EDITABLE_FIELDS:
-        if k not in payload:
-            continue
-        v = payload[k]
-        if k in ("artists", "tags"):
-            fields[k] = [str(x).strip() for x in (v or []) if str(x).strip()]
-        elif k == "capo":
-            fields[k] = None if v in (None, "") else max(0, min(12, int(v)))
-        elif k == "section":
-            fields[k] = None if v in (None, "") else max(1, min(7, int(v)))
-        else:
-            fields[k] = str(v).strip() if v is not None else ""
-    if "title" in fields and not fields["title"]:
-        raise ValueError("歌名不能为空")
-    return fields
+def _song_service_error(error: SongServiceError):
+    if isinstance(error, SongNotFound):
+        status_code = 404
+    elif isinstance(error, SongConflict):
+        status_code = 409
+    elif isinstance(error, SongValidationFailed):
+        status_code = 400
+    else:
+        status_code = 500
+    return Response(str(error), status_code=status_code)
 
 
 def _save_library(context, library):
@@ -136,98 +129,52 @@ def api_songs_list(req: Request, status: str = None):
 def api_songs_status(req: Request, payload: SongLegacyStatusRequest):
     payload = _payload_dict(payload)
     context = get_app_context(req)
-    library = _library(context)
     title = (payload.get("title") or "").strip()
     status = (payload.get("status") or "").strip()
-    if status not in ("active", "draft"):
-        return Response("status 必须是 active 或 draft", status_code=400)
-    mark = library.mark_active if status == "active" else library.mark_draft
-    if not mark(title):
-        return Response(f"未找到歌曲：{title}", status_code=404)
-    if status == "active":
-        song = library.get(title)
-        if song is not None:
-            song.learned_at = datetime.now().strftime("%Y-%m-%d")
-    else:
-        song = library.get(title)
-    _save_library(context, library)
-    _append_event(context, "song_learned" if status == "active" else "song_unlearned",
-                 song_id=song.id if song else None, title_snapshot=title,
-                 source="songs-api")
+    try:
+        result = context.song_service.set_status_by_title(title, status)
+    except SongServiceError as error:
+        return _song_service_error(error)
     return {"ok": True, "title": title, "status": status,
-            "active": library.count_active(), "draft": library.count_draft()}
+            "active": result.active, "draft": result.draft}
 
 
 @router.post("/api/songs/update", response_model=SongUpdateResponse)
 def api_songs_update(req: Request, payload: SongLegacyUpdateRequest):
     payload = _payload_dict(payload)
     context = get_app_context(req)
-    library = _library(context)
     title = (payload.get("title") or "").strip()
     try:
-        fields = _clean_song_fields(payload.get("fields") or {})
-        if not fields:
-            return Response("fields 为空", status_code=400)
-        old_song = library.get(title)
-        old_view = _song_dict(old_song) if old_song else None
-        ok = library.update(title, fields)
-    except ValueError as e:
-        status_code = 409 if "改名失败" in str(e) else 400
-        return Response(str(e), status_code=status_code)
-    if not ok:
-        return Response(f"未找到歌曲：{title}", status_code=404)
-    _save_library(context, library)
-    song = library.get(fields.get("title", title))
-    changes = [{"field": k, "old": old_view.get(k), "new": song and _song_dict(song).get(k)}
-               for k in fields if old_view and old_view.get(k) != _song_dict(song).get(k)]
-    _append_event(context, "song_edited", song_id=song.id,
-                 title_snapshot=song.title, meta={"changes": changes},
-                 source="songs-api")
-    return {"ok": True, "song": _song_dict(song)}
+        result = context.song_service.update_by_title(
+            title, payload.get("fields") or {})
+    except SongServiceError as error:
+        return _song_service_error(error)
+    return {"ok": True, "song": _song_dict(result.song)}
 
 
 @router.post("/api/songs/add", response_model=SongMutationResponse)
 def api_songs_add(req: Request, payload: SongCreateRequest):
     payload = _payload_dict(payload)
     context = get_app_context(req)
-    library = _library(context)
     try:
-        fields = _clean_song_fields(payload)
-    except (ValueError, TypeError) as e:
-        return Response(str(e), status_code=400)
-    title = fields.pop("title", "")
-    if not title:
-        return Response("歌名不能为空", status_code=400)
-    song = Song(title=title,
-                status=payload.get("status") if payload.get("status") in ("active", "draft") else "draft",
-                added_at=datetime.now().strftime("%Y-%m-%d"),
-                **fields)
-    if not song.pinyin:
-        song.pinyin = pinyin_initials(title)
-    if not library.add(song):
-        return Response(f"歌曲已存在：{title}", status_code=409)
-    _save_library(context, library)
-    _append_event(context, "song_added", song_id=song.id,
-                 title_snapshot=title, meta={"status": song.status},
-                 source="songs-api")
-    return {"ok": True, "song": _song_dict(song),
-            "active": library.count_active(), "draft": library.count_draft()}
+        result = context.song_service.create(payload)
+    except SongServiceError as error:
+        return _song_service_error(error)
+    return {"ok": True, "song": _song_dict(result.song),
+            "active": result.active, "draft": result.draft}
 
 
 @router.post("/api/songs/delete", response_model=SongLegacyDeleteResponse)
 def api_songs_delete(req: Request, payload: SongLegacyIdentityRequest):
     payload = _payload_dict(payload)
     context = get_app_context(req)
-    library = _library(context)
     title = (payload.get("title") or "").strip()
-    song = library.get(title)
-    if song is None or not library.remove(title):
-        return Response(f"未找到歌曲：{title}", status_code=404)
-    _save_library(context, library)
-    _append_event(context, "song_deleted", song_id=song.id,
-                 title_snapshot=title, source="songs-api")
+    try:
+        result = context.song_service.delete_by_title(title)
+    except SongServiceError as error:
+        return _song_service_error(error)
     return {"ok": True, "title": title,
-            "active": library.count_active(), "draft": library.count_draft()}
+            "active": result.active, "draft": result.draft}
 
 
 # ── Song ID 主接口 ──
@@ -247,28 +194,11 @@ def api_song_update_by_id(req: Request, song_id: str, payload: SongEditableField
     """按不可变 ID 更新歌曲，允许修改 title 但禁止修改 id。"""
     context = get_app_context(req)
     payload = _payload_dict(payload)
-    library = _library(context)
-    song = library.get_by_id(song_id)
-    if song is None:
-        return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
-    old_view = _song_dict(song)
     try:
-        fields = _clean_song_fields(payload)
-        if not fields:
-            return Response("fields 为空", status_code=400)
-        library.update_by_id(song_id, fields)
-    except ValueError as e:
-        status_code = 409 if "改名失败" in str(e) else 400
-        return Response(str(e), status_code=status_code)
-    _save_library(context, library)
-    current = library.get_by_id(song_id)
-    current_view = _song_dict(current)
-    changes = [{"field": key, "old": old_view.get(key), "new": current_view.get(key)}
-               for key in fields if old_view.get(key) != current_view.get(key)]
-    _append_event(context, "song_edited", song_id=current.id,
-                 title_snapshot=current.title, meta={"changes": changes},
-                 source="songs-api")
-    return {"ok": True, "song": current_view}
+        result = context.song_service.update_by_id(song_id, payload)
+    except SongServiceError as error:
+        return _song_service_error(error)
+    return {"ok": True, "song": _song_dict(result.song)}
 
 
 @router.patch("/api/songs/{song_id}/status", response_model=SongMutationResponse)
@@ -276,38 +206,26 @@ def api_song_status_by_id(req: Request, song_id: str, payload: SongStatusRequest
     """按不可变 ID 修改 active/draft 状态。"""
     context = get_app_context(req)
     payload = _payload_dict(payload)
-    library = _library(context)
     status = (payload.get("status") or "").strip()
-    if status not in ("active", "draft"):
-        return Response("status 必须是 active 或 draft", status_code=400)
-    song = library.get_by_id(song_id)
-    if song is None:
-        return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
-    mark = library.mark_active_by_id if status == "active" else library.mark_draft_by_id
-    mark(song_id)
-    if status == "active":
-        song.learned_at = datetime.now().strftime("%Y-%m-%d")
-    _save_library(context, library)
-    _append_event(context, "song_learned" if status == "active" else "song_unlearned",
-                 song_id=song.id, title_snapshot=song.title, source="songs-api")
-    return {"ok": True, "song": _song_dict(song),
-            "active": library.count_active(), "draft": library.count_draft()}
+    try:
+        result = context.song_service.set_status_by_id(song_id, status)
+    except SongServiceError as error:
+        return _song_service_error(error)
+    return {"ok": True, "song": _song_dict(result.song),
+            "active": result.active, "draft": result.draft}
 
 
 @router.delete("/api/songs/{song_id}", response_model=SongDeleteResponse)
 def api_song_delete_by_id(req: Request, song_id: str):
     """按不可变 ID 删除歌曲；历史事件保留 ID 与 title_snapshot。"""
     context = get_app_context(req)
-    library = _library(context)
-    song = library.get_by_id(song_id)
-    if song is None:
-        return Response(f"未找到歌曲 ID：{song_id}", status_code=404)
-    library.remove_by_id(song_id)
-    _save_library(context, library)
-    _append_event(context, "song_deleted", song_id=song.id,
-                 title_snapshot=song.title, source="songs-api")
-    return {"ok": True, "song_id": song.id, "title_snapshot": song.title,
-            "active": library.count_active(), "draft": library.count_draft()}
+    try:
+        result = context.song_service.delete_by_id(song_id)
+    except SongServiceError as error:
+        return _song_service_error(error)
+    return {"ok": True, "song_id": result.song_id,
+            "title_snapshot": result.title_snapshot,
+            "active": result.active, "draft": result.draft}
 
 
 # ── 曲谱附件 ──
