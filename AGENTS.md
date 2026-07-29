@@ -48,8 +48,8 @@
 
 ```
 引擎兼容  ✅          avoid/cache 正确性已修复，金标准 16/16 diff=0；环境复现待 R0 收口
-数据层    S1-S3 ✅   S3.5 🟡（Song v5/Event v2 ✅，关系迁移 ⬜）  S4/S5 等待 S3.5
-产品主线  R0 🟡      avoid/cache、Song v5、Event v2 已完成；关系迁移、AppContext、Repository、API 契约、数据目录与安全待收口
+数据层    S1-S3.5 ✅ Song v5/Event v2、Tabs/Queue/Preset song_id 关系迁移完成；S4/S5 按 R3 启动
+产品主线  R0 🟡      R0.1-R0.5 已完成；AppContext、Repository、API 契约、数据目录与安全待收口
 桌面壳    spike 已过  正式壳 ⬜
 UI        ~80%       工作台/歌曲库/学歌/速查可用
 ```
@@ -64,7 +64,7 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 | 数据 | JSON + JSONL 本地文件 | songs.json v5（178 首）、events.jsonl v1/v2、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 56 项单元测试 + 16 张金标准逐像素 + tsc --noEmit | Windows 直接 runner 56/56；控制台 UTF-8 与依赖锁定仍待 R0 收口 |
+| 测试 | 87 项 Python 单元测试 + 6 项前端测试 + 16 张金标准逐像素 + tsc/build | 当前 CI 质量门通过；Windows 控制台 UTF-8 与依赖锁定仍待 R0 收口 |
 
 ---
 
@@ -169,7 +169,7 @@ Python 后端是核心用户数据的唯一写入权威（ADR-003）。Electron 
 ```bash
 # 测试
 PYTHONPATH=. python tests/test_golden.py     # 金标准 16/16
-PYTHONPATH=. python tests/test_unit.py        # 单元测试 56 项
+PYTHONPATH=. python tests/test_unit.py        # Python 单元测试 87 项
 cd ui && npx tsc --noEmit                    # TS 编译检查
 
 # 运行
