@@ -112,6 +112,9 @@ def test_secondary_openapi_uses_named_body_query_and_response_models():
     assert presets["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
         "/PresetRequest"
     )
+    preset_default = schema["paths"]["/api/presets/{preset_id}/default"]["post"]
+    assert preset_default["responses"]["200"]["content"]["application/json"][
+        "schema"]["$ref"].endswith("/PresetDefaultResponse")
     assert export["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
         "/ExportResponse"
     )

@@ -12,10 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from server.ports.repositories import BackupPolicy, RepositoryCorrupt, RepositoryUnavailable
+from server.ports.repositories import (
+    BackupPolicy,
+    MISSING_REVISION,
+    RepositoryCorrupt,
+    RepositoryUnavailable,
+)
 
 
-MISSING_REVISION = "missing"
 JsonValidator = Callable[[Any], None]
 
 

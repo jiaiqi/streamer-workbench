@@ -1053,12 +1053,15 @@ def test_preset_api_rejects_malformed_query_and_protects_default_flag():
     import server.routers.presets as presets_router
     from server.ports.repositories import BackupPolicy
     from server.repositories.presets import FilePresetRepository
+    from server.services.presets import PresetApplicationService
 
     with tempfile.TemporaryDirectory() as data_root:
         repository = FilePresetRepository(
             os.path.join(data_root, "presets"), BackupPolicy(os.path.join(data_root, "backups")))
         request = _request_for_library(SongLibrary([]))
         request.app.state.context.preset_repository = repository
+        request.app.state.context.preset_service = PresetApplicationService(
+            preset_repository=repository)
         try:
             malformed = presets_router.api_presets_save({"name": "坏数据", "song_query": "不是对象"}, request)
             invalid_ids = presets_router.api_presets_save({
