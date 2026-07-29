@@ -74,8 +74,10 @@ def test_event_openapi_uses_named_request_and_response_models():
     }
 
 
-async def _request(app, method: str, path: str, payload: dict):
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+async def _request(app, method: str, path: str, payload: dict | None = None,
+                   headers: dict[str, str] | None = None):
+    body = (json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            if payload is not None else b"")
     sent = False
     messages = []
 
@@ -89,22 +91,36 @@ async def _request(app, method: str, path: str, payload: dict):
     async def send(message):
         messages.append(message)
 
-    await app(
-        {
-            "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
-            "method": method, "scheme": "http", "path": path,
-            "raw_path": path.encode(), "query_string": b"",
-            "headers": [(b"content-type", b"application/json")],
-            "client": ("test", 1), "server": ("test", 80),
-        },
-        receive,
-        send,
-    )
+    try:
+        await app(
+            {
+                "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+                "method": method, "scheme": "http", "path": path,
+                "raw_path": path.encode(), "query_string": b"",
+                "headers": [
+                    (key.lower().encode(), value.encode())
+                    for key, value in ({"content-type": "application/json"} | (headers or {})).items()
+                ],
+                "client": ("test", 1), "server": ("test", 80),
+            },
+            receive,
+            send,
+        )
+    except Exception:
+        # Starlette ServerErrorMiddleware 在发送测试响应后仍会重新抛出，便于测试客户端配置。
+        if not any(message["type"] == "http.response.start" for message in messages):
+            raise
     status = next(message["status"] for message in messages
                   if message["type"] == "http.response.start")
+    response_start = next(message for message in messages
+                          if message["type"] == "http.response.start")
+    response_headers = {
+        key.decode().lower(): value.decode()
+        for key, value in response_start.get("headers", [])
+    }
     response_body = b"".join(message.get("body", b"") for message in messages
                              if message["type"] == "http.response.body")
-    return status, json.loads(response_body)
+    return status, json.loads(response_body), response_headers
 
 
 def test_event_report_rejects_unknown_fields_before_business_logic():
@@ -114,14 +130,59 @@ def test_event_report_rejects_unknown_fields_before_business_logic():
         with tempfile.TemporaryDirectory() as raw:
             app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
             async with app.router.lifespan_context(app):
-                status, body = await _request(
+                status, body, headers = await _request(
                     app,
                     "POST",
                     "/api/events/report",
                     {"type": "queue_added", "unexpected": True},
                 )
                 assert status == 422
-                assert body["detail"][0]["type"] == "extra_forbidden"
+                assert body["error"]["code"] == "validation_error"
+                assert body["error"]["details"]["issues"][0]["type"] == "extra_forbidden"
+                assert body["error"]["request_id"] == headers["x-request-id"]
+
+    asyncio.run(scenario())
+
+
+def test_request_id_is_propagated_and_invalid_value_is_replaced():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+            async with app.router.lifespan_context(app):
+                status, body, headers = await _request(
+                    app, "GET", "/api/missing", headers={"x-request-id": "client_req-1"})
+                assert status == 404
+                assert headers["x-request-id"] == "client_req-1"
+                assert body["error"]["request_id"] == "client_req-1"
+                assert body["error"]["code"] == "not_found"
+
+                _, body, headers = await _request(
+                    app, "GET", "/api/missing", headers={"x-request-id": "bad id\nvalue"})
+                assert headers["x-request-id"].startswith("req_")
+                assert body["error"]["request_id"] == headers["x-request-id"]
+
+    asyncio.run(scenario())
+
+
+def test_unhandled_error_uses_safe_envelope_without_leaking_exception():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+
+            @app.get("/api/test-unhandled")
+            def fail():
+                raise RuntimeError("sensitive implementation detail")
+
+            async with app.router.lifespan_context(app):
+                status, body, headers = await _request(app, "GET", "/api/test-unhandled")
+                assert status == 500
+                assert body["error"]["code"] == "internal_error"
+                assert body["error"]["request_id"] == headers["x-request-id"]
+                assert "sensitive" not in json.dumps(body, ensure_ascii=False)
 
     asyncio.run(scenario())
 

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.engine import render_page
+from server.api.handlers import install_api_contract
 from server.config import AppConfig, build_app_paths
 from server.context import AppContext
 from server.dependencies import get_app_context
@@ -81,6 +82,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                   lifespan=_lifespan(config, paths))
     app.state.config = config
     app.state.paths = paths
+    install_api_contract(app)
 
     app.add_middleware(
         CORSMiddleware,
