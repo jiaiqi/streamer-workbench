@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Song } from "../types";
+import { apiRequest } from "../api/client";
+import { toRequestFailure } from "../async/requestState";
 
 /* ---- 歌曲编辑对话框（增删改全字段，弹唱信息独立分组） ---- */
 export default function SongEditDialog({ dark, target, onClose, onSaved }: {
@@ -34,6 +36,7 @@ export default function SongEditDialog({ dark, target, onClose, onSaved }: {
   }, [saving, onClose]);
 
   const save = async () => {
+    if (saving) return;
     if (!form.title?.trim()) { setError("歌名不能为空"); return; }
     setSaving(true);
     setError("");
@@ -48,16 +51,15 @@ export default function SongEditDialog({ dark, target, onClose, onSaved }: {
       section: form.section === "" ? null : parseInt(form.section, 10),
     };
     try {
-      const res = target === "new"
-        ? await fetch("/api/songs/add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) })
-        : await fetch("/api/songs/update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: target.title, fields }) });
-      if (!res.ok) { setError(await res.text()); setSaving(false); return; }
+      await (target === "new"
+        ? apiRequest("/api/songs/add", { method: "POST", body: fields })
+        : apiRequest("/api/songs/update", { method: "POST", body: { title: target.title, fields } }));
       await onSaved();
       onClose();
-    } catch (e) {
-      setError("保存失败：" + e);
-    }
-    setSaving(false);
+    } catch (reason) {
+      const failure = toRequestFailure(reason, "保存失败");
+      setError([failure.message, failure.recovery, failure.requestId && `请求编号：${failure.requestId}`].filter(Boolean).join(" · "));
+    } finally { setSaving(false); }
   };
 
   const inputCls = `mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`;
@@ -148,7 +150,7 @@ export default function SongEditDialog({ dark, target, onClose, onSaved }: {
           </label>
         </div>
 
-        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+        {error && <p className="mt-3 text-sm text-red-500" role="alert" aria-live="polite">{error}</p>}
 
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={() => !saving && onClose()} disabled={saving}

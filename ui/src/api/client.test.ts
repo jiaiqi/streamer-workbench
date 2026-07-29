@@ -29,6 +29,19 @@ test("serializes JSON body and returns typed JSON", async () => {
   assert.equal(new Headers(received?.init?.headers).get("content-type"), "application/json");
 });
 
+test("passes FormData through without forcing a JSON content type", async () => {
+  let received: RequestInit | undefined;
+  const request = createApiClient({ fetch: async (_url, init) => {
+    received = init;
+    return jsonResponse({ tab_files: [] });
+  } });
+  const form = new FormData();
+  form.append("file", new Blob(["tab"]), "tab.txt");
+  await request("/api/tabs", { method: "POST", body: form });
+  assert.equal(received?.body, form);
+  assert.equal(new Headers(received?.headers).has("content-type"), false);
+});
+
 test("parses structured API error envelope", async () => {
   const request = createApiClient({
     fetch: async () => jsonResponse({

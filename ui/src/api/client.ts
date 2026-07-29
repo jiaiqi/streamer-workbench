@@ -56,17 +56,18 @@ function combineSignals(signal: AbortSignal | null | undefined, timeout: AbortSi
 export function createApiClient(options: ApiClientOptions = {}) {
   const baseUrl = (options.baseUrl ?? "").replace(/\/$/, "");
   const defaultTimeoutMs = options.timeoutMs ?? 15_000;
-  const fetchImpl = options.fetch ?? globalThis.fetch;
 
   return async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
+    const fetchImpl = options.fetch ?? globalThis.fetch;
     const { body, timeoutMs = defaultTimeoutMs, headers, signal, ...requestInit } = init;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
     let response: Response;
     try {
       response = await fetchImpl(`${baseUrl}${path}`, {
         ...requestInit,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        headers: body === undefined
+        body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
+        headers: body === undefined || isFormData
           ? headers
           : { "Content-Type": "application/json", ...headers },
         signal: combineSignals(signal, timeoutSignal),

@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { apiRequest } from "../api/client";
+import { toRequestFailure } from "../async/requestState";
 
 /* ---- 导出对话框：范围选择 + 预估 + 进度 + 打开目录 ----
    常挂载（open 控制显隐），保证范围选择跨次打开记忆；
@@ -21,10 +23,11 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [done, setDone] = useState<{ count: number; totalMs: number; outputDir: string } | null>(null);
+  const [error, setError] = useState("");
 
   // 打开时重置进度/完成态 + scope 回到默认
   useEffect(() => {
-    if (open) { setDone(null); setProgress(null); setScope("all"); }
+    if (open) { setDone(null); setProgress(null); setScope("all"); setError(""); }
   }, [open]);
 
   // Esc 关闭（导出中不响应）——输入框聚焦时也要生效
@@ -45,26 +48,32 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
   const estimateMs = estimateCount * (lastRenderMs ?? 900);
 
   const runExport = async () => {
+    if (exporting) return;
     setExporting(true);
+    setError("");
     setDone(null);
     setProgress({ done: 0, total: estimateCount, current: "" });
     try {
       if (scope === "all") {
         // 批量：后端后台任务 + 300ms 轮询进度
-        const res = await fetch(
+        const { job_id } = await apiRequest<{ job_id: string }>(
           `/api/export/batch?canvas=${encodeURIComponent(canvas)}&avoid=${avoid}`,
           { method: "POST" });
-        const { job_id } = await res.json();
         await new Promise<void>((resolve) => {
           const timer = setInterval(async () => {
-            const j = await (await fetch(`/api/export/jobs/${job_id}`)).json();
-            setProgress({ done: j.done, total: j.total, current: j.current });
-            if (j.status === "done" || j.status === "error") {
-              clearInterval(timer);
-              if (j.status === "done") {
+            try {
+              const j = await apiRequest<{ status: string; done: number; total: number; current: string; total_ms: number; output_dir: string; error?: string }>(`/api/export/jobs/${job_id}`);
+              setProgress({ done: j.done, total: j.total, current: j.current });
+              if (j.status === "done" || j.status === "error") {
+                clearInterval(timer);
+                if (j.status === "error") throw new Error(j.error || "批量导出失败");
                 setDone({ count: j.done, totalMs: j.total_ms, outputDir: j.output_dir });
-                onRendered(j.total_ms / j.total);
+                onRendered(j.total_ms / Math.max(j.total, 1));
+                resolve();
               }
+            } catch (reason) {
+              clearInterval(timer);
+              setError(toRequestFailure(reason, "批量导出失败").message);
               resolve();
             }
           }, 300);
@@ -76,23 +85,25 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
         const t0 = performance.now();
         for (const p of pages) {
           setProgress({ done: p - pages[0], total: pages.length, current: `${selTheme} p${p}` });
-          const res = await fetch(
+          const data = await apiRequest<{ duration_ms: number }>(
             `/api/export?theme=${encodeURIComponent(selTheme)}&page=${p}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`,
             { method: "POST" });
-          const data = await res.json();
           onRendered(data.duration_ms);
           setProgress({ done: p - pages[0] + 1, total: pages.length, current: `${selTheme} p${p}` });
         }
-        const st = await (await fetch("/api/settings")).json();
+        const st = await apiRequest<{ output_dir: string }>("/api/settings");
         setDone({ count: pages.length, totalMs: Math.round(performance.now() - t0), outputDir: st.output_dir });
       }
-    } catch (e) {
-      console.error("导出失败", e);
+    } catch (reason) {
+      setError(toRequestFailure(reason, "导出失败").message);
     }
     setExporting(false);
   };
 
-  const openOutputDir = () => fetch("/api/export/open", { method: "POST" });
+  const openOutputDir = async () => {
+    try { await apiRequest("/api/export/open", { method: "POST" }); }
+    catch (reason) { setError(toRequestFailure(reason, "无法打开输出目录").message); }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
@@ -152,6 +163,7 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
             <p className="text-xs mt-1 opacity-75 break-all">{done.outputDir}</p>
           </div>
         )}
+        {error && <div className="mb-4 rounded-xl bg-red-500/10 px-3 py-2.5 text-sm text-red-500" role="alert">{error}</div>}
 
         {/* 操作按钮 */}
         <div className="flex justify-end gap-2">

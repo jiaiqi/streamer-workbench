@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { apiRequest } from "../api/client";
+import { toRequestFailure } from "../async/requestState";
 
 /* ---- 曲谱面板（共享组件，S3）----
    缩略图墙 + 上传 + 删除 + 点击看大图（lightbox）。
@@ -21,16 +23,16 @@ export default function TabsPanel({ title, tabFiles, dark, onChanged }: {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const upload = async (file: File) => {
+    if (busy) return;
     setBusy(true); setError(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch(`/api/songs/${encodeURIComponent(title)}/tabs`, { method: "POST", body: fd });
-      if (!r.ok) throw new Error(await r.text());
-      const d = await r.json();
+      const d = await apiRequest<{ tab_files: string[] }>(`/api/songs/${encodeURIComponent(title)}/tabs`, { method: "POST", body: fd });
       onChanged(d.tab_files);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "上传失败");
+      const failure = toRequestFailure(e, "上传失败");
+      setError([failure.message, failure.recovery].filter(Boolean).join(" · "));
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -38,16 +40,16 @@ export default function TabsPanel({ title, tabFiles, dark, onChanged }: {
   };
 
   const remove = async (rel: string) => {
+    if (busy) return;
     setBusy(true); setError(null);
     try {
-      const r = await fetch(`/api/songs/${encodeURIComponent(title)}/tabs?file=${encodeURIComponent(rel)}`,
+      const d = await apiRequest<{ tab_files: string[] }>(`/api/songs/${encodeURIComponent(title)}/tabs?file=${encodeURIComponent(rel)}`,
         { method: "DELETE" });
-      if (!r.ok) throw new Error(await r.text());
-      const d = await r.json();
       onChanged(d.tab_files);
       if (viewer === rel) setViewer(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "删除失败");
+      const failure = toRequestFailure(e, "删除失败");
+      setError([failure.message, failure.recovery].filter(Boolean).join(" · "));
     } finally { setBusy(false); }
   };
 
