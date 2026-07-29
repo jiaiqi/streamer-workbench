@@ -47,7 +47,11 @@ export function useLatestRequest<T>(options: { isEmpty?: (data: T) => boolean } 
     } catch (reason) {
       if (current !== generation.current) return null;
       if (isAbortError(reason) || nextController.signal.aborted) {
-        setState(previous => ({ ...previous, status: previous.data === null ? "idle" : "success", error: null }));
+        setState(previous => ({
+          ...previous,
+          status: previous.data === null ? "idle" : isEmptyRef.current?.(previous.data) ? "empty" : "success",
+          error: null,
+        }));
         return null;
       }
       setState(previous => ({ status: "error", data: previous.data, error: toRequestFailure(reason) }));
@@ -58,7 +62,11 @@ export function useLatestRequest<T>(options: { isEmpty?: (data: T) => boolean } 
   const cancel = useCallback(() => {
     generation.current += 1;
     controller.current?.abort();
-    setState(previous => ({ ...previous, status: previous.data === null ? "idle" : "success", error: null }));
+    setState(previous => ({
+      ...previous,
+      status: previous.data === null ? "idle" : isEmptyRef.current?.(previous.data) ? "empty" : "success",
+      error: null,
+    }));
   }, []);
 
   useEffect(() => () => {

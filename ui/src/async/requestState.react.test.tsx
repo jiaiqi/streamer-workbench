@@ -69,6 +69,23 @@ describe("useLatestRequest interaction contract", () => {
     await waitFor(() => expect(screen.getByLabelText("status").textContent).toBe("idle"));
     expect(screen.queryByRole("alert")).toBeNull();
   });
+
+  it("restores empty when a refresh of existing empty data is cancelled", async () => {
+    render(<RequestProbe requests={[
+      () => Promise.resolve(""),
+      signal => new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")), { once: true });
+      }),
+    ]} />);
+    const load = screen.getByRole("button", { name: "加载" });
+    fireEvent.click(load);
+    await waitFor(() => expect(screen.getByLabelText("status").textContent).toBe("empty"));
+    fireEvent.click(load);
+    expect(screen.getByLabelText("status").textContent).toBe("loading");
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(screen.getByLabelText("status").textContent).toBe("empty"));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 describe("SongEditDialog write feedback", () => {
