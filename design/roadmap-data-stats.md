@@ -1,7 +1,7 @@
 # 数据时间维度路线图：事件日志 · 曲谱管理 · 学歌记录 · 数据统计（主播工作台 / streamer-workbench）
 
 > **状态**：进行中（2026-07-29 更新）——S1 ✅ S2 ✅ S3 ✅ S3.5 ✅；Song v5 / Event v2 与 tabs/queue/Preset 的 song_id 关系迁移已完成；S4 / S5 按统一路线图 R3 启动
-> **关联文档**：`../ADR-004.md`、`../ADR-005.md`、`产品优化方案终版-0727/路线图.md` R0/R2/R3（事件类型与统计口径仍以本文为唯一真相）
+> **关联文档**：`../ADR-004.md`–`../ADR-007.md`、`产品优化方案终版-0727/产品与技术规格-v3.md`、`产品优化方案终版-0727/路线图.md` R0/R2/R3（事件类型与统计口径仍以本文为唯一真相）
 > **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`core/data/events.py`（事件现状）、`server/routers/`（API 现状）。旧 `redesign-v2.html` 已归档，不再作为实现规范。
 
 ---
@@ -50,9 +50,9 @@
 - 个人使用量级（每日数十事件、每年数千行）顺序扫描足够；
 - **撤退路线**：事件量破万或需多设备同步时，事件流可整体导入 SQLite，schema 无需重设计——事件先行，存储可换。
 
-### 决策：LiveSession 可选关联（2026-07-28，取代 2026-07-27 方案 A）
+### 决策：LiveSession 只聚合直播运营（2026-07-29 修订）
 
-“本场”是准备海报、现场队列和直播记录的共同聚合。进入直播模式时自动创建或恢复当日未结束的 LiveSession，不增加强制的“开始今晚”按钮。Event v2 允许可选 `session_id`；不属于具体场次的事件仍可省略，并继续按时间窗口聚合。完整裁决见 `../ADR-005.md`。
+LiveSession 聚合规则快照、点歌请求、权益消费、队列与演唱结果。进入直播时提示恢复未结束场次，也允许一键新建，避免错误合并。海报使用独立 PosterDocument，不属于 LiveSession；二者只允许可选引用。Event 允许可选 `session_id`，不属于具体场次的歌曲、学习和海报事件仍可省略。完整裁决见 `../ADR-006.md` 与 `../ADR-007.md`。
 
 ### 决策：歌曲使用不可变 ID（2026-07-28 定）
 
@@ -87,7 +87,10 @@
 | `song_edited` | /api/songs/update（meta 记字段级 diff：`{"field":"key","old":"","new":"G"}`） | 更新记录 |
 | `song_learned` / `song_unlearned` | /api/songs/status（draft⇄active） | 更新记录 + 学歌统计 |
 | `practice_logged` | 学歌打卡（meta：`{note, minutes?, self_rating?}`） | 学歌记录 |
-| `queue_added` / `song_sung` | 直播模式加入歌单/标记唱完时上报 | 点歌排行、演唱频次 |
+| `request_created` / `request_rejected` | 登记点歌或规则校验拒绝 | 点歌排行、拒绝原因、规则效果 |
+| `entitlement_granted` / `entitlement_consumed` | 粉丝团、会员、礼物等权益创建与核销 | 免费额度与重复消费审计 |
+| `queue_added` / `queue_priority_changed` | 请求入队、主播确认插队或恢复普通优先级 | 队列公平性与插队记录 |
+| `performance_recorded` | 已唱、不会、延期、取消或中断 | 演唱频次、未会清单、履约率 |
 | `poster_exported` | /api/export、/api/export/batch（meta：`{theme,layout,canvas,pages,duration_ms}`） | 海报更新记录 |
 
 ## 5. 数据模型变更
@@ -118,7 +121,12 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/song_<uuid>
 | /api/songs/{song_id}/tabs/{file} | DELETE | 删除单个谱文件 |
 | /tabs/{song_id}/{file} | GET | 静态访问（StaticFiles 挂载 data/tabs/） |
 | /api/practice/log | POST | 学歌打卡，写 practice_logged |
-| /api/sessions* | GET/POST/PATCH | 创建或恢复本场、更新计划歌曲/队列/已唱状态 |
+| /api/posters* | GET/POST/PATCH | 独立海报文档保存、恢复和可选场次引用；不创建直播场次 |
+| /api/sessions* | GET/POST/PATCH | 创建、恢复或结束直播场次，冻结当场规则版本 |
+| /api/sessions/{id}/requests | POST/GET | 登记点歌与点歌人/来源，执行规则校验 |
+| /api/sessions/{id}/queue | GET/PATCH | 稳定队列、主播确认插队与顺序调整 |
+| /api/sessions/{id}/performances | POST | 记录已唱、不会、延期、取消或中断结果 |
+| /api/request-policies* | GET/POST/PATCH | 管理版本化点歌与会员/礼物规则 |
 | /api/events | GET | 事件 feed（参数：type/since/limit），更新记录视图用 |
 | /api/stats/overview | GET | 总览聚合（现算）：曲库规模、选调完整度、本月学会、本月演唱次数 |
 | /api/stats/learning | GET | 学歌聚合：学习周期分布、打卡热力、卡最久 draft 榜 |
@@ -133,7 +141,8 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/song_<uuid>
 | 功能 | 触点 |
 |---|---|
 | 曲谱 | 歌曲库展开面板加「曲谱」区（缩略图墙+上传+lightbox）；学歌卡片加谱子入口；直播模式焦点区加 `T` 键看谱弹层 |
-| 本场工作台 | LiveSession → SongQuery → selected_song_ids → 模板 → 预览/导出/进入直播；普通设置与高级设置分层；空曲库提供样例数据入口 |
+| 海报工作区 | 独立 PosterDocument → SongQuery → selected_song_ids → 布局/主题/比例能力匹配 → 分类/分页 → 预览/导出；不要求 LiveSession |
+| 直播工作区 | LiveSession → 规则快照 → 点歌人/来源（可选）→ 权益校验 → 队列/插队确认 → 演唱结果；断网保序补报 |
 | 更新记录 | 新「统计」视图内"最近动态"时间线（事件 feed 直渲） |
 | 学歌记录 | 学歌卡片加「打卡」按钮（note+可选时长+自评）+ 展开练习时间线（倒序）+ 累计打卡天数 |
 | 数据统计 | **导航加第五项「统计」**（4 一等公民 + 统计 + 设置 = 6 图标位，仍在导航上限内）。三板块：总览卡 / 趋势图（近 12 周学会数、曲库增长，纯 CSS 柱状，不引图表库）/ 排行榜（点歌 TOP10、练习最勤、卡最久未会） |
@@ -145,7 +154,9 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/song_<uuid>
 - **弹唱完整度** = 有 key 的 active 歌曲数 / active 总数（与 toolbar 现口径一致，扩展为含 capo 的细分）
 - **学习周期** = learned_at − added_at（天）；旧数据 learned_at 为空不参与均值
 - **本月学会** = song_learned 事件当月计数（减同月 song_unlearned 净额另列）
-- **点歌排行** = song_sung 事件按 song_id 计数；title_snapshot 只负责展示；点歌率 = song_sung / queue_added（约等于唱完率）
+- **点歌排行** = `request_created` 按 song_id 计数；title_snapshot 只负责展示，不以已唱次数冒充点歌次数
+- **履约率** = 结果为 sung 的有效点歌请求数 / 已结束的有效请求数；不会、延期、取消分别展示，不混入已唱
+- **高频点歌人** = 有稳定 requester_id 的有效请求按人聚合；只有昵称时标注“可能合并不准”，不得跨改名强行归一
 - **直播场次** = 有 `session_id` 时按 LiveSession 精确聚合；旧事件或无场次事件按自然日估算并明确标注“估算”
 
 ## 9. 分期实施（S1→S5）
@@ -156,7 +167,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/song_<uuid>
 | **S2 点歌上报** | QuickView 双写（localStorage + 上报）+ 失败补报 | ✅ `403165c` | /api/events/report（仅三类可上报）；断网队列不丢、恢复保序补报 |
 | **S3 曲谱** | tabs 上传/列表/删除/静态访问 + 曲库/学歌/直播三触点 | ✅ `42fc392` | core/data/tabs.py；TabsPanel 共享组件；直播 T 键看谱；42/42 测试 |
 | **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | ✅ 完成 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
-| **R2 本场关联** | LiveSession + Event v2 可选 session_id | ⬜ 等待 R0/R1 | 本场准备、QuickView 队列和已唱记录共享同一 session_id |
+| **R2 直播规则与台账** | LiveSession + RequestPolicy + Entitlement + QueueEntry + PerformanceRecord；Event schema 增量 | ⬜ 等待 R0/R1 | 权益幂等、插队可审计、请求与已唱分口径、海报不依赖场次 |
 | **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | ⬜ 身份前置已满足，等待 R3 | 打卡 → 时间线可见；离线补报不重复；学会周期正确 |
 | **S5 统计视图** | /api/stats/* 三端点 + 第五导航视图 | ⬜ 待开发 | 口径与第 8 节一致；截图回归 |
 
@@ -171,7 +182,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/song_<uuid>
 - 聚合主键必须是 song_id，改名不得拆榜；
 - 统计全部从 `core/data/events.py` 的 `iter_events()` 现算，**只算不存**（第 10 节纪律）；
 - 统计视图使用 `design/design-tokens.json` 和主规格 §4 的当前视觉语义，不再复刻已归档交互稿；
-- 排行榜口径：点歌 TOP10 = `song_sung` 按 `song_id` 计数，使用最新歌名或 `title_snapshot` 展示（全时段/近 30 天两档）。
+- 排行榜口径：点歌 TOP10 = `request_created` 按 `song_id` 计数；已唱 TOP 单独使用 `performance_recorded.result=sung`，使用最新歌名或 `title_snapshot` 展示（全时段/近 30 天两档）。
 
 **已完成阶段排序回顾**：S1 解锁更新记录且让之后所有功能"白拿"历史数据；S2 尽早沉淀直播数据；S3 高频刚需但工程量最大放中间；S5 是全部数据的兑现，收尾。
 
