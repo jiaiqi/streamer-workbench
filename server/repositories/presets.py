@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -133,12 +134,14 @@ class FilePresetRepository:
             source = self.get(source_id)
             if source is None:
                 raise RepositoryConflict(f"Preset 不存在：{source_id}")
-            duplicate = copy.deepcopy(target)
+            duplicate = copy.deepcopy(source.value)
+            duplicate.id = target.id
+            duplicate.name = target.name or f"{source.value.name} (副本)"
             self._validate_id(duplicate.id)
             if self.get(duplicate.id) is not None:
                 raise RepositoryConflict(f"目标 Preset 已存在：{duplicate.id}")
             now = datetime.now().isoformat(timespec="seconds")
-            duplicate.created_at = duplicate.created_at or now
+            duplicate.created_at = target.created_at or now
             duplicate.updated_at = now
             duplicate.is_default = False
             return self._save_locked(duplicate, expected_revision=MISSING_REVISION, operation="duplicate")
@@ -238,7 +241,7 @@ class FilePresetRepository:
         manifest_next: dict[str, Any],
     ) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
-        self._transactions.mkdir(parents=True, exist_ok=True)
+        self._ensure_control_dir(self._transactions)
         transaction_id = f"txn_{uuid.uuid4().hex}"
         transaction_dir = self._transactions / transaction_id
         transaction_dir.mkdir()
@@ -287,6 +290,11 @@ class FilePresetRepository:
         if not journal_path.is_file():
             raise RepositoryRecoveryRequired("Preset 事务缺少 journal")
         journal = self._read_json(journal_path, "Preset transaction")
+        if journal.get("transaction_id") != transaction_dir.name:
+            raise RepositoryRecoveryRequired("Preset journal transaction_id 与目录不一致")
+        transaction_name = str(journal["transaction_id"])
+        if not transaction_name.startswith("txn_") or len(transaction_name) != 36:
+            raise RepositoryRecoveryRequired("Preset journal transaction_id 格式无效")
         phase = journal.get("phase")
         transaction_id = journal.get("transaction_id", transaction_dir.name)
         if phase == "staging":
@@ -325,7 +333,7 @@ class FilePresetRepository:
                 if active_dir.exists() and trash_target.exists():
                     raise RepositoryRecoveryRequired("Preset 删除恢复发现活动项与 trash 同时存在")
                 if active_dir.exists():
-                    self._trash.mkdir(parents=True, exist_ok=True)
+                    self._ensure_control_dir(self._trash)
                     os.replace(active_dir, trash_target)
                 continue
             payload = self._read_json(transaction_dir / "next" / f"{item_id}.json", "next preset")
@@ -338,7 +346,7 @@ class FilePresetRepository:
                 payload,
                 validator=lambda value, item_id=item_id: self._validate_payload(value, expected_id=item_id),
                 backup_policy=self._backup_policy,
-                backup_kind=f"preset-{item_id}",
+                backup_kind=f"preset-{hashlib.sha256(item_id.encode('utf-8')).hexdigest()[:16]}",
             )
 
     def _publish_manifest(self, transaction_dir: Path) -> None:
@@ -366,7 +374,10 @@ class FilePresetRepository:
         if not self._manifest_path.is_file() or self._manifest_path.is_symlink():
             raise RepositoryRecoveryRequired("Preset manifest 路径不安全")
         manifest = self._read_json(self._manifest_path, "Preset manifest")
-        self._validate_manifest_shape(manifest)
+        try:
+            self._validate_manifest_shape(manifest)
+        except (TypeError, ValueError) as error:
+            raise RepositoryCorrupt("Preset manifest Schema 无效") from error
         return manifest
 
     def _validate_consistency(self, manifest: dict[str, Any]) -> None:
@@ -441,9 +452,12 @@ class FilePresetRepository:
 
     @classmethod
     def _encode(cls, preset: Preset) -> dict[str, Any]:
-        payload = asdict(preset)
-        cls._validate_payload(payload, expected_id=preset.id)
-        return payload
+        try:
+            payload = asdict(preset)
+            cls._validate_payload(payload, expected_id=preset.id)
+            return payload
+        except (TypeError, ValueError) as error:
+            raise RepositoryCorrupt("待保存 Preset Schema 无效") from error
 
     @staticmethod
     def _decode(payload: dict[str, Any]) -> Preset:
@@ -511,6 +525,12 @@ class FilePresetRepository:
     def _ensure_open(self) -> None:
         if self._closed:
             raise RepositoryClosed("PresetRepository 已关闭")
+
+    @staticmethod
+    def _ensure_control_dir(path: Path) -> None:
+        if path.exists() and (path.is_symlink() or not path.is_dir()):
+            raise RepositoryRecoveryRequired(f"Preset 控制目录不安全：{path.name}")
+        path.mkdir(parents=True, exist_ok=True)
 
     def _merge_report(
         self,
