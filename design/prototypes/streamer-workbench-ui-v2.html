@@ -40,6 +40,10 @@
   --serif: "Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
   --mono: ui-monospace,"SF Mono","Cascadia Code",monospace;
 }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 html[data-mode="dark"] {
   --paper: #15201C;
   --paper-raised: #1E2C26;
@@ -242,6 +246,24 @@ button { cursor: pointer; border: 0; background: none; }
 .seg { display: flex; gap: 2px; border: 1px solid var(--line); border-radius: 10px; padding: 3px; background: var(--paper-raised); }
 .seg button { flex: 1; min-height: 32px; border-radius: 7px; color: var(--ink-3); font-size: 12px; font-weight: 600; transition: .18s; }
 .seg button.active { color: var(--ink); background: var(--paper-sunk); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.layout-card {
+  width: 100%; min-height: 48px; padding: 8px 10px; display: flex; align-items: center; gap: 10px;
+  border: 1.5px solid var(--primary); border-radius: 10px; background: var(--primary-soft); text-align: left;
+}
+.layout-card strong { display: block; font-size: 12px; }
+.layout-card small { display: block; color: var(--ink-3); font-size: 10px; margin-top: 1px; }
+.layout-icon { width: 28px; height: 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; flex: 0 0 auto; }
+.layout-icon i { border-radius: 2px; background: var(--primary); opacity: .78; }
+.field-note { margin: 7px 0 0; color: var(--ink-3); font-size: 10px; line-height: 1.55; }
+.accent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.accent-choice {
+  min-height: 32px; display: flex; align-items: center; gap: 7px; padding: 4px 7px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--paper-raised);
+  color: var(--ink-2); font-size: 10.5px; text-align: left;
+}
+.accent-choice:hover { border-color: var(--line-strong); color: var(--ink); }
+.accent-choice[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-soft); color: var(--ink); font-weight: 700; }
+.accent-swatch { width: 13px; height: 13px; border-radius: 50%; background: var(--swatch); box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); flex: 0 0 auto; }
 .text-input {
   width: 100%; height: 38px; border: 1px solid var(--line); border-radius: 9px;
   padding: 0 11px; background: var(--paper-raised); font-size: 13px; margin-bottom: 7px;
@@ -314,6 +336,7 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast .ok { color: var(--primary); font-weight: 800; }
+.mobile-note { display: none; }
 
 /* ── 响应式 ───────────────────────────────────────────── */
 @media (max-width: 1100px) {
@@ -322,12 +345,16 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
 }
 @media (max-width: 800px) {
   body { overflow: auto; }
+  .topbar { padding: 0 12px; }
+  .session-name, .save-state, .topbar > span[style], .loop-nav { display: none; }
   .desk { display: block; height: auto; }
-  .collection { border-right: 0; border-bottom: 1px solid var(--line); }
-  .song-list { max-height: 300px; }
-  .wall-stage { min-height: 62dvh; }
+  .collection, .inspector { display: none; }
+  .wall-stage { min-height: 62dvh; padding: 20px 14px; }
+  .wall-meta { height: auto; min-height: 46px; flex-wrap: wrap; padding: 8px 14px; }
+  .mobile-note { display: block; padding: 10px 14px; background: var(--primary-soft); color: var(--ink-2); font-size: 11px; line-height: 1.6; }
   .caption { flex-wrap: wrap; height: auto; padding: 10px 14px; gap: 10px; }
-  .caption-hint, .loop-nav { display: none; }
+  .caption-hint, .btn-quiet { display: none; }
+  .btn-export { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
@@ -343,11 +370,11 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
     主播工作台
   </div>
   <span style="color:var(--ink-3)">/</span>
-  <span class="session-name" id="sessionName" contenteditable="true" spellcheck="false" role="textbox" aria-label="本场名称">周五民谣夜</span>
-  <span class="save-state" id="saveState"><span class="dot"></span><span id="saveText">已保存</span></span>
+  <span class="session-name" id="documentName" contenteditable="true" spellcheck="false" role="textbox" aria-label="海报名称">周五民谣歌单</span>
+  <span class="save-state" id="saveState" role="status"><span class="dot"></span><span id="saveText">已保存</span></span>
   <div class="top-spacer"></div>
   <nav class="loop-nav" aria-label="核心闭环">
-    <button class="active">出图</button>
+    <button class="active" aria-current="page">海报</button>
     <button data-toast="直播闭环在 v1 原型中演示">直播</button>
     <button data-toast="学歌闭环在 v1 原型中演示">学歌</button>
   </nav>
@@ -364,7 +391,7 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
     <div class="col-head">
       <div class="col-title">
         <h2>歌曲集合</h2>
-        <span class="count tnum" id="setCount">0 首入展</span>
+        <span class="count tnum" id="setCount">已选 0 首</span>
       </div>
       <div class="search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -372,13 +399,13 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
       </div>
     </div>
     <div class="chips" id="chips">
-      <button class="chip active" data-f="all">全部</button>
-      <button class="chip" data-f="active">已会</button>
-      <button class="chip" data-f="draft">未会</button>
-      <button class="chip" data-f="l2">二字</button>
-      <button class="chip" data-f="l3">三字</button>
-      <button class="chip" data-f="l4">四字</button>
-      <button class="chip" data-f="l5">五字+</button>
+      <button class="chip active" data-f="all" aria-pressed="true">全部</button>
+      <button class="chip" data-f="active" aria-pressed="false">已会</button>
+      <button class="chip" data-f="draft" aria-pressed="false">未会</button>
+      <button class="chip" data-f="l2" aria-pressed="false">二字</button>
+      <button class="chip" data-f="l3" aria-pressed="false">三字</button>
+      <button class="chip" data-f="l4" aria-pressed="false">四字</button>
+      <button class="chip" data-f="l5" aria-pressed="false">五字+</button>
     </div>
     <div class="song-list" id="songList" role="listbox" aria-label="曲库"></div>
   </aside>
@@ -386,10 +413,11 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
   <!-- 中：画廊墙 -->
   <main class="wall" aria-label="海报预览">
     <div class="wall-meta">
-      <span class="room">一号展厅 · 日常出图</span>
+      <span class="room">独立海报 · 画廊策展台</span>
       <span>·</span>
       <span id="wallMeta">海洋柔光 · 抖音全屏 9:20 · 第 1 页</span>
     </div>
+    <div class="mobile-note">移动端提供轻量预览与导出。歌曲选择、布局和主题调整请在宽屏工作台完成，避免误触或隐藏关键配置。</div>
     <div class="wall-stage">
       <div class="artwork show-avoid" id="artwork">
         <img class="bg" id="artBg" alt="">
@@ -403,15 +431,34 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
   <!-- 右：检查器 -->
   <aside class="inspector" aria-label="海报设置">
     <div class="insp-section">
-      <div class="insp-label">模板 · 真实主题皮肤</div>
+      <div class="insp-label">布局</div>
+      <button class="layout-card" aria-pressed="true" aria-label="当前布局：经典网格 grid-wrap">
+        <span class="layout-icon" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <span><strong>经典网格</strong><small>grid-wrap · 自动分页预估</small></span>
+      </button>
+      <p class="field-note">布局决定可用比例和分页能力；主题在下方独立选择，二者不是绑定模板。</p>
+    </div>
+    <div class="insp-section">
+      <div class="insp-label">主题 · 真实 Palette</div>
       <div class="tpl-grid" id="tplGrid"></div>
     </div>
     <div class="insp-section">
       <div class="insp-label">画布比例</div>
       <div class="seg" id="canvasSeg">
-        <button data-c="920" class="active">抖音全屏 9:20</button>
-        <button data-c="916">标准 9:16</button>
+        <button data-c="920" class="active" aria-pressed="true">抖音全屏 9:20</button>
+        <button data-c="916" aria-pressed="false">标准 9:16</button>
       </div>
+      <p class="field-note">仅展示当前布局已声明支持的比例；不会为了补齐选项谎报 3:4、4:5、1:1 或 A4。</p>
+    </div>
+    <div class="insp-section">
+      <div class="insp-label">分类方式</div>
+      <div class="seg" id="groupingSeg">
+        <button data-g="length" class="active" aria-pressed="true">按字数</button>
+        <button data-g="artist" aria-pressed="false">按歌手</button>
+        <button data-g="status" aria-pressed="false">按掌握</button>
+        <button data-g="none" aria-pressed="false">不分类</button>
+      </div>
+      <p class="field-note">类型、语言、标签等将在数据具备后由同一分类契约扩展。</p>
     </div>
     <div class="insp-section">
       <div class="insp-label">标题 / 副标题</div>
@@ -421,12 +468,17 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
     <div class="insp-section">
       <div class="toggle-row">
         <div class="copy"><strong>避让互动区</strong><small>9:20 画布右下评论/礼物安全区</small></div>
-        <label class="switch"><input type="checkbox" id="avoidToggle" checked><i></i></label>
+        <label class="switch"><span class="sr-only">避让互动区</span><input type="checkbox" id="avoidToggle" checked><i></i></label>
       </div>
       <div class="toggle-row">
         <div class="copy"><strong>只显示已会歌曲</strong><small>未会歌曲留在清单但不入展</small></div>
-        <label class="switch"><input type="checkbox" id="activeOnly"><i></i></label>
+        <label class="switch"><span class="sr-only">只显示已会歌曲</span><input type="checkbox" id="activeOnly"><i></i></label>
       </div>
+    </div>
+    <div class="insp-section">
+      <div class="insp-label">应用主色 <output>不影响海报</output></div>
+      <div class="accent-grid" id="accentGrid"></div>
+      <p class="field-note">主色只改变导航、按钮、焦点和选中态；海报仍使用所选主题 Palette。</p>
     </div>
   </aside>
 </div>
@@ -435,7 +487,7 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
 <footer class="caption">
   <div class="page-thumbs" id="pageThumbs"></div>
   <div class="caption-meta">
-    <span><strong class="tnum" id="metaSongs">0</strong> 首入展</span>
+    <span>已选 <strong class="tnum" id="metaSongs">0</strong> 首</span>
     <span class="sep"></span>
     <span id="metaTpl">海洋柔光</span>
     <span class="sep"></span>
@@ -443,7 +495,7 @@ html[data-mode="dark"] .btn-export { color: #0E1F1A; }
     <span class="sep"></span>
     <span class="caption-hint">←→ 翻页 · 点列表行入展</span>
   </div>
-  <button class="btn-quiet" id="resetBtn">重置本场</button>
+  <button class="btn-quiet" id="resetBtn">清空选歌</button>
   <button class="btn-export" id="exportBtn">导出 PNG</button>
 </footer>
 
@@ -471,21 +523,45 @@ const THEMES = [
     pal: { text: "rgb(96,70,58)",  label: "rgb(148,74,50)",  pill: "rgba(250,222,190,.51)", line: "rgb(196,96,66)" } },
 ];
 
+/* 应用主色来自 design-tokens.json v3；与上方海报 Palette 严格隔离 */
+const ACCENTS = [
+  { id: "bambooMoon", label: "竹月青", light: "#287D69", strongLight: "#1F6756", dark: "#49B89C", strongDark: "#62CBB1" },
+  { id: "rainSky", label: "雨过天青", light: "#356A8A", strongLight: "#295671", dark: "#6FA4C5", strongDark: "#87B7D3" },
+  { id: "distantMountain", label: "远山黛", light: "#465E65", strongLight: "#35494F", dark: "#879AA0", strongDark: "#A0AFB3" },
+  { id: "rouge", label: "胭脂红", light: "#A13D50", strongLight: "#843142", dark: "#D77A8B", strongDark: "#E692A0" },
+  { id: "begonia", label: "海棠褐", light: "#9A4F36", strongLight: "#7D3E2A", dark: "#D78869", strongDark: "#E69E84" },
+  { id: "wisteria", label: "藤萝紫", light: "#66528A", strongLight: "#51416F", dark: "#9B88C1", strongDark: "#B09ED0" },
+  { id: "amber", label: "琥珀金", light: "#8A5A16", strongLight: "#70470F", dark: "#D0A04D", strongDark: "#DEB465" },
+  { id: "pineFlower", label: "松花绿", light: "#5D6F32", strongLight: "#495827", dark: "#98AA67", strongDark: "#ADBC80" },
+];
+
+function readPreference(key, fallback) {
+  try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
+}
+function writePreference(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* file:// 隐私模式下保持当前会话即可 */ }
+}
+
 const state = {
   set: new Set(),           // 入展歌曲（title 为键，原型内简化）
   theme: THEMES[0],
   canvas: "920",
+  grouping: "length",
+  accent: ACCENTS.find(a => a.id === readPreference("swb-prototype-accent", "bambooMoon")) || ACCENTS[0],
   page: 1,
   filter: "all",
   query: "",
   activeOnly: false,
 };
-const PER_PAGE = 40;        // 每页入展容量（模拟 grid-wrap 密度）
+document.documentElement.dataset.mode = readPreference("swb-prototype-mode", "light") === "dark" ? "dark" : "light";
 
 const $ = s => document.querySelector(s);
 const artwork = $("#artwork"), artBg = $("#artBg"), posterInner = $("#posterInner");
 const toast = $("#toast");
 let toastTimer;
+function escapeHtml(value) {
+  return String(value).replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c]);
+}
 function showToast(html) {
   toast.innerHTML = html;
   toast.classList.add("show");
@@ -505,8 +581,8 @@ function markDirty() {
     $("#saveText").textContent = "已保存 · 刚刚";
   }, 1200);
 }
-$("#sessionName").addEventListener("input", markDirty);
-$("#sessionName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+$("#documentName").addEventListener("input", () => { renderPoster(false); markDirty(); });
+$("#documentName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
 
 /* ── 歌曲清单 ── */
 function pinyinHead(t) { return t; } // 原型：搜索直接匹配文本
@@ -533,11 +609,11 @@ function renderList() {
   }
   list.innerHTML = songs.map(s => {
     const inSet = state.set.has(s.t);
-    return `<button class="song-row ${inSet ? "in-set" : ""}" role="option" aria-selected="${inSet}" data-t="${s.t}">
+    return `<button class="song-row ${inSet ? "in-set" : ""}" role="option" aria-selected="${inSet}" data-t="${escapeHtml(s.t)}">
       <span class="song-key ${s.k ? "" : "empty"}">${s.k || "·"}</span>
       <span class="song-main">
-        <span class="song-name">${s.t}</span>
-        <span class="song-sub">${s.a}${s.st === "draft" ? " · 未会" : ""}</span>
+        <span class="song-name">${escapeHtml(s.t)}</span>
+        <span class="song-sub">${escapeHtml(s.a)}${s.st === "draft" ? " · 未会" : ""}</span>
       </span>
       <span class="song-act ${inSet ? "remove" : ""}">${inSet ? "移出" : "入展"}</span>
     </button>`;
@@ -559,16 +635,17 @@ $("#searchInput").addEventListener("input", e => { state.query = e.target.value;
 $("#chips").addEventListener("click", e => {
   const chip = e.target.closest(".chip");
   if (!chip) return;
-  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  document.querySelectorAll(".chip").forEach(c => { c.classList.remove("active"); c.setAttribute("aria-pressed", "false"); });
   chip.classList.add("active");
+  chip.setAttribute("aria-pressed", "true");
   state.filter = chip.dataset.f;
   renderList();
 });
 
-/* ── 模板 ── */
+/* ── 主题（与布局独立） ── */
 function renderTemplates() {
   $("#tplGrid").innerHTML = THEMES.map((t, i) => `
-    <button class="tpl ${t === state.theme ? "active" : ""}" data-i="${i}" aria-label="模板 ${t.id}">
+    <button class="tpl ${t === state.theme ? "active" : ""}" data-i="${i}" aria-label="主题 ${t.id}" aria-pressed="${t === state.theme}">
       <span class="tpl-thumb"><img src="${t.bg}" alt="" loading="lazy"
         onerror="this.parentElement.innerHTML='<span style=&quot;display:grid;place-items:center;height:100%;font-size:9px;color:var(--ink-3)&quot;>${t.id}</span>'"></span>
       <span>${t.id}</span>
@@ -586,8 +663,18 @@ $("#tplGrid").addEventListener("click", e => {
 $("#canvasSeg").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   document.querySelectorAll("#canvasSeg button").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll("#canvasSeg button").forEach(x => x.setAttribute("aria-pressed", "false"));
   b.classList.add("active");
+  b.setAttribute("aria-pressed", "true");
   state.canvas = b.dataset.c;
+  state.page = 1;
+  renderPoster(true); markDirty();
+});
+$("#groupingSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#groupingSeg button").forEach(x => { x.classList.remove("active"); x.setAttribute("aria-pressed", "false"); });
+  b.classList.add("active"); b.setAttribute("aria-pressed", "true");
+  state.grouping = b.dataset.g; state.page = 1;
   renderPoster(true); markDirty();
 });
 $("#titleInput").addEventListener("input", () => { renderPoster(false); markDirty(); });
@@ -599,10 +686,55 @@ $("#activeOnly").addEventListener("change", e => {
   state.activeOnly = e.target.checked; renderList(); markDirty();
 });
 
-/* ── 海报排版（模拟 grid-wrap：按字数分组，多栏流） ── */
-const GROUPS = [[1, "一字"], [2, "二字"], [3, "三字"], [4, "四字"], [5, "五字以上"]];
+/* ── 应用主色：只改工作台交互令牌，不读取或改写海报 Palette ── */
+function rgba(hex, alpha) {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${value >> 16},${(value >> 8) & 255},${value & 255},${alpha})`;
+}
+function applyAccent() {
+  const dark = document.documentElement.dataset.mode === "dark";
+  const root = document.documentElement.style;
+  const color = dark ? state.accent.dark : state.accent.light;
+  root.setProperty("--primary", color);
+  root.setProperty("--primary-strong", dark ? state.accent.strongDark : state.accent.strongLight);
+  root.setProperty("--primary-soft", rgba(color, dark ? .14 : .12));
+}
+function renderAccents() {
+  $("#accentGrid").innerHTML = ACCENTS.map(accent => `
+    <button class="accent-choice" data-accent="${accent.id}" aria-pressed="${accent === state.accent}">
+      <span class="accent-swatch" style="--swatch:${accent.light}" aria-hidden="true"></span>${accent.label}
+    </button>`).join("");
+}
+$("#accentGrid").addEventListener("click", e => {
+  const button = e.target.closest(".accent-choice"); if (!button) return;
+  state.accent = ACCENTS.find(accent => accent.id === button.dataset.accent) || ACCENTS[0];
+  writePreference("swb-prototype-accent", state.accent.id);
+  applyAccent(); renderAccents();
+  showToast(`应用主色已切换为「${state.accent.label}」，海报主题保持不变`);
+});
+
+/* ── 海报排版（模拟 grid-wrap 能力：分类、比例与内容共同参与分页） ── */
 function setSongs() { return SONGS.filter(s => state.set.has(s.t)); }
-function pageCount() { return Math.max(1, Math.ceil(setSongs().length / PER_PAGE)); }
+function pageCapacity() {
+  const canvasCapacity = state.canvas === "916" ? 32 : 40;
+  return ["artist", "status"].includes(state.grouping) ? Math.max(20, canvasCapacity - 8) : canvasCapacity;
+}
+function pageCount() { return Math.max(1, Math.ceil(setSongs().length / pageCapacity())); }
+function groupSongs(songs) {
+  if (state.grouping === "none") return [["全部歌曲", songs]];
+  if (state.grouping === "length") {
+    return [[1, "一字"], [2, "二字"], [3, "三字"], [4, "四字"], [5, "五字以上"]]
+      .map(([len, label]) => [label, songs.filter(s => len === 5 ? s.len >= 5 : s.len === len)])
+      .filter(([, items]) => items.length);
+  }
+  const buckets = new Map();
+  songs.forEach(song => {
+    const key = state.grouping === "artist" ? (song.a || "其他") : (song.st === "active" ? "已会" : "待学习");
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(song);
+  });
+  return [...buckets.entries()];
+}
 function posterHTML() {
   const songs = setSongs();
   const title = $("#titleInput").value || "今晚歌单";
@@ -612,21 +744,20 @@ function posterHTML() {
   if (!songs.length) {
     return `<div class="poster-empty">展品虚位以待<br>从左侧清单挑选今晚要唱的歌</div>`;
   }
-  const start = (state.page - 1) * PER_PAGE;
-  const pageSongs = songs.slice(start, start + PER_PAGE);
+  const capacity = pageCapacity();
+  const start = (state.page - 1) * capacity;
+  const pageSongs = songs.slice(start, start + capacity);
   const pal = state.theme.pal;
-  const groups = GROUPS.map(([len, label]) => {
-    const items = pageSongs.filter(s => len === 5 ? s.len >= 5 : s.len === len);
-    if (!items.length) return "";
+  const groups = groupSongs(pageSongs).map(([label, items]) => {
     return `<div class="pgroup">
-      <span class="pgroup-label" style="color:${pal.label};background:${pal.pill}">${label} · ${items.length}</span>
-      <div class="pgroup-songs">${items.map(s => `<span>${s.t}</span>`).join("")}</div>
+      <span class="pgroup-label" style="color:${pal.label};background:${pal.pill}">${escapeHtml(label)} · ${items.length}</span>
+      <div class="pgroup-songs">${items.map(s => `<span>${escapeHtml(s.t)}</span>`).join("")}</div>
     </div>`;
   }).join("");
   return `
-    <div class="poster-kicker">${$("#sessionName").textContent} · LIVE SETLIST</div>
-    <div class="poster-title">${title}</div>
-    <div class="poster-sub">${sub}</div>
+    <div class="poster-kicker">${escapeHtml($("#documentName").textContent || "未命名海报")} · SONG COLLECTION</div>
+    <div class="poster-title">${escapeHtml(title)}</div>
+    <div class="poster-sub">${escapeHtml(sub)}</div>
     <div class="poster-rule" style="background:${pal.line};opacity:.8"></div>
     <div class="poster-groups">${groups}</div>
     <div class="poster-foot" style="border-color:${pal.line}"><span>${dateStr}</span><span class="tnum">${songs.length} 首 · 第 ${state.page}/${pageCount()} 页</span></div>`;
@@ -634,15 +765,17 @@ function posterHTML() {
 function renderPoster(animate) {
   const apply = () => {
     artBg.src = state.theme.bg;
+    artBg.alt = `${state.theme.id}主题，经典网格布局，第 ${state.page} 页背景`;
     posterInner.style.color = state.theme.pal.text;
     posterInner.innerHTML = posterHTML();
     artwork.classList.toggle("ratio-916", state.canvas === "916");
     artwork.classList.toggle("show-avoid", $("#avoidToggle").checked && state.canvas === "920");
     $("#wallMeta").textContent = `${state.theme.id} · ${state.canvas === "916" ? "标准 9:16" : "抖音全屏 9:20"} · 第 ${state.page} 页`;
     $("#metaSongs").textContent = state.set.size;
-    $("#setCount").textContent = `${state.set.size} 首入展`;
+    $("#setCount").textContent = `已选 ${state.set.size} 首`;
     $("#metaTpl").textContent = state.theme.id;
     $("#metaCanvas").textContent = state.canvas === "916" ? "1080×1920" : "1080×2400";
+    $("#exportBtn").textContent = `导出 ${pageCount()} 页 PNG`;
     renderPageThumbs();
   };
   if (animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -654,8 +787,8 @@ function renderPageThumbs() {
   const n = pageCount();
   if (state.page > n) state.page = n;
   $("#pageThumbs").innerHTML = Array.from({ length: n }, (_, i) => `
-    <button class="page-thumb ${state.page === i + 1 ? "active" : ""}" data-p="${i + 1}" aria-label="第 ${i + 1} 页">
-      <img src="${state.theme.bg}" alt=""><b>${i + 1}</b>
+    <button class="page-thumb ${state.page === i + 1 ? "active" : ""}" data-p="${i + 1}" aria-label="查看第 ${i + 1} 页" aria-current="${state.page === i + 1 ? "page" : "false"}">
+      <img src="${state.theme.bg}" alt="${state.theme.id}主题，经典网格布局，第 ${i + 1} 页"><b>${i + 1}</b>
     </button>`).join("");
 }
 $("#pageThumbs").addEventListener("click", e => {
@@ -669,16 +802,24 @@ document.addEventListener("keydown", e => {
 });
 
 /* ── 亮暗模式 ── */
+function syncModeControl() {
+  const dark = document.documentElement.dataset.mode === "dark";
+  $("#modeToggle").setAttribute("aria-label", dark ? "切换到亮色模式" : "切换到暗色模式");
+  $("#modeToggle").setAttribute("aria-pressed", String(dark));
+  $("#modeToggle").title = dark ? "切换到亮色模式" : "切换到暗色模式";
+}
 $("#modeToggle").addEventListener("click", () => {
   const html = document.documentElement;
   html.dataset.mode = html.dataset.mode === "dark" ? "light" : "dark";
+  writePreference("swb-prototype-mode", html.dataset.mode);
+  applyAccent(); syncModeControl();
 });
 
 /* ── 重置 / 导出 ── */
 $("#resetBtn").addEventListener("click", () => {
   state.set.clear(); state.page = 1;
   renderList(); renderPoster(true); markDirty();
-  showToast("本场已重置，可以重新策展");
+  showToast("已清空当前海报的选歌，可以重新策展");
 });
 $("#exportBtn").addEventListener("click", async () => {
   if (!state.set.size) { showToast("展品为空——先入展至少一首歌"); return; }
@@ -691,18 +832,18 @@ $("#exportBtn").addEventListener("click", async () => {
     await new Promise(r => setTimeout(r, 340 + Math.random() * 220));
   }
   btn.disabled = false;
-  btn.textContent = "导出 PNG";
   const n = pageCount();
+  btn.textContent = `导出 ${n} 页 PNG`;
   showToast(`<span class="ok">✓</span> 已导出 ${n} 页 · ${state.theme.id} · ${state.set.size} 首（原型演示，未写盘）`);
 });
 
-/* ── 初始化：预置一场真实的「周五民谣夜」── */
+/* ── 初始化：预置一个可独立保存、按需导出的民谣歌单作品 ── */
 ["成都", "理想", "南山南", "斑马斑马", "奇妙能力歌", "历历万乡", "春风十里", "米店",
  "晴天", "七里香", "遇见", "我怀念的", "小幸运", "旅行的意义", "外面的世界", "突然好想你",
  "红豆", "传奇", "知足", "温柔", "小情歌", "好想你", "云烟成雨", "时间煮雨"].forEach(t => {
   if (SONGS.some(s => s.t === t)) state.set.add(t);
 });
-renderTemplates(); renderList(); renderPoster(false);
+applyAccent(); syncModeControl(); renderAccents(); renderTemplates(); renderList(); renderPoster(false);
 </script>
 </body>
 </html>
