@@ -1,6 +1,6 @@
 # 数据时间维度路线图：事件日志 · 曲谱管理 · 学歌记录 · 数据统计（主播工作台 / streamer-workbench）
 
-> **状态**：进行中（2026-07-28 更新）——S1 ✅ S2 ✅ S3 ✅；S3.5 中 Song v5 / Event v2 ✅，tabs/queue/Preset 关系迁移待完成；S4 / S5 等待完整前置
+> **状态**：进行中（2026-07-29 更新）——S1 ✅ S2 ✅ S3 ✅ S3.5 ✅；Song v5 / Event v2 与 tabs/queue/Preset 的 song_id 关系迁移已完成；S4 / S5 按统一路线图 R3 启动
 > **关联文档**：`../ADR-004.md`、`../ADR-005.md`、`产品优化方案终版-0727/路线图.md` R0/R2/R3（事件类型与统计口径仍以本文为唯一真相）
 > **前置阅读**：`core/data/songs.py`（数据层与迁移链）、`core/data/events.py`（事件现状）、`server/routers/`（API 现状）。旧 `redesign-v2.html` 已归档，不再作为实现规范。
 
@@ -98,7 +98,7 @@
 
 ```python
 learned_at: str = ""          # 学会日期（song_learned 时回填；旧 active 歌曲留空）
-tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主歌.png"
+tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/song_<uuid>/主歌.png"
 ```
 
 - 迁移函数 `_migrate_v3_to_v4`：补两个字段默认值，注册进 `MIGRATIONS` 链；
@@ -107,7 +107,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 
 ### 已完成代码：迁移 v4→v5
 
-已新增不可变 `Song.id`：v4 旧数据使用确定性 UUIDv5，新歌使用 UUIDv4；加载时拒绝空 ID、重复 ID 和重复 title，API 列表返回 `id`。首次持久化仍沿用 `SongLibrary.save()` 的写前备份与原子替换。曲谱目录迁移到 `data/tabs/{song_id}/{文件名}`、Event v2 和其他关系切换仍属于后续 R0.4/R0.5。
+已新增不可变 `Song.id`：v4 旧数据使用确定性 UUIDv5，新歌使用 UUIDv4；加载时拒绝空 ID、重复 ID 和重复 title，API 列表返回 `id`。首次持久化仍沿用 `SongLibrary.save()` 的写前备份与原子替换。曲谱目录已迁移到 `data/tabs/{song_id}/{文件名}`，Event v2、QuickView queue 和 Preset 关系均已切换到 `song_id`；真实开发数据迁移完成且二次 dry-run 幂等。
 
 ## 6. API 增量（server/main.py）
 
@@ -155,9 +155,9 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 | **S1 地基** | events.py + 五端点埋点 + 迁移 v4（learned_at/tab_files）+ /api/events feed | ✅ `05ac6e7` | 单元测试 27→37 通过；五动作逐行落 events.jsonl |
 | **S2 点歌上报** | QuickView 双写（localStorage + 上报）+ 失败补报 | ✅ `403165c` | /api/events/report（仅三类可上报）；断网队列不丢、恢复保序补报 |
 | **S3 曲谱** | tabs 上传/列表/删除/静态访问 + 曲库/学歌/直播三触点 | ✅ `42fc392` | core/data/tabs.py；TabsPanel 共享组件；直播 T 键看谱；42/42 测试 |
-| **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | 🟡 Song v5/Event v2 ✅；关系迁移待完成 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
+| **S3.5 身份升级** | Song v5 + Event v2 + tabs/queue/Preset 使用 song_id | ✅ 完成 | 改名不破坏附件、队列、历史和统计；旧数据可回退 |
 | **R2 本场关联** | LiveSession + Event v2 可选 session_id | ⬜ 等待 R0/R1 | 本场准备、QuickView 队列和已唱记录共享同一 session_id |
-| **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | ⬜ 等待 S3.5 | 打卡 → 时间线可见；离线补报不重复；学会周期正确 |
+| **S4 学歌打卡** | /api/practice/log + 卡片打卡 + 练习时间线 | ⬜ 身份前置已满足，等待 R3 | 打卡 → 时间线可见；离线补报不重复；学会周期正确 |
 | **S5 统计视图** | /api/stats/* 三端点 + 第五导航视图 | ⬜ 待开发 | 口径与第 8 节一致；截图回归 |
 
 **S4 开工提示**（下一任 agent 直接可用）：
@@ -178,7 +178,7 @@ tab_files: List[str] = []     # 曲谱文件相对路径，如 "tabs/知足/主�
 ## 10. 工程纪律（沿用项目既有约定）
 
 - **统计只算不存**：每次请求从 events 现算，不引入缓存失效问题；
-- 后续迁移继续走 `MIGRATIONS` 链并增加单元测试；当前基线为 Song v5、56 项单元测试；
+- 后续迁移继续走 `MIGRATIONS` 链并增加单元测试；当前基线为 Song v5、87 项 Python 单元测试与 6 项前端测试；
 - 每阶段跑：`npx tsc --noEmit` + `make test-unit` + `make test-golden`（16/16 diff=0 不许破）+ 截图验证；
 - 铁律不变：`core/` 不 import UI/服务器框架；UI 经 `engine.render_page()` 拿图；events.py 属 core/data，被 server 调用；
 - events.jsonl 纳入 data/backups 备份节奏（追加式文件，备份即复制）。
