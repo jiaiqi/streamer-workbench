@@ -403,7 +403,7 @@
       </div>
       <div class="nav-label">工作空间</div>
       <nav class="nav">
-        <button class="nav-btn" data-page="workspace" aria-current="page"><svg class="icon"><use href="#i-home"/></svg><span>本场</span></button>
+        <button class="nav-btn" data-page="poster" aria-current="page"><svg class="icon"><use href="#i-home"/></svg><span>海报</span></button>
         <button class="nav-btn" data-page="songs"><svg class="icon"><use href="#i-music"/></svg><span>歌曲</span><span class="badge">178</span></button>
         <button class="nav-btn" data-page="live"><svg class="icon"><use href="#i-live"/></svg><span>直播</span><span class="badge">5</span></button>
         <button class="nav-btn" data-page="learning"><svg class="icon"><use href="#i-book"/></svg><span>学歌</span><span class="badge">12</span></button>
@@ -423,7 +423,7 @@
     <div class="main-wrap">
       <header class="topbar">
         <div class="mobile-brand">主播工作台</div>
-        <div class="crumb">工作区&nbsp; / &nbsp;<strong id="crumbTitle">本场</strong></div>
+        <div class="crumb">工作区&nbsp; / &nbsp;<strong id="crumbTitle">海报</strong></div>
         <div class="top-spacer"></div>
         <div class="status-pill"><span class="sync-dot"></span><span id="saveState">所有更改已保存</span></div>
         <button class="icon-btn" id="themeToggle" aria-label="切换明暗主题" title="切换明暗主题"><svg class="icon"><use href="#i-sun"/></svg></button>
@@ -431,22 +431,22 @@
       </header>
 
       <main id="main">
-        <section class="page active" id="page-workspace" aria-labelledby="title-workspace">
+        <section class="page active" id="page-poster" aria-labelledby="title-poster">
           <div class="page-head">
-            <div><div class="eyebrow">Tonight's session</div><h1 id="title-workspace">今晚的直播，准备好了</h1><p class="page-desc">确认歌曲集合，选择模板，然后预览并导出。</p></div>
-            <div class="head-actions"><button class="btn"><svg class="icon icon-sm"><use href="#i-clock"/></svg>导出历史</button><button class="btn btn-primary" data-page-jump="live"><svg class="icon icon-sm"><use href="#i-play"/></svg>进入直播</button></div>
+            <div><div class="eyebrow">Playlist Studio</div><h1 id="title-poster" tabindex="-1">歌单海报</h1><p class="page-desc">按你的节奏维护歌单，需要分享时再设计与导出，不与某场直播绑定。</p></div>
+            <div class="head-actions"><button class="btn"><svg class="icon icon-sm"><use href="#i-clock"/></svg>作品与导出记录</button><button class="btn btn-primary" id="newPoster"><svg class="icon icon-sm"><use href="#i-plus"/></svg>新建设计</button></div>
           </div>
 
           <div class="workspace">
             <section class="panel source-panel" aria-label="歌曲集合">
               <div class="panel-body">
                 <article class="session-card">
-                  <div class="session-kicker">当前本场</div><h2>今晚直播</h2><p>7 月 29 日 · 20:00</p>
-                  <div class="session-stats"><span><strong>8</strong>计划歌曲</span><span><strong>5</strong>待唱</span><span><strong>2</strong>草稿</span></div>
+                  <div class="session-kicker">当前设计 · 自动保存</div><h2>我的常用歌单</h2><p>上次编辑于今天 18:42 · 未关联直播</p>
+                  <div class="session-stats"><span><strong>8</strong>首歌曲</span><span><strong>2</strong>页海报</span><span><strong>3</strong>次导出</span></div>
                 </article>
                 <div class="field-label"><span>歌曲来源</span><button class="btn-quiet" style="border:0;background:none;color:var(--primary)">管理</button></div>
                 <div class="source-chips"><button class="chip active">手动选择</button><button class="chip">全部已会</button><button class="chip">最近学会</button><button class="chip">点歌 TOP</button></div>
-                <div class="field-label"><span>当前集合</span><span>8 首</span></div>
+                <div class="field-label"><span>海报歌曲</span><span>8 首</span></div>
                 <div class="search"><svg class="icon icon-sm"><use href="#i-search"/></svg><input id="workspaceSearch" aria-label="搜索歌曲" placeholder="搜索并加入歌曲"></div>
                 <div class="song-stack" id="workspaceSongs">
                   <div class="song-row"><svg class="icon icon-sm drag"><use href="#i-grip"/></svg><span class="song-index">01</span><div class="song-main"><div class="song-name">知足</div><div class="song-sub">五月天 · C</div></div><button class="song-remove" aria-label="移除知足"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div>
@@ -465,9 +465,9 @@
                 <button class="btn btn-small btn-quiet">适合窗口</button><div class="zoom">45%</div>
               </div>
               <div class="poster-wrap">
-                <article class="poster" aria-label="海报预览：今晚直播歌单">
-                  <div class="poster-ring"></div><div class="poster-content"><div class="poster-date">July 29 · Live Set</div><h3>今晚的<br>歌单</h3><div class="poster-note">在熟悉的旋律里，见面吧。</div><div class="poster-divider"></div><div class="poster-songs"><span>01 知足</span><span>02 慢冷</span><span>03 如果可以</span><span>04 晴天</span><span>05 唯一</span><span>06 突然好想你</span><span>07 爱人错过</span><span>08 这世界那么多人</span></div></div>
-                  <div class="poster-footer"><span>QI MUSIC LIVE</span><span>20:00</span></div>
+                <article class="poster" aria-label="海报预览：我的常用歌单">
+                  <div class="poster-ring"></div><div class="poster-content"><div class="poster-date">QI'S PLAYLIST · VOL. 01</div><h3>我的<br>歌单</h3><div class="poster-note">想听的歌，都在这里。</div><div class="poster-divider"></div><div class="poster-songs"><span>01 知足</span><span>02 慢冷</span><span>03 如果可以</span><span>04 晴天</span><span>05 唯一</span><span>06 突然好想你</span><span>07 爱人错过</span><span>08 这世界那么多人</span></div></div>
+                  <div class="poster-footer"><span>QI MUSIC</span><span>PLAYLIST</span></div>
                 </article>
               </div>
               <div class="stage-status"><span class="sync-dot"></span>预览已更新 · 8 首歌曲 · 2 页</div>
@@ -482,7 +482,7 @@
               </div>
             </aside>
           </div>
-          <div class="export-bar"><div class="export-summary"><strong>今晚直播 · 舞台夜色 · 抖音全屏</strong><span>8 首歌曲 · 2 页 PNG · 保存到默认输出目录</span></div><button class="btn">保存为场景预设</button><button class="btn btn-primary" data-open-export><svg class="icon icon-sm"><use href="#i-export"/></svg>导出海报</button></div>
+          <div class="export-bar"><div class="export-summary"><strong>我的常用歌单 · 舞台夜色 · 抖音全屏</strong><span>设计已保存 · 8 首歌曲 · 需要分享时可随时导出</span></div><button class="btn">复制为新设计</button><button class="btn btn-primary" data-open-export><svg class="icon icon-sm"><use href="#i-export"/></svg>按需导出</button></div>
         </section>
 
         <section class="page" id="page-songs" aria-labelledby="title-songs">
@@ -495,7 +495,7 @@
         </section>
 
         <section class="page" id="page-live" aria-labelledby="title-live">
-          <div class="page-head"><div><div class="eyebrow">Live Control</div><h1 id="title-live">直播</h1><p class="page-desc">队列、当前歌曲和曲谱，在一个键盘流里完成。</p></div><div class="head-actions"><button class="btn">打开置顶速查</button><button class="btn btn-primary" id="finishSong"><svg class="icon icon-sm"><use href="#i-check"/></svg>标记已唱</button></div></div>
+          <div class="page-head"><div><div class="eyebrow">Live Control</div><h1 id="title-live">直播</h1><p class="page-desc">队列、当前歌曲和曲谱独立保存；开播不要求创建或导出歌单海报。</p></div><div class="head-actions"><button class="btn">打开置顶速查</button><button class="btn btn-primary" id="finishSong"><svg class="icon icon-sm"><use href="#i-check"/></svg>标记已唱</button></div></div>
           <div class="live-layout"><section class="panel now-playing"><div class="live-label">NOW PLAYING · 当前歌曲</div><h2 id="nowSong">知足</h2><p>五月天 · C 调 · 变调夹 0</p><span class="key-cap">Space 标记已唱</span></section><aside class="panel"><div class="panel-head"><div class="panel-title">今晚队列</div><div class="panel-meta">5 首待唱</div></div><div class="panel-body queue" id="liveQueue"><div class="queue-item active"><div class="queue-no">01</div><div class="song-main"><div class="song-name">知足</div><div class="song-sub">五月天</div></div><span class="status">当前</span></div><div class="queue-item"><div class="queue-no">02</div><div class="song-main"><div class="song-name">慢冷</div><div class="song-sub">梁静茹</div></div></div><div class="queue-item"><div class="queue-no">03</div><div class="song-main"><div class="song-name">如果可以</div><div class="song-sub">韦礼安</div></div></div><div class="queue-item"><div class="queue-no">04</div><div class="song-main"><div class="song-name">晴天</div><div class="song-sub">周杰伦</div></div></div><div class="queue-item"><div class="queue-no">05</div><div class="song-main"><div class="song-name">唯一</div><div class="song-sub">告五人</div></div></div></div></aside></div>
         </section>
 
@@ -519,17 +519,17 @@
   </div>
 
   <nav class="mobile-nav" aria-label="移动端主导航">
-    <button class="active" data-page="workspace"><svg class="icon"><use href="#i-home"/></svg><span>本场</span></button><button data-page="songs"><svg class="icon"><use href="#i-music"/></svg><span>歌曲</span></button><button data-page="live"><svg class="icon"><use href="#i-live"/></svg><span>直播</span></button><button data-page="learning"><svg class="icon"><use href="#i-book"/></svg><span>学歌</span></button><button data-page="stats"><svg class="icon"><use href="#i-chart"/></svg><span>统计</span></button><button data-page="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></button>
+    <button class="active" data-page="poster"><svg class="icon"><use href="#i-home"/></svg><span>海报</span></button><button data-page="songs"><svg class="icon"><use href="#i-music"/></svg><span>歌曲</span></button><button data-page="live"><svg class="icon"><use href="#i-live"/></svg><span>直播</span></button><button data-page="learning"><svg class="icon"><use href="#i-book"/></svg><span>学歌</span></button><button data-page="stats"><svg class="icon"><use href="#i-chart"/></svg><span>统计</span></button><button data-page="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></button>
   </nav>
 
   <div class="scrim" id="exportDialog" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
-    <div class="dialog"><div class="dialog-head"><div><h2 id="exportTitle">导出海报</h2><p>使用当前冻结的歌曲与模板配置创建文件。</p></div><button class="icon-btn" data-close-dialog aria-label="关闭导出对话框"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="dialog-body"><div class="form-grid"><div class="form-row"><label for="filename">文件名</label><input class="input" id="filename" value="今晚直播歌单_2026-07-29"></div><div class="form-row"><label for="exportFormat">格式</label><div class="select-wrap"><select class="select" id="exportFormat"><option>PNG · 高清</option><option>JPEG · 适合分享</option></select></div></div><div class="form-row"><label for="exportPath">保存位置</label><input class="input" id="exportPath" readonly value="~/Pictures/主播工作台"></div><div class="export-progress" id="exportProgress"><strong id="progressText">正在冻结渲染输入…</strong><div class="export-progress-line"><span id="progressBar"></span></div></div></div></div><div class="dialog-actions"><button class="btn" data-close-dialog>取消</button><button class="btn btn-primary" id="confirmExport"><svg class="icon icon-sm"><use href="#i-export"/></svg>导出 2 张 PNG</button></div></div>
+    <div class="dialog"><div class="dialog-head"><div><h2 id="exportTitle">导出这份设计</h2><p>导出是可选操作，不会创建直播场次或改变直播队列。</p></div><button class="icon-btn" data-close-dialog aria-label="关闭导出对话框"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="dialog-body"><div class="form-grid"><div class="form-row"><label for="filename">文件名</label><input class="input" id="filename" value="我的常用歌单"></div><div class="form-row"><label for="exportFormat">格式</label><div class="select-wrap"><select class="select" id="exportFormat"><option>PNG · 高清</option><option>JPEG · 适合分享</option></select></div></div><div class="form-row"><label for="exportPath">保存位置</label><input class="input" id="exportPath" readonly value="~/Pictures/主播工作台"></div><div class="export-progress" id="exportProgress"><strong id="progressText">正在冻结渲染输入…</strong><div class="export-progress-line"><span id="progressBar"></span></div></div></div></div><div class="dialog-actions"><button class="btn" data-close-dialog>稍后再说</button><button class="btn btn-primary" id="confirmExport"><svg class="icon icon-sm"><use href="#i-export"/></svg>导出 2 张 PNG</button></div></div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"><svg class="icon" style="color:var(--success)"><use href="#i-check"/></svg><span id="toastText">操作已完成</span></div>
 
   <script>
     (() => {
-      const titles = {workspace:'本场',songs:'歌曲',live:'直播',learning:'学歌',stats:'统计',settings:'设置'};
+      const titles = {poster:'海报',songs:'歌曲',live:'直播',learning:'学歌',stats:'统计',settings:'设置'};
       const pages = [...document.querySelectorAll('.page')];
       const navButtons = [...document.querySelectorAll('[data-page]')];
       const toast = document.getElementById('toast');
@@ -583,9 +583,10 @@
         const row = event.currentTarget.closest('.song-row');
         const name = row.querySelector('.song-name').textContent;
         row.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(-12px)'}],{duration:180,easing:'ease-out'}).onfinish = () => row.remove();
-        showToast(`已从本场移除「${name}」`);
+        showToast(`已从当前海报移除「${name}」`);
       }));
       document.getElementById('addSong').addEventListener('click', () => showToast('搜索歌曲后按 Enter，即可加入当前集合'));
+      document.getElementById('newPoster').addEventListener('click', () => showToast('已准备一份空白设计，当前作品仍会保留'));
 
       const librarySearch = document.getElementById('librarySearch');
       librarySearch.addEventListener('input', () => {
