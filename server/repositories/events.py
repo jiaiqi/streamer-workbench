@@ -123,8 +123,11 @@ class FileEventStore:
             if b"\n" in serialized[:-1] or b"\r" in serialized[:-1]:
                 raise RepositoryCorrupt("Event v2 序列化后不得包含物理换行")
 
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            offset = self._path.stat().st_size if self._path.exists() else 0
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                offset = self._path.stat().st_size if self._path.exists() else 0
+            except OSError as error:
+                raise RepositoryUnavailable("无法准备 Event JSONL 追加") from error
             descriptor: int | None = None
             try:
                 descriptor = os.open(
@@ -142,6 +145,7 @@ class FileEventStore:
                 self._inject("after_write")
                 self._inject("before_fsync")
                 os.fsync(descriptor)
+                _fsync_directory(self._path.parent)
                 self._inject("after_fsync")
             except OSError as error:
                 raise RepositoryUnavailable("Event JSONL 追加失败；索引未更新") from error
@@ -332,10 +336,14 @@ class FileEventStore:
     @classmethod
     def _valid_standalone_line(cls, content: bytes) -> bool:
         try:
-            cls._parse_record(content, line_number=None)
-            return True
-        except RepositoryRecoveryRequired:
+            text = content.decode("utf-8")
+            json.loads(text)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            # 只有语法/编码未完成才属于可隔离的半尾行。
             return False
+        # JSON 完整但 Schema 非法必须阻止启动，不能当作截断尾行自动丢弃。
+        cls._parse_record(content, line_number=None)
+        return True
 
     @staticmethod
     def _validate_v2(event: Any) -> None:
@@ -391,11 +399,11 @@ class FileEventStore:
 
     def _quarantine_and_truncate_tail(self, tail: bytes, truncate_at: int) -> str:
         recovery_dir = self._path.parent / f".{self._path.name}.recovery"
-        recovery_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
         name = f"tail-{timestamp}-{uuid.uuid4().hex[:8]}.bin"
         quarantine = recovery_dir / name
         try:
+            recovery_dir.mkdir(parents=True, exist_ok=True)
             with quarantine.open("xb") as handle:
                 handle.write(tail)
                 handle.flush()
@@ -429,9 +437,12 @@ class FileEventStore:
         unresolved: tuple[str, ...] = (),
     ) -> None:
         current = self._recovery_report
+        def merge_unique(existing: tuple[str, ...], added: tuple[str, ...]) -> tuple[str, ...]:
+            return existing + tuple(item for item in added if item not in existing)
+
         self._recovery_report = RecoveryReport(
-            detected=current.detected + detected,
-            recovered=current.recovered + recovered,
-            quarantined=current.quarantined + quarantined,
-            unresolved=current.unresolved + unresolved,
+            detected=merge_unique(current.detected, detected),
+            recovered=merge_unique(current.recovered, recovered),
+            quarantined=merge_unique(current.quarantined, quarantined),
+            unresolved=merge_unique(current.unresolved, unresolved),
         )
