@@ -1,7 +1,7 @@
 # 主播工作台 · CI 流水线
 #
 # 质量门：
-#   1. Python 单元、应用上下文与 Repository 测试（当前 106 项）
+#   1. Python 单元、应用上下文、Repository 与 EventStore 测试（当前 116 项）
 #   2. 金标准逐像素对比（16 张，diff=0 死线）
 #   3. 前端纯函数测试
 #   4. TypeScript 编译与生产构建
@@ -79,4 +79,4 @@ jobs:
 
       # ---- 汇总 ----
       - name: ✅ 全部质量门通过
-        run: echo "Python 单元/AppContext/Repository 测试 + 金标准 diff=0 + 前端测试 + TS 编译/构建 —— 全部通过"
+        run: echo "Python 单元/AppContext/Repository/EventStore 测试 + 金标准 diff=0 + 前端测试 + TS 编译/构建 —— 全部通过"
