@@ -49,7 +49,7 @@
 ```
 引擎兼容  ✅          avoid/cache 正确性已修复，金标准 16/16 diff=0；环境复现待 R0 收口
 数据层    S1-S3.5 ✅ Song v5/Event v2、Tabs/Queue/Preset song_id 关系迁移完成；S4/S5 按 R3 启动
-产品主线  R0 🟡      R0.1-R0.5 已完成；AppContext、Repository、API 契约、数据目录与安全待收口
+产品主线  R0 🟡      R0.1-R0.6 ✅；R0.7 可靠性证据闭合、架构边界待裁决；R0.8 基础完成
 桌面壳    spike 已过  正式壳 ⬜
 UI        ~80%       工作台/歌曲库/学歌/速查可用
 ```
@@ -59,12 +59,12 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 | 层 | 技术 | 说明 |
 |---|---|---|
 | 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；本地 venv 版本漂移需 R0 收口 |
-| 后端 | FastAPI 0.115.0（requirements）+ uvicorn | `server/`，已拆分为 deps + routers；目标边界见 ADR-005 |
+| 后端 | FastAPI 0.115.0（requirements）+ uvicorn | AppContext + Repository adapters + services + routers；边界见 ADR-005 |
 | 前端 | React 19 + Vite 6 + Tailwind 4 | `ui/` |
 | 数据 | JSON + JSONL 本地文件 | songs.json v5（178 首）、events.jsonl v1/v2、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 87 项 Python 单元测试 + 6 项前端测试 + 16 张金标准逐像素 + tsc/build | 当前 CI 质量门通过；Windows 控制台 UTF-8 与依赖锁定仍待 R0 收口 |
+| 测试 | 145 项 Python 测试 + 12 项前端测试 + 16 张金标准逐像素 + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定仍待 R0 收口 |
 
 ---
 
@@ -169,7 +169,7 @@ Python 后端是核心用户数据的唯一写入权威（ADR-003）。Electron 
 ```bash
 # 测试
 PYTHONPATH=. python tests/test_golden.py     # 金标准 16/16
-PYTHONPATH=. python tests/test_unit.py        # Python 单元测试 87 项
+PYTHONPATH=. python tests/test_unit.py        # 核心兼容单元测试 87 项；CI 另跑 55 项边界/可靠性测试
 cd ui && npx tsc --noEmit                    # TS 编译检查
 
 # 运行

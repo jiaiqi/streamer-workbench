@@ -95,12 +95,13 @@ def test_lifespan_builds_and_releases_context():
                 song_repository = context.song_repository
                 settings_repository = context.settings_repository
                 event_store = context.event_store
+                preset_repository = context.preset_repository
                 assert context.export_job_manager is app.state.export_jobs
                 assert (data_root / "tabs").is_dir()
                 assert (data_root / "presets").is_dir()
             assert not hasattr(app.state, "context")
             for operation in (song_repository.load, settings_repository.load,
-                              event_store.flush):
+                              preset_repository.list, event_store.flush):
                 try:
                     operation()
                     assert False, "lifespan 退出后 Repository 必须关闭"
@@ -197,6 +198,9 @@ def test_nested_lifespans_http_writes_stay_in_request_app():
                 status, songs = await request(reopened, "GET", "/api/songs/list")
                 assert status == 200
                 assert any(song["title"] == "只属于 A" for song in songs["songs"])
+                status, presets = await request(reopened, "GET", "/api/presets")
+                assert status == 200
+                assert any(item["id"] == "only-a" for item in presets)
 
     asyncio.run(scenario())
 
@@ -216,6 +220,31 @@ def test_corrupt_song_data_blocks_startup_without_publishing_context():
                 async with app.router.lifespan_context(app):
                     assert False, "损坏数据必须阻止启动"
             except RepositoryCorrupt:
+                pass
+            assert not hasattr(app.state, "context")
+
+    asyncio.run(scenario())
+
+
+def test_inconsistent_preset_manifest_blocks_startup():
+    from server.app import create_app
+    from server.ports.repositories import RepositoryError
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            data_root = Path(raw)
+            presets = data_root / "presets"
+            presets.mkdir()
+            (presets / "manifest.json").write_text(json.dumps({
+                "missing": {"name": "缺失内容", "layout_id": "grid-wrap",
+                            "is_default": False, "created_at": "", "updated_at": ""},
+            }), encoding="utf-8")
+            app = create_app(AppConfig(Path(__file__).resolve().parent.parent,
+                                       mode="test", data_root=data_root))
+            try:
+                async with app.router.lifespan_context(app):
+                    assert False, "Preset manifest 与内容不一致必须阻止启动"
+            except RepositoryError:
                 pass
             assert not hasattr(app.state, "context")
 

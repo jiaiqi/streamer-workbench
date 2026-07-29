@@ -1,0 +1,153 @@
+"""Settings、Preset、Render 与 Export 的 HTTP 边界模型。"""
+
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class StrictRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class SettingsUpdateRequest(StrictRequest):
+    output_dir: str | None = None
+    default_canvas: str | None = None
+    default_theme: str | None = None
+    font_path: str | None = None
+    backup_count: int | None = None
+    render_threads: int | None = None
+
+
+class SettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    output_dir: str
+    default_canvas: str
+    default_theme: str
+    font_path: str
+    backup_count: int
+    render_threads: int
+
+
+class SettingsUpdateResponse(BaseModel):
+    ok: bool = True
+    settings: SettingsResponse
+
+
+class SongQueryRequest(StrictRequest):
+    status: str = "active"
+    classify: str = "chars"
+    sort_by: str = "default"
+    max_songs: int = 0
+    custom_ids: list[str] = Field(default_factory=list)
+    unresolved: list[str] = Field(default_factory=list)
+
+
+class PresetRequest(StrictRequest):
+    schema_version: int = 2
+    id: str = ""
+    name: str = "未命名预设"
+    created_at: str = ""
+    updated_at: str = ""
+    is_default: bool = False
+    song_query: SongQueryRequest = Field(default_factory=SongQueryRequest)
+    layout_id: str = "grid-wrap"
+    palette_id: str = ""
+    skin_id: str = ""
+    canvas: dict[str, Any] = Field(default_factory=lambda: {"width": 1080, "height": 2400})
+    params: dict[str, Any] = Field(default_factory=dict)
+    export: dict[str, Any] = Field(default_factory=dict)
+    color_overrides: dict[str, Any] = Field(default_factory=dict)
+
+
+class PresetResponse(PresetRequest):
+    pass
+
+
+class PresetSummaryResponse(BaseModel):
+    id: str
+    name: str
+    layout_id: str
+    is_default: bool
+    created_at: str
+    updated_at: str
+
+
+class PresetSaveResponse(BaseModel):
+    ok: bool = True
+    id: str
+    updated_at: str
+
+
+class PresetDuplicateRequest(StrictRequest):
+    name: str = ""
+
+
+class PresetDuplicateResponse(BaseModel):
+    ok: bool = True
+    id: str
+    name: str
+
+
+class OkResponse(BaseModel):
+    ok: bool = True
+
+
+class RenderRequest(StrictRequest):
+    theme: str
+    page: int = 1
+    canvas: str = "标准 9:16"
+    avoid: bool = False
+    layout: str = "grid-wrap"
+    margin: int | None = None
+    font_song: int | None = None
+    row_h: int | None = None
+    sec_gap: int | None = None
+    # 旧前端用于强制刷新浏览器图片缓存；不参与渲染语义。
+    t: str | None = None
+
+
+class ExportRequest(RenderRequest):
+    pass
+
+
+class ExportBatchRequest(StrictRequest):
+    layout: str = "grid-wrap"
+    canvas: str = "抖音全屏 9:20"
+    avoid: bool = True
+
+
+class ExportResponse(BaseModel):
+    ok: bool = True
+    path: str
+    filename: str
+    duration_ms: float | None
+
+
+class ExportBatchResponse(BaseModel):
+    ok: bool = True
+    job_id: str
+    total: int = Field(ge=0)
+
+
+class ExportedFileResponse(BaseModel):
+    theme: str
+    page: int
+    path: str
+
+
+class ExportJobResponse(BaseModel):
+    status: Literal["running", "done", "error", "cancelled"]
+    done: int = Field(ge=0)
+    total: int = Field(ge=0)
+    current: str
+    files: list[ExportedFileResponse]
+    output_dir: str
+    total_ms: float | None
+    error: str | None
+
+
+class ExportOpenResponse(BaseModel):
+    ok: bool = True
+    output_dir: str

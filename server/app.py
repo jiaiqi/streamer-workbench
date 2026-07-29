@@ -9,11 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.engine import render_page
+from server.api.handlers import install_api_contract
 from server.config import AppConfig, build_app_paths
 from server.context import AppContext
 from server.dependencies import get_app_context
 from server.ports.repositories import BackupPolicy
 from server.repositories.events import FileEventStore
+from server.repositories.presets import FilePresetRepository
 from server.repositories.settings import FileSettingsRepository
 from server.repositories.songs import FileSongRepository
 
@@ -38,13 +40,20 @@ def _lifespan(config: AppConfig, paths):
             resources.append(settings_repository)
             event_store = FileEventStore(paths.events_jsonl)
             resources.append(event_store)
+            preset_repository = FilePresetRepository(
+                paths.presets_dir, BackupPolicy(paths.backups_dir / "presets"))
+            resources.append(preset_repository)
             # 启动时完成 Schema 校验，损坏数据阻止 context 发布。
             song_repository.load()
             settings_repository.load()
+            preset_repository.recover()
+            if preset_repository.get("_default") is None:
+                from core.data.presets import Preset
+                preset_repository.save(Preset.default(), expected_revision=None)
             context = AppContext(
                 config=config, paths=paths,
                 song_repository=song_repository, event_store=event_store,
-                preset_repository=app.state.presets_dir,
+                preset_repository=preset_repository,
                 settings_repository=settings_repository,
                 render_service=render_page,
                 export_job_manager=app.state.export_jobs, themes=app.state.themes,
@@ -53,7 +62,7 @@ def _lifespan(config: AppConfig, paths):
             try:
                 yield
             finally:
-                app.state.export_jobs.clear()
+                app.state.export_jobs.close()
                 del app.state.context
         finally:
             for resource in reversed(resources):
@@ -73,6 +82,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                   lifespan=_lifespan(config, paths))
     app.state.config = config
     app.state.paths = paths
+    install_api_contract(app)
 
     app.add_middleware(
         CORSMiddleware,
