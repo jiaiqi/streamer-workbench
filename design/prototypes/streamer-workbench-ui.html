@@ -22,6 +22,7 @@
       --primary: #287d69;
       --primary-strong: #1f6756;
       --primary-soft: rgba(40,125,105,.11);
+      --on-primary: #fff;
       --accent: #d57953;
       --accent-soft: rgba(213,121,83,.12);
       --spot: #c78b2f;
@@ -55,6 +56,7 @@
       --primary: #49b89c;
       --primary-strong: #62cbb1;
       --primary-soft: rgba(73,184,156,.14);
+      --on-primary: #07100d;
       --accent: #ea9876;
       --accent-soft: rgba(234,152,118,.14);
       --spot: #edb14d;
@@ -64,6 +66,21 @@
       --shadow-1: 0 1px 2px rgba(0,0,0,.25), 0 8px 28px rgba(0,0,0,.26);
       --shadow-2: 0 22px 70px rgba(0,0,0,.5);
     }
+
+    html[data-accent="rain-sky"] { --primary:#356a8a; --primary-strong:#295671; --primary-soft:rgba(53,106,138,.12); }
+    html[data-accent="distant-mountain"] { --primary:#465e65; --primary-strong:#35494f; --primary-soft:rgba(70,94,101,.12); }
+    html[data-accent="rouge"] { --primary:#a13d50; --primary-strong:#843142; --primary-soft:rgba(161,61,80,.12); }
+    html[data-accent="begonia"] { --primary:#9a4f36; --primary-strong:#7d3e2a; --primary-soft:rgba(154,79,54,.12); }
+    html[data-accent="wisteria"] { --primary:#66528a; --primary-strong:#51416f; --primary-soft:rgba(102,82,138,.12); }
+    html[data-accent="amber"] { --primary:#8a5a16; --primary-strong:#70470f; --primary-soft:rgba(138,90,22,.12); }
+    html[data-accent="pine-flower"] { --primary:#5d6f32; --primary-strong:#495827; --primary-soft:rgba(93,111,50,.12); }
+    html[data-theme="dark"][data-accent="rain-sky"] { --primary:#6fa4c5; --primary-strong:#87b7d3; }
+    html[data-theme="dark"][data-accent="distant-mountain"] { --primary:#879aa0; --primary-strong:#a0afb3; }
+    html[data-theme="dark"][data-accent="rouge"] { --primary:#d77a8b; --primary-strong:#e692a0; }
+    html[data-theme="dark"][data-accent="begonia"] { --primary:#d78869; --primary-strong:#e69e84; }
+    html[data-theme="dark"][data-accent="wisteria"] { --primary:#9b88c1; --primary-strong:#b09ed0; }
+    html[data-theme="dark"][data-accent="amber"] { --primary:#d0a04d; --primary-strong:#deb465; }
+    html[data-theme="dark"][data-accent="pine-flower"] { --primary:#98aa67; --primary-strong:#adbc80; }
 
     * { box-sizing: border-box; }
     html { min-width: 320px; background: var(--bg); scroll-behavior: smooth; }
@@ -83,7 +100,7 @@
     .app-shell { min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar) minmax(0,1fr); }
     .sidebar { position: sticky; top: 0; height: 100dvh; padding: 20px 14px 18px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--bg-raised) 88%, transparent); backdrop-filter: blur(28px) saturate(1.2); z-index: 30; display: flex; flex-direction: column; }
     .brand { height: 52px; padding: 0 10px; display: flex; align-items: center; gap: 11px; }
-    .brand-mark { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: white; background: linear-gradient(145deg, #3aa78c, #236b5a); box-shadow: 0 8px 18px rgba(40,125,105,.24); }
+    .brand-mark { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: white; background: linear-gradient(145deg, color-mix(in srgb,var(--primary) 82%,white), var(--primary-strong)); box-shadow: 0 8px 18px color-mix(in srgb,var(--primary) 28%,transparent); }
     .brand-mark .icon { width: 19px; height: 19px; stroke-width: 2.2; }
     .brand-name { font-weight: 650; font-size: 16px; letter-spacing: -.025em; }
     .brand-sub { color: var(--text-3); font-size: 11px; margin-top: -2px; }
@@ -125,7 +142,7 @@
     .btn { min-height: 44px; padding: 0 17px; border: 1px solid var(--line); border-radius: 13px; color: var(--text); background: var(--surface); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; transition: transform .15s, background .2s, border-color .2s, box-shadow .2s; }
     .btn:hover { background: var(--surface-subtle); border-color: var(--line-strong); }
     .btn:active { transform: scale(.97); }
-    .btn-primary { color: #fff; background: var(--primary); border-color: transparent; box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 24%, transparent); }
+    .btn-primary { color: var(--on-primary); background: var(--primary); border-color: transparent; box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 24%, transparent); }
     .btn-primary:hover { background: var(--primary-strong); border-color: transparent; }
     .btn-quiet { border-color: transparent; background: transparent; color: var(--text-2); box-shadow: none; }
     .btn-small { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; }
@@ -357,6 +374,12 @@
     .form-row label { display:block; margin:0 0 6px; font-size:12px; font-weight:650; }
     .input { width:100%; min-height:44px; padding:0 12px; border:1px solid var(--line); border-radius:12px; background:var(--bg-raised); }
     .helper { margin:5px 0 0; color:var(--text-3); font-size:11px; }
+    .accent-options { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    .accent-option { min-height:56px; padding:7px 9px; border:1px solid var(--line); border-radius:12px; color:var(--text-2); background:var(--bg-raised); display:flex; align-items:center; gap:8px; text-align:left; transition:border-color .18s,background .18s,box-shadow .18s; }
+    .accent-option:hover { border-color:var(--line-strong); background:var(--surface-hover); }
+    .accent-option.active { color:var(--text); border-color:color-mix(in srgb,var(--primary) 55%,var(--line)); background:var(--primary-soft); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 16%,transparent); }
+    .accent-swatch { width:24px; height:24px; flex:0 0 auto; border-radius:8px; background:var(--swatch); box-shadow:inset 0 0 0 1px rgba(0,0,0,.12); }
+    .accent-option span:last-child { font-size:11px; font-weight:650; line-height:1.25; }
 
     .mobile-nav { display:none; }
     .scrim { position:fixed; inset:0; z-index:80; padding:20px; background:rgba(0,0,0,.48); display:none; place-items:center; }
@@ -439,6 +462,7 @@
       .policy-summary { align-items:flex-start; }
       .policy-summary > .btn { flex:0 0 auto; }
       .rule-config { grid-template-columns:1fr; }
+      .accent-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -588,7 +612,7 @@
 
         <section class="page" id="page-settings" aria-labelledby="title-settings">
           <div class="page-head"><div><div class="eyebrow">Preferences</div><h1 id="title-settings">设置</h1><p class="page-desc">数据、输出和桌面行为，都保持清楚可恢复。</p></div></div>
-          <div class="settings-layout"><section class="panel settings-section"><div><h2>外观</h2><p>适应白天创作与夜间直播。</p></div><div class="form-grid"><div class="form-row"><label for="appearance">界面模式</label><div class="select-wrap"><select class="select" id="appearance"><option value="system">跟随系统</option><option value="light">画廊白</option><option value="dark">暗色舞台</option></select></div></div><div class="toggle-row"><div class="toggle-row-copy"><strong>减少动态效果</strong><small>系统开启 reduced motion 时自动生效</small></div><label class="switch"><input type="checkbox"><span></span></label></div></div></section><section class="panel settings-section"><div><h2>数据与输出</h2><p>后端是核心用户数据的唯一写入方。</p></div><div class="form-grid"><div class="form-row"><label for="dataPath">数据目录</label><input class="input" id="dataPath" readonly value="~/Library/Application Support/streamer-workbench"><p class="helper">切换前会验证目录，失败时继续使用当前目录。</p></div><div class="form-row"><label for="outputPath">默认输出目录</label><input class="input" id="outputPath" readonly value="~/Pictures/主播工作台"><p class="helper">导出对话框中仍可为单次任务选择其他位置。</p></div><button class="btn" style="width:max-content"><svg class="icon icon-sm"><use href="#i-folder"/></svg>管理目录</button></div></section><section class="panel settings-section"><div><h2>安全与诊断</h2><p>本地服务只接受受信任来源。</p></div><div class="form-grid"><div class="toggle-row"><div class="toggle-row-copy"><strong>启动时自动检查数据</strong><small>发现损坏时阻止写入并提供恢复建议</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><button class="btn" style="width:max-content">打开日志目录</button></div></section></div>
+          <div class="settings-layout"><section class="panel settings-section"><div><h2>外观</h2><p>明暗模式与主色互相独立，适应白天创作和夜间直播。</p></div><div class="form-grid"><div class="form-row"><label for="appearance">界面模式</label><div class="select-wrap"><select class="select" id="appearance"><option value="system">跟随系统</option><option value="light">画廊白</option><option value="dark">暗色舞台</option></select></div></div><fieldset class="form-row" style="margin:0;padding:0;border:0"><legend style="margin-bottom:7px;font-size:12px;font-weight:650">应用主色</legend><div class="accent-options" id="accentOptions"><button class="accent-option active" data-accent="bamboo-moon" aria-pressed="true"><span class="accent-swatch" style="--swatch:#287d69"></span><span>竹月青</span></button><button class="accent-option" data-accent="rain-sky" aria-pressed="false"><span class="accent-swatch" style="--swatch:#356a8a"></span><span>雨过天青</span></button><button class="accent-option" data-accent="distant-mountain" aria-pressed="false"><span class="accent-swatch" style="--swatch:#465e65"></span><span>远山黛</span></button><button class="accent-option" data-accent="rouge" aria-pressed="false"><span class="accent-swatch" style="--swatch:#a13d50"></span><span>胭脂红</span></button><button class="accent-option" data-accent="begonia" aria-pressed="false"><span class="accent-swatch" style="--swatch:#9a4f36"></span><span>海棠褐</span></button><button class="accent-option" data-accent="wisteria" aria-pressed="false"><span class="accent-swatch" style="--swatch:#66528a"></span><span>藤萝紫</span></button><button class="accent-option" data-accent="amber" aria-pressed="false"><span class="accent-swatch" style="--swatch:#8a5a16"></span><span>琥珀金</span></button><button class="accent-option" data-accent="pine-flower" aria-pressed="false"><span class="accent-swatch" style="--swatch:#5d6f32"></span><span>松花绿</span></button></div><p class="helper">只改变导航、主按钮、焦点和进度等界面交互色，不改变海报主题、语义状态色或导出结果。</p></fieldset><div class="toggle-row"><div class="toggle-row-copy"><strong>减少动态效果</strong><small>系统开启 reduced motion 时自动生效</small></div><label class="switch"><input type="checkbox"><span></span></label></div></div></section><section class="panel settings-section"><div><h2>数据与输出</h2><p>后端是核心用户数据的唯一写入方。</p></div><div class="form-grid"><div class="form-row"><label for="dataPath">数据目录</label><input class="input" id="dataPath" readonly value="~/Library/Application Support/streamer-workbench"><p class="helper">切换前会验证目录，失败时继续使用当前目录。</p></div><div class="form-row"><label for="outputPath">默认输出目录</label><input class="input" id="outputPath" readonly value="~/Pictures/主播工作台"><p class="helper">导出对话框中仍可为单次任务选择其他位置。</p></div><button class="btn" style="width:max-content"><svg class="icon icon-sm"><use href="#i-folder"/></svg>管理目录</button></div></section><section class="panel settings-section"><div><h2>安全与诊断</h2><p>本地服务只接受受信任来源。</p></div><div class="form-grid"><div class="toggle-row"><div class="toggle-row-copy"><strong>启动时自动检查数据</strong><small>发现损坏时阻止写入并提供恢复建议</small></div><label class="switch"><input type="checkbox" checked><span></span></label></div><button class="btn" style="width:max-content">打开日志目录</button></div></section></div>
         </section>
       </main>
     </div>
@@ -656,6 +680,22 @@
         document.documentElement.dataset.theme = event.target.value;
         localStorage.setItem('sw-prototype-theme',event.target.value);
       });
+
+      const accentNames = {'bamboo-moon':'竹月青','rain-sky':'雨过天青','distant-mountain':'远山黛',rouge:'胭脂红',begonia:'海棠褐',wisteria:'藤萝紫',amber:'琥珀金','pine-flower':'松花绿'};
+      const accentButtons = [...document.querySelectorAll('[data-accent]')];
+      function applyAccent(accent,announce=false) {
+        const safeAccent = accentNames[accent] ? accent : 'bamboo-moon';
+        document.documentElement.dataset.accent = safeAccent;
+        accentButtons.forEach(button => {
+          const active = button.dataset.accent === safeAccent;
+          button.classList.toggle('active',active);
+          button.setAttribute('aria-pressed',String(active));
+        });
+        localStorage.setItem('sw-prototype-accent',safeAccent);
+        if (announce) showToast(`应用主色已切换为「${accentNames[safeAccent]}」`);
+      }
+      applyAccent(localStorage.getItem('sw-prototype-accent') || 'bamboo-moon');
+      accentButtons.forEach(button => button.addEventListener('click',() => applyAccent(button.dataset.accent,true)));
 
       const layoutConfig = {
         'grid-wrap': { name:'经典网格', ratios:[['9:20','抖音全屏 · 9:20',8],['3:4','标准竖版 · 3:4',10],['4:5','社交竖版 · 4:5',12]], themes:7, manual:false },

@@ -10,7 +10,7 @@
 - **渲染引擎**：Python + PIL（纯函数，金标准：与现有成品逐像素一致，当前 16/16 diff=0）
 - **后端**：FastAPI 本地服务（`server/`，开发期 uvicorn 8000 端口）；MVP 后期由 Electron 打包成桌面 App（Python 作 child_process，引擎不重写）
 - **前端**：React 19 + Vite 6 + Tailwind 4（`ui/`）；开发期另有 `web/index.html` 原生验证页
-- **视觉系统**：`design/design-tokens.json` v2 是当前单源真值；React 工作台默认使用画廊白 Art Gallery，QuickView/演出模式使用暗色舞台 Cinematic Stage；`.archive/design-docs/歌单海报生成器-界面设计/` 仅作历史参考
+- **视觉系统**：`design/design-tokens.json` v3 是当前单源真值；React 工作台支持画廊白/暗色舞台与独立可选应用主色，应用主色不影响海报 Theme/Palette；`.archive/design-docs/歌单海报生成器-界面设计/` 仅作历史参考
 - **铁律**：`core/` 禁止 import 任何 UI/服务器框架；React 只通过 FastAPI 访问核心业务和渲染能力
 - ~~PySide6 (Qt)~~：已移除（2026-07-23 晚决策，理由见设计结论）
 
@@ -78,5 +78,5 @@ cd ui; npx tsc --noEmit
 - 当前目标：`design/产品优化方案终版-0727/产品优化方案终版.md`；2026-07-29 详细增量规格：`design/产品优化方案终版-0727/产品与技术规格-v3.md`；
 - 当前顺序：`design/产品优化方案终版-0727/路线图.md`；
 - 数据口径：`design/roadmap-data-stats.md`；
-- 架构决策：`ADR-001.md`–`ADR-007.md`；
+- 架构决策：`ADR-001.md`–`ADR-008.md`；
 - `design/archive/` 和 `.archive/` 中的文档均已退役，不得作为当前执行依据。
