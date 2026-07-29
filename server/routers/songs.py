@@ -1,10 +1,10 @@
 """歌曲管理路由（/api/songs*）。"""
-import os
-import uuid
-from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request, Response
+from fastapi import APIRouter, UploadFile, File, Request, Response
 
+from core.data.tabs import MAX_FILE_BYTES
+from server.api.errors import ApiError
+from server.api.handlers import api_error_response
 from server.api.song_models import (
     SongCreateRequest,
     SongDeleteResponse,
@@ -22,7 +22,6 @@ from server.api.song_models import (
     SongStatusRequest,
 )
 from server.dependencies import get_app_context
-from server.ports.repositories import RepositoryConflict, RepositoryError
 from server.services.songs import (
     SongConflict,
     SongNotFound,
@@ -30,8 +29,11 @@ from server.services.songs import (
     SongValidationFailed,
     song_values,
 )
-from core.data.events import append_event, _normalize_timestamp
-from core.data import tabs as tabs_store
+from server.services.tabs import (
+    TabNotFound,
+    TabServiceError,
+    TabValidationFailed,
+)
 
 router = APIRouter()
 
@@ -58,19 +60,16 @@ def _song_service_error(error: SongServiceError):
     return Response(str(error), status_code=status_code)
 
 
-def _save_library(context, library):
-    repository = context.song_repository
-    if hasattr(repository, "load") and not isinstance(repository, type(library)):
-        try:
-            repository.save(
-                library, expected_revision=getattr(library, "_repository_revision", None))
-        except RepositoryConflict as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
-        except RepositoryError as error:
-            raise HTTPException(status_code=503, detail=str(error)) from error
-    else:  # 仅供旧单元夹具兼容；正式 AppContext 始终注入 Repository port。
-        repository.save(str(context.paths.songs_json),
-                        backup_dir=str(context.paths.backups_dir), backup_count=20)
+def _tab_service_error(request: Request, error: TabServiceError):
+    status_code = 404 if isinstance(error, TabNotFound) else 400
+    if not isinstance(error, (TabNotFound, TabValidationFailed)):
+        status_code = 500
+    code = "tab_not_found" if status_code == 404 else "tab_validation_failed"
+    if status_code == 500:
+        code = "tab_error"
+    return api_error_response(
+        request, status_code,
+        ApiError(code, str(error), recovery="检查曲谱文件和歌曲状态后重试"))
 
 
 def _library(context):
@@ -80,29 +79,6 @@ def _library(context):
         setattr(snapshot.value, "_repository_revision", snapshot.revision)
         return snapshot.value
     return repository
-
-
-def _events_path(context):
-    return str(context.paths.events_jsonl)
-
-
-def _append_event(context, event_type, **kwargs):
-    store = getattr(context, "event_store", None)
-    if store is None:
-        return append_event(_events_path(context), event_type, **kwargs)
-    event = {
-        "schema_version": 2,
-        "event_id": kwargs.pop("event_id", None) or f"evt_{uuid.uuid4().hex}",
-        "occurred_at": _normalize_timestamp(kwargs.pop("occurred_at", None)),
-        "recorded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "type": event_type,
-        "source": kwargs.pop("source", "songs-api"),
-    }
-    for key in ("song_id", "title_snapshot", "meta"):
-        value = kwargs.get(key)
-        if value is not None:
-            event[key] = value
-    return store.append(event).event
 
 
 @router.get("/api/songs", response_model=SongsSummaryResponse)
@@ -230,57 +206,35 @@ def api_song_delete_by_id(req: Request, song_id: str):
 
 # ── 曲谱附件 ──
 
-def _resolve_song_identity(library, identity: str):
-    """R0.5：ID 主查找，title 仅作为迁移期兼容回退。"""
-    return library.get_by_id(identity) or library.get(identity)
-
 
 @router.post("/api/songs/{identity}/tabs")
 async def api_tab_upload(req: Request, identity: str, file: UploadFile = File(...)):
     context = get_app_context(req)
-    library = _library(context)
-    song = _resolve_song_identity(library, identity)
-    if song is None:
-        return Response(f"未找到歌曲：{identity}", status_code=404)
-    data = await file.read()
+    data = await file.read(MAX_FILE_BYTES + 1)
     try:
-        rel = tabs_store.save_tab(str(context.paths.tabs_dir), song.id, file.filename or "tab.png", data)
-    except ValueError as e:
-        return Response(str(e), status_code=400)
-    song.tab_files.append(rel)
-    _save_library(context, library)
-    _append_event(context, "song_edited", song_id=song.id,
-                 title_snapshot=song.title,
-                 meta={"changes": [{"field": "tab_files", "old": None, "new": rel}]},
-                 source="tabs-api")
-    return {"ok": True, "song_id": song.id, "title": song.title,
-            "file": rel, "tab_files": song.tab_files}
+        result = context.tab_service.upload(
+            identity, file.filename or "tab.png", data, file.content_type)
+    except TabServiceError as error:
+        return _tab_service_error(req, error)
+    return {"ok": True, "song_id": result.song_id, "title": result.title,
+            "file": result.file, "tab_files": list(result.tab_files)}
 
 
 @router.get("/api/songs/{identity}/tabs")
 def api_tab_list(req: Request, identity: str):
-    library = _library(get_app_context(req))
-    song = _resolve_song_identity(library, identity)
-    if song is None:
-        return Response(f"未找到歌曲：{identity}", status_code=404)
-    return {"song_id": song.id, "title": song.title, "tab_files": song.tab_files}
+    try:
+        result = get_app_context(req).tab_service.list(identity)
+    except TabServiceError as error:
+        return _tab_service_error(req, error)
+    return {"song_id": result.song_id, "title": result.title,
+            "tab_files": list(result.tab_files)}
 
 
 @router.delete("/api/songs/{identity}/tabs")
 def api_tab_delete(req: Request, identity: str, file: str):
-    context = get_app_context(req)
-    library = _library(context)
-    song = _resolve_song_identity(library, identity)
-    if song is None:
-        return Response(f"未找到歌曲：{identity}", status_code=404)
-    if file not in song.tab_files:
-        return Response(f"曲谱不存在：{file}", status_code=404)
-    song.tab_files.remove(file)
-    tabs_store.delete_tab(str(context.paths.tabs_dir), song.id, file)
-    _save_library(context, library)
-    _append_event(context, "song_edited", song_id=song.id,
-                 title_snapshot=song.title,
-                 meta={"changes": [{"field": "tab_files", "old": file, "new": None}]},
-                 source="tabs-api")
-    return {"ok": True, "song_id": song.id, "title": song.title,
-            "tab_files": song.tab_files}
+    try:
+        result = get_app_context(req).tab_service.delete(identity, file)
+    except TabServiceError as error:
+        return _tab_service_error(req, error)
+    return {"ok": True, "song_id": result.song_id, "title": result.title,
+            "tab_files": list(result.tab_files)}

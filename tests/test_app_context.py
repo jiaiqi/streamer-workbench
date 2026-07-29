@@ -135,6 +135,60 @@ def test_two_apps_have_distinct_context_and_mutable_state():
     asyncio.run(scenario())
 
 
+def test_lifespan_recovers_tab_transaction_and_idempotent_event():
+    from server.app import create_app
+    from server.services.tabs import TabApplicationService
+
+    class SimulatedCrash(BaseException):
+        pass
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            data_root = Path(raw) / "data"
+            project = Path(__file__).resolve().parent.parent
+            app = create_app(AppConfig(project, mode="test", data_root=data_root))
+            async with app.router.lifespan_context(app):
+                context = app.state.context
+                song = context.song_service.create({
+                    "title": "曲谱恢复测试", "status": "active"}).song
+
+                def crash(phase):
+                    if phase == "after_metadata_publish":
+                        raise SimulatedCrash()
+
+                interrupted = TabApplicationService(
+                    song_repository=context.song_repository,
+                    event_store=context.event_store,
+                    tabs_root=context.paths.tabs_dir,
+                    transactions_root=(context.paths.backups_dir
+                                       / "tab-transactions"),
+                    fault_injector=crash,
+                )
+                try:
+                    interrupted.upload(song.id, "重启恢复.png", b"PNG")
+                    assert False, "故障注入必须中断"
+                except SimulatedCrash:
+                    pass
+                relative_path = context.song_repository.load().value.get_by_id(
+                    song.id).tab_files[-1]
+                assert context.event_store.tail(
+                    limit=10, event_type="song_edited") == ()
+
+            reopened = create_app(AppConfig(
+                project, mode="test", data_root=data_root))
+            async with reopened.router.lifespan_context(reopened):
+                context = reopened.state.context
+                listing = context.tab_service.list(song.id)
+                assert relative_path in listing.tab_files
+                assert (data_root / relative_path).is_file()
+                events = context.event_store.tail(
+                    limit=10, event_type="song_edited")
+                assert len(events) == 1
+                assert events[0]["meta"]["changes"][0]["new"] == relative_path
+
+    asyncio.run(scenario())
+
+
 def test_nested_lifespans_http_writes_stay_in_request_app():
     from server.app import create_app
 

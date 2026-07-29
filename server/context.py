@@ -19,6 +19,7 @@ class AppContext:
     settings_repository: Any
     render_service: Any
     song_service: Any
+    tab_service: Any
     export_service: Any
     export_job_manager: Any
     themes: Mapping[str, Any]

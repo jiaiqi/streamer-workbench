@@ -13,13 +13,14 @@ from server.api.handlers import install_api_contract
 from server.config import AppConfig, build_app_paths
 from server.context import AppContext
 from server.dependencies import get_app_context
-from server.ports.repositories import BackupPolicy
+from server.ports.repositories import BackupPolicy, RepositoryRecoveryRequired
 from server.repositories.events import FileEventStore
 from server.repositories.presets import FilePresetRepository
 from server.repositories.settings import FileSettingsRepository
 from server.repositories.songs import FileSongRepository
 from server.services.export import ExportApplicationService
 from server.services.songs import SongApplicationService
+from server.services.tabs import TabApplicationService
 
 logger = logging.getLogger("streamer-workbench")
 
@@ -64,6 +65,17 @@ def _lifespan(config: AppConfig, paths):
                 song_repository=song_repository,
                 event_store=event_store,
             )
+            tab_service = TabApplicationService(
+                song_repository=song_repository,
+                event_store=event_store,
+                tabs_root=paths.tabs_dir,
+                transactions_root=paths.backups_dir / "tab-transactions",
+            )
+            tab_recovery = tab_service.recover()
+            if tab_recovery.unresolved:
+                raise RepositoryRecoveryRequired(
+                    "曲谱附件事务存在无法自动恢复的状态："
+                    + ", ".join(tab_recovery.unresolved))
             context = AppContext(
                 config=config, paths=paths,
                 song_repository=song_repository, event_store=event_store,
@@ -71,6 +83,7 @@ def _lifespan(config: AppConfig, paths):
                 settings_repository=settings_repository,
                 render_service=render_page,
                 song_service=song_service,
+                tab_service=tab_service,
                 export_service=export_service,
                 export_job_manager=app.state.export_jobs, themes=app.state.themes,
             )
