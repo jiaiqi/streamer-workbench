@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
+import AsyncStateNotice from "../components/AsyncStateNotice";
+import { apiRequest } from "../api/client";
+import { toRequestFailure, useLatestRequest } from "../async/requestState";
 
 /* ================= 符号化元数据 ================= */
 // 难度 → 菱形阶（◆◆◇），一瞥可读
@@ -42,13 +45,17 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Song | "new" | null>(null);
+  const [actionSong, setActionSong] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
+  const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
   const probeRef = useRef<HTMLDivElement>(null);
 
   const refresh = async () => {
-    const d: SongsData = await (await fetch("/api/songs/list")).json();
+    const d = await listRequest.run(signal => apiRequest<SongsData>("/api/songs/list", { signal }));
+    if (!d) return;
     setSongsData(d);
     onStatsChange({ active: d.active, draft: d.draft });
   };
@@ -140,13 +147,11 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
   }, [filtered, cursor, editTarget]);
 
   const toggleStatus = async (song: Song) => {
+    if (actionSong) return;
     const next = song.status === "active" ? "draft" : "active";
+    setActionSong(song.id); setActionError("");
     try {
-      const res = await fetch("/api/songs/status", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: song.title, status: next }),
-      });
-      if (!res.ok) { console.error("状态切换失败", await res.text()); return; }
+      await apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: next } });
       // 本地更新该行 + 统计，避免整表重拉
       setSongsData(prev => {
         if (!prev) return prev;
@@ -158,24 +163,20 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
         onStatsChange(stats);
         return { ...prev, ...stats, songs };
       });
-    } catch (e) {
-      console.error("状态切换失败", e);
-    }
+    } catch (reason) { setActionError(toRequestFailure(reason, "状态切换失败").message); }
+    finally { setActionSong(null); }
   };
 
   const deleteSong = async (song: Song) => {
     if (!window.confirm(`确定删除「${song.title}」？此操作会立即写入 songs.json（有自动备份）。`)) return;
+    if (actionSong) return;
+    setActionSong(song.id); setActionError("");
     try {
-      const res = await fetch("/api/songs/delete", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: song.title }),
-      });
-      if (!res.ok) { console.error("删除失败", await res.text()); return; }
+      await apiRequest("/api/songs/delete", { method: "POST", body: { title: song.title } });
       if (expanded === song.title) setExpanded(null);
       await refresh();
-    } catch (e) {
-      console.error("删除失败", e);
-    }
+    } catch (reason) { setActionError(toRequestFailure(reason, "删除失败").message); }
+    finally { setActionSong(null); }
   };
 
   /* ---- 设计令牌速记 ---- */
@@ -249,8 +250,13 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
         </span>
       </div>
 
+      {actionError && <div className="mx-6 mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500" role="alert">{actionError}</div>}
+
       {/* ===== 分组卡片网格 ===== */}
-      {songsData ? (
+      {listRequest.status === "loading" && !songsData ? <AsyncStateNotice kind="loading" label="歌曲库" />
+      : listRequest.status === "error" && !songsData ? <AsyncStateNotice kind="error" label="歌曲库" error={listRequest.error} onRetry={refresh} />
+      : listRequest.status === "empty" ? <AsyncStateNotice kind="empty" label="歌曲" />
+      : songsData ? (
         <div ref={listRef} className="flex-1 overflow-y-auto">
           {/* 列数探针：与真实网格同 class，键盘导航据此计算 ↑↓ 步长 */}
           <div ref={probeRef} aria-hidden="true" className={`invisible h-0 overflow-hidden ${GRID_CLASS}`} />
@@ -312,6 +318,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                         <div className="mt-2.5 flex items-center gap-2.5 text-[12px]">
                           <button
                             onClick={e => { e.stopPropagation(); toggleStatus(s); }}
+                            disabled={actionSong === s.id}
                             title={s.status === "active" ? "已会 · 点击标回未会" : "未会 · 点击标记学会了"}
                             className="shrink-0 w-5 h-5 -ml-1 flex items-center justify-center cursor-pointer">
                             <span className={`w-2 h-2 rounded-full transition-all duration-300 ${
@@ -397,6 +404,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                               {/* 操作列 */}
                               <div className="shrink-0 ml-auto flex md:flex-col gap-1.5 w-full md:w-24">
                                 <button onClick={() => toggleStatus(s)}
+                                  disabled={actionSong === s.id}
                                   className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${s.status === "draft"
                                     ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                                     : dark ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-600" : "bg-background border border-border text-muted-foreground hover:text-foreground"}`}>
@@ -407,6 +415,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                                   编辑
                                 </button>
                                 <button onClick={() => deleteSong(s)}
+                                  disabled={actionSong === s.id}
                                   className={`rounded-lg px-3 py-1.5 text-xs transition-colors cursor-pointer ${dark ? "text-red-400/80 hover:bg-zinc-700 hover:text-red-400" : "text-red-500/80 hover:bg-red-50 hover:text-red-500"}`}>
                                   删除
                                 </button>
@@ -422,9 +431,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
             </div>
           ))}
         </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">加载中…</div>
-      )}
+      ) : null}
 
       {/* ===== 底栏：计数收尾 ===== */}
       <div className={`shrink-0 flex items-center px-6 h-8 border-t text-[11px] ${hairline} ${dark ? "text-zinc-600" : "text-muted-foreground"}`}>

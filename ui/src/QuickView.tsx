@@ -5,6 +5,8 @@ import {
   enqueue, flushPending, loadStorageV2, migrateStorage, moveQueueItem, resolveQueueItem, toggleSung,
   type PendingEvent, type QuickEventType, type QuickViewStorageV2, type QueueItem,
 } from "./quick-view/model";
+import { apiRequest } from "./api/client";
+import { toRequestFailure, useLatestRequest } from "./async/requestState";
 
 /* ---- 速查小窗 Web 版（/quick）----
    场景：直播中手机开播、电脑本窗口置顶，纯键盘速查选调。
@@ -24,15 +26,11 @@ const REFRESH_MS = 30_000;
    occurred_at 为事件发生时刻，重试始终复用原 event_id。 */
 async function postEvent(e: PendingEvent): Promise<{ ok: boolean; diagnostic?: string }> {
   try {
-    const r = await fetch("/api/events/report", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(e),
-    });
-    if (r.ok) return { ok: true };
-    const message = await r.text();
-    return { ok: false, diagnostic: `${r.status}: ${message || "事件补报失败"}` };
+    await apiRequest("/api/events/report", { method: "POST", body: e });
+    return { ok: true };
   } catch (error) {
-    return { ok: false, diagnostic: error instanceof Error ? error.message : "网络不可用" };
+    const failure = toRequestFailure(error, "事件补报失败");
+    return { ok: false, diagnostic: [failure.message, failure.requestId && `请求 ${failure.requestId}`].filter(Boolean).join(" · ") };
   }
 }
 
@@ -64,6 +62,7 @@ export default function QuickView() {
   const storageRef = useRef(storage); storageRef.current = storage;
   const storageReadyRef = useRef(storageReady); storageReadyRef.current = storageReady;
   const flushRunningRef = useRef(false);
+  const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
 
   const commitStorage = (next: QuickViewStorageV2) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -101,10 +100,8 @@ export default function QuickView() {
   };
 
   const refresh = async () => {
-    try {
-      const response = await fetch("/api/songs/list");
-      if (!response.ok) throw new Error(`歌曲加载失败：${response.status}`);
-      const d: SongsData = await response.json();
+    const d = await listRequest.run(signal => apiRequest<SongsData>("/api/songs/list", { signal }));
+    if (d) {
       setSongs(d.songs);
       if (!storageReadyRef.current) {
         const migrated = migrateStorage(
@@ -126,7 +123,7 @@ export default function QuickView() {
       } else {
         void flushPendingEvents();
       }
-    } catch { /* 后端没起时保持旧数据 */ }
+    }
   };
   useEffect(() => {
     refresh();
@@ -297,9 +294,19 @@ export default function QuickView() {
       </div>
 
       <div className="flex flex-1 min-h-0">
+        {listRequest.status === "error" && (
+          <div className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-lg border border-red-900 bg-red-950/90 px-4 py-2 text-xs text-red-300" role="alert">
+            {listRequest.error?.message} {listRequest.error?.recovery && `· ${listRequest.error.recovery}`}
+            <button type="button" className="ml-3 underline" onClick={refresh}>重试</button>
+          </div>
+        )}
         {/* ===== 结果列表 ===== */}
         <div ref={listRef} className="w-64 shrink-0 overflow-y-auto border-r border-zinc-800">
-          {results.length === 0 && (
+          {listRequest.status === "loading" && songs.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-zinc-600" role="status">正在加载歌曲…</p>
+          ) : listRequest.status === "empty" ? (
+            <p className="px-4 py-6 text-sm text-zinc-600">歌曲库还没有歌曲</p>
+          ) : results.length === 0 && (
             <p className="px-4 py-6 text-sm text-zinc-600">无匹配</p>
           )}
           {results.map((s, i) => (
@@ -454,7 +461,10 @@ export default function QuickView() {
       {/* ===== 底栏 ===== */}
       <div className="shrink-0 flex items-center px-5 h-8 border-t border-zinc-800 text-[11px] text-zinc-600">
         <span>↑↓ 选择 · Enter 加入歌单 · T 看谱 · 双击同效 · Esc 清空 · 每 {REFRESH_MS / 1000}s 自动刷新</span>
-        <button onClick={refresh} className="ml-auto hover:text-zinc-300 transition-colors cursor-pointer">手动刷新</button>
+        <button onClick={refresh} disabled={listRequest.status === "loading"}
+          className="ml-auto hover:text-zinc-300 transition-colors cursor-pointer disabled:opacity-50">
+          {listRequest.status === "loading" ? "刷新中…" : "手动刷新"}
+        </button>
       </div>
     </div>
   );

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "test": "npm run test:unit && npm run test:react",
+    "test:unit": "node --experimental-strip-types --test src/**/*.test.ts",
+    "test:react": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -15,11 +17,15 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.4",
     "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^4.1.10"
   }
 }

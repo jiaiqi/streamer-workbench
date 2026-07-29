@@ -3,6 +3,9 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
+import AsyncStateNotice from "../components/AsyncStateNotice";
+import { apiRequest } from "../api/client";
+import { toRequestFailure, useLatestRequest } from "../async/requestState";
 
 /* ---- 学歌管理视图（按设计稿 learning.html 重写）----
    设计语言：晨光纸感 · 卡片网格 · 星光难度 · 衬线标题
@@ -45,7 +48,6 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
   onEditTargetChange?: (open: boolean) => void;
 }) {
   const [songs, setSongs] = useState<Song[]>([]);
-  const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importResult, setImportResult] = useState<string[]>([]);
@@ -53,13 +55,18 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
   const [justLearned, setJustLearned] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Song | null>(null);
   const [tabsOpen, setTabsOpen] = useState<string | null>(null);
+  const [learningSong, setLearningSong] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
+  const listRequest = useLatestRequest<{ draft: SongsData; all: SongsData }>({ isEmpty: result => result.draft.total === 0 });
 
   const refresh = async () => {
-    const d: SongsData = await (await fetch("/api/songs/list?status=draft")).json();
-    setSongs(d.songs);
-    const all: SongsData = await (await fetch("/api/songs/list")).json();
-    onStatsChange({ active: all.active, draft: all.draft });
-    setLoading(false);
+    const result = await listRequest.run(signal => Promise.all([
+      apiRequest<SongsData>("/api/songs/list?status=draft", { signal }),
+      apiRequest<SongsData>("/api/songs/list", { signal }),
+    ]).then(([draft, all]) => ({ draft, all })));
+    if (!result) return;
+    setSongs(result.draft.songs);
+    onStatsChange({ active: result.all.active, draft: result.all.draft });
   };
 
   useEffect(() => { refresh(); /* eslint-disable-next-line */ }, []);
@@ -71,21 +78,18 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
     (difficultyOrder[a.difficulty] ?? 3) - (difficultyOrder[b.difficulty] ?? 3));
 
   const learn = async (song: Song) => {
+    if (learningSong) return;
+    setLearningSong(song.id); setActionError("");
     try {
-      const res = await fetch("/api/songs/status", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: song.title, status: "active" }),
-      });
-      if (!res.ok) { console.error("标记失败", await res.text()); return; }
+      await apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: "active" } });
       setJustLearned(song.title);
       setTimeout(() => {
         setSongs(prev => prev.filter(s => s.title !== song.title));
         setJustLearned(null);
       }, 450);
       onStatsChange(prev => prev && ({ active: prev.active + 1, draft: prev.draft - 1 }));
-    } catch (e) {
-      console.error("标记失败", e);
-    }
+    } catch (reason) { setActionError(toRequestFailure(reason, "标记失败").message); }
+    finally { setLearningSong(null); }
   };
 
   const doImport = async () => {
@@ -105,13 +109,10 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
         title = line;
       }
       try {
-        const res = await fetch("/api/songs/add", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, artists, status: "draft" }),
-        });
-        results.push(res.ok ? `✅ ${title}` : `❌ ${title} — ${await res.text()}`);
-      } catch {
-        results.push(`❌ ${title} — 网络错误`);
+        await apiRequest("/api/songs/add", { method: "POST", body: { title, artists, status: "draft" } });
+        results.push(`✅ ${title}`);
+      } catch (reason) {
+        results.push(`❌ ${title} — ${toRequestFailure(reason).message}`);
       }
     }
     setImportResult(results);
@@ -145,12 +146,15 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
 
       {/* ===== 内容区 ===== */}
       <div className="flex-1 overflow-y-auto px-8 pb-10">
-        {loading ? (
+        {actionError && <div className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500" role="alert">{actionError}</div>}
+        {listRequest.status === "loading" && songs.length === 0 ? (
           <div className="grid grid-cols-2 gap-4">
             {[1, 2, 3, 4].map(i => (
               <div key={i} className={`h-44 rounded-2xl animate-pulse ${dark ? "bg-zinc-800/60" : "bg-muted/70"}`} />
             ))}
           </div>
+        ) : listRequest.status === "error" && songs.length === 0 ? (
+          <AsyncStateNotice kind="error" label="在学歌曲" error={listRequest.error} onRetry={refresh} />
         ) : sorted.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center space-y-4">
@@ -251,10 +255,11 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
                     编辑
                   </button>
                   <button onClick={() => learn(s)}
+                    disabled={learningSong === s.id}
                     className="flex-1 flex items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium text-white transition-all active:scale-95 cursor-pointer"
                     style={{ background: "linear-gradient(150deg, var(--color-primary), var(--color-primary-strong))" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    标记学会
+                    {learningSong === s.id ? "标记中…" : "标记学会"}
                   </button>
                 </div>
               </article>
