@@ -124,6 +124,67 @@ def test_two_apps_have_distinct_context_and_mutable_state():
     asyncio.run(scenario())
 
 
+def test_nested_lifespans_http_writes_stay_in_request_app():
+    from server.app import create_app
+
+    async def request(app, method: str, path: str, payload=None):
+        body = json.dumps(payload, ensure_ascii=False).encode() if payload is not None else b""
+        sent = False
+        messages = []
+
+        async def receive():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            messages.append(message)
+
+        headers = [(b"content-type", b"application/json")] if payload is not None else []
+        await app({"type": "http", "asgi": {"version": "3.0"},
+                   "http_version": "1.1", "method": method, "scheme": "http",
+                   "path": path, "raw_path": path.encode(), "query_string": b"",
+                   "headers": headers, "client": ("test", 1), "server": ("test", 80)},
+                  receive, send)
+        status = next(message["status"] for message in messages
+                      if message["type"] == "http.response.start")
+        response_body = b"".join(message.get("body", b"") for message in messages
+                                 if message["type"] == "http.response.body")
+        return status, json.loads(response_body) if response_body else None
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            project = Path(__file__).resolve().parent.parent
+            app_a = create_app(AppConfig(project, mode="test", data_root=base / "a"))
+            app_b = create_app(AppConfig(project, mode="test", data_root=base / "b"))
+            async with app_a.router.lifespan_context(app_a):
+                async with app_b.router.lifespan_context(app_b):
+                    status, _ = await request(app_a, "POST", "/api/songs/add",
+                                              {"title": "只属于 A"})
+                    assert status == 200
+                    status, _ = await request(app_a, "POST", "/api/presets",
+                                              {"id": "only-a", "name": "A 预设"})
+                    assert status == 200
+                    status, songs_b = await request(app_b, "GET", "/api/songs/list")
+                    assert status == 200
+                    status, presets_b = await request(app_b, "GET", "/api/presets")
+                    assert status == 200
+                    assert all(song["title"] != "只属于 A" for song in songs_b["songs"])
+                    assert all(item["id"] != "only-a" for item in presets_b)
+
+                    assert (base / "a" / "songs.json").is_file()
+                    assert not (base / "b" / "songs.json").exists()
+                    assert (base / "a" / "events.jsonl").is_file()
+                    assert not (base / "b" / "events.jsonl").exists()
+                    assert (base / "a" / "presets" / "only-a" / "preset.json").is_file()
+                    assert not (base / "b" / "presets" / "only-a").exists()
+
+    asyncio.run(scenario())
+
+
 def _run():
     tests = [value for name, value in sorted(globals().items())
              if name.startswith("test_") and callable(value)]
