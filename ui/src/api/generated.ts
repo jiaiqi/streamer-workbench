@@ -45,6 +45,130 @@ export interface HTTPValidationError {
   [key: string]: unknown;
 }
 
+export interface SongCreateRequest {
+  "artists"?: Array<unknown> | null;
+  "capo"?: unknown | null;
+  "composer"?: unknown | null;
+  "difficulty"?: unknown | null;
+  "key"?: unknown | null;
+  "lyricist"?: unknown | null;
+  "notes"?: unknown | null;
+  "pinyin"?: unknown | null;
+  "section"?: unknown | null;
+  "status"?: string | null;
+  "tabs"?: unknown | null;
+  "tags"?: Array<unknown> | null;
+  "title"?: unknown | null;
+}
+
+export interface SongDeleteResponse {
+  "active": number;
+  "draft": number;
+  "ok"?: boolean;
+  "song_id": string;
+  "title_snapshot": string;
+  [key: string]: unknown;
+}
+
+export interface SongEditableFields {
+  "artists"?: Array<unknown> | null;
+  "capo"?: unknown | null;
+  "composer"?: unknown | null;
+  "difficulty"?: unknown | null;
+  "key"?: unknown | null;
+  "lyricist"?: unknown | null;
+  "notes"?: unknown | null;
+  "pinyin"?: unknown | null;
+  "section"?: unknown | null;
+  "tabs"?: unknown | null;
+  "tags"?: Array<unknown> | null;
+  "title"?: unknown | null;
+}
+
+export interface SongLegacyDeleteResponse {
+  "active": number;
+  "draft": number;
+  "ok"?: boolean;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface SongLegacyIdentityRequest {
+  "title": string;
+}
+
+export interface SongLegacyStatusRequest {
+  "status": string;
+  "title": string;
+}
+
+export interface SongLegacyStatusResponse {
+  "active": number;
+  "draft": number;
+  "ok"?: boolean;
+  "status": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface SongLegacyUpdateRequest {
+  "fields": SongEditableFields;
+  "title": string;
+}
+
+export interface SongMutationResponse {
+  "active": number;
+  "draft": number;
+  "ok"?: boolean;
+  "song": SongResponse;
+  [key: string]: unknown;
+}
+
+export interface SongResponse {
+  "added_at": string;
+  "artists": Array<string>;
+  "capo": number | null;
+  "composer": string;
+  "difficulty": string;
+  "id": string;
+  "key": string;
+  "learned_at": string;
+  "lyricist": string;
+  "notes": string;
+  "pinyin": string;
+  "section": number | null;
+  "status": string;
+  "tab_files": Array<string>;
+  "tabs": string;
+  "tags": Array<string>;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface SongStatusRequest {
+  "status": string;
+}
+
+export interface SongUpdateResponse {
+  "ok"?: boolean;
+  "song": SongResponse;
+  [key: string]: unknown;
+}
+
+export interface SongsListResponse {
+  "active": number;
+  "draft": number;
+  "songs": Array<SongResponse>;
+  "total": number;
+  [key: string]: unknown;
+}
+
+export interface SongsSummaryResponse {
+  "by_len": Record<string, number>;
+  "total": number;
+  [key: string]: unknown;
+}
+
 export interface ValidationError {
   "loc": Array<string | number>;
   "msg": string;
