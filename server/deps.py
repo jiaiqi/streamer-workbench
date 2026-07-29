@@ -16,6 +16,8 @@ DEFAULT_SETTINGS = {
     "font_path": "",
     "backup_count": 20,
     "render_threads": 1,
+    "appearanceMode": "system",
+    "applicationAccentId": "bambooMoon",
 }
 
 

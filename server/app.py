@@ -21,6 +21,7 @@ from server.repositories.songs import FileSongRepository
 from server.services.export import ExportApplicationService
 from server.services.presets import PresetApplicationService
 from server.services.songs import SongApplicationService
+from server.services.settings import SettingsApplicationService
 from server.services.tabs import TabApplicationService
 
 logger = logging.getLogger("streamer-workbench")
@@ -69,6 +70,9 @@ def _lifespan(config: AppConfig, paths):
             preset_service = PresetApplicationService(
                 preset_repository=preset_repository,
             )
+            settings_service = SettingsApplicationService(
+                settings_repository=settings_repository,
+            )
             tab_service = TabApplicationService(
                 song_repository=song_repository,
                 event_store=event_store,
@@ -88,6 +92,7 @@ def _lifespan(config: AppConfig, paths):
                 render_service=render_page,
                 song_service=song_service,
                 preset_service=preset_service,
+                settings_service=settings_service,
                 tab_service=tab_service,
                 export_service=export_service,
                 export_job_manager=app.state.export_jobs, themes=app.state.themes,

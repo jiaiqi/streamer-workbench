@@ -20,6 +20,7 @@ class AppContext:
     render_service: Any
     song_service: Any
     preset_service: Any
+    settings_service: Any
     tab_service: Any
     export_service: Any
     export_job_manager: Any

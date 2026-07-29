@@ -159,6 +159,8 @@ export interface PresetSummaryResponse {
 }
 
 export interface SettingsResponse {
+  "appearanceMode"?: "system" | "light" | "dark";
+  "applicationAccentId"?: "bambooMoon" | "rainSky" | "distantMountain" | "rouge" | "begonia" | "wisteria" | "amber" | "pineFlower";
   "backup_count": number;
   "default_canvas": string;
   "default_theme": string;
@@ -169,6 +171,8 @@ export interface SettingsResponse {
 }
 
 export interface SettingsUpdateRequest {
+  "appearanceMode"?: "system" | "light" | "dark" | null;
+  "applicationAccentId"?: "bambooMoon" | "rainSky" | "distantMountain" | "rouge" | "begonia" | "wisteria" | "amber" | "pineFlower" | null;
   "backup_count"?: number | null;
   "default_canvas"?: string | null;
   "default_theme"?: string | null;
