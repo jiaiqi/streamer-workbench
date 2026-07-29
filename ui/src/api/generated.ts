@@ -40,8 +40,140 @@ export interface EventsResponse {
   [key: string]: unknown;
 }
 
+export interface ExportBatchResponse {
+  "job_id": string;
+  "ok"?: boolean;
+  "total": number;
+  [key: string]: unknown;
+}
+
+export interface ExportJobResponse {
+  "current": string;
+  "done": number;
+  "error": string | null;
+  "files": Array<ExportedFileResponse>;
+  "output_dir": string;
+  "status": "running" | "done" | "error" | "cancelled";
+  "total": number;
+  "total_ms": number | null;
+  [key: string]: unknown;
+}
+
+export interface ExportOpenResponse {
+  "ok"?: boolean;
+  "output_dir": string;
+  [key: string]: unknown;
+}
+
+export interface ExportResponse {
+  "duration_ms": number | null;
+  "filename": string;
+  "ok"?: boolean;
+  "path": string;
+  [key: string]: unknown;
+}
+
+export interface ExportedFileResponse {
+  "page": number;
+  "path": string;
+  "theme": string;
+  [key: string]: unknown;
+}
+
 export interface HTTPValidationError {
   "detail"?: Array<ValidationError>;
+  [key: string]: unknown;
+}
+
+export interface OkResponse {
+  "ok"?: boolean;
+  [key: string]: unknown;
+}
+
+export interface PresetDuplicateRequest {
+  "name"?: string;
+}
+
+export interface PresetDuplicateResponse {
+  "id": string;
+  "name": string;
+  "ok"?: boolean;
+  [key: string]: unknown;
+}
+
+export interface PresetRequest {
+  "canvas"?: Record<string, unknown>;
+  "color_overrides"?: Record<string, unknown>;
+  "created_at"?: string;
+  "export"?: Record<string, unknown>;
+  "id"?: string;
+  "is_default"?: boolean;
+  "layout_id"?: string;
+  "name"?: string;
+  "palette_id"?: string;
+  "params"?: Record<string, unknown>;
+  "schema_version"?: number;
+  "skin_id"?: string;
+  "song_query"?: SongQueryRequest;
+  "updated_at"?: string;
+}
+
+export interface PresetResponse {
+  "canvas"?: Record<string, unknown>;
+  "color_overrides"?: Record<string, unknown>;
+  "created_at"?: string;
+  "export"?: Record<string, unknown>;
+  "id"?: string;
+  "is_default"?: boolean;
+  "layout_id"?: string;
+  "name"?: string;
+  "palette_id"?: string;
+  "params"?: Record<string, unknown>;
+  "schema_version"?: number;
+  "skin_id"?: string;
+  "song_query"?: SongQueryRequest;
+  "updated_at"?: string;
+}
+
+export interface PresetSaveResponse {
+  "id": string;
+  "ok"?: boolean;
+  "updated_at": string;
+  [key: string]: unknown;
+}
+
+export interface PresetSummaryResponse {
+  "created_at": string;
+  "id": string;
+  "is_default": boolean;
+  "layout_id": string;
+  "name": string;
+  "updated_at": string;
+  [key: string]: unknown;
+}
+
+export interface SettingsResponse {
+  "backup_count": number;
+  "default_canvas": string;
+  "default_theme": string;
+  "font_path": string;
+  "output_dir": string;
+  "render_threads": number;
+  [key: string]: unknown;
+}
+
+export interface SettingsUpdateRequest {
+  "backup_count"?: number | null;
+  "default_canvas"?: string | null;
+  "default_theme"?: string | null;
+  "font_path"?: string | null;
+  "output_dir"?: string | null;
+  "render_threads"?: number | null;
+}
+
+export interface SettingsUpdateResponse {
+  "ok"?: boolean;
+  "settings": SettingsResponse;
   [key: string]: unknown;
 }
 
@@ -122,6 +254,15 @@ export interface SongMutationResponse {
   "ok"?: boolean;
   "song": SongResponse;
   [key: string]: unknown;
+}
+
+export interface SongQueryRequest {
+  "classify"?: string;
+  "custom_ids"?: Array<string>;
+  "max_songs"?: number;
+  "sort_by"?: string;
+  "status"?: string;
+  "unresolved"?: Array<string>;
 }
 
 export interface SongResponse {
