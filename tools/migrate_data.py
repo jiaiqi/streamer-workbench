@@ -226,11 +226,10 @@ def run_r05_migration(data_root: str, apply: bool = False, report_path: str = No
 
         # presets：只保存有变化的
         if preset_details:
-            presets_store.PRESETS_DIR = presets_dir
             changed_ids = {d["id"] for d in preset_details}
             for p in preset_list:
                 if p.id in changed_ids:
-                    presets_store.save(p)
+                    presets_store.save(p, presets_dir)
 
         # queue：写出迁移后快照
         if queue_report and queue_out:

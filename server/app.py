@@ -20,15 +20,15 @@ def _lifespan(config: AppConfig, paths):
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # R0.6 第一切片沿用 deps 作为临时适配器；初始化被严格延后到 lifespan。
-        from server.deps import init_deps
+        from server.deps import initialize_legacy_state
 
-        init_deps(app, root=str(paths.project_root), data_root=str(paths.data_root))
+        initialize_legacy_state(app, paths)
         context = AppContext(
             config=config,
             paths=paths,
             song_repository=app.state.library,
             event_store=paths.events_jsonl,
-            preset_repository=paths.presets_dir,
+            preset_repository=app.state.presets_dir,
             settings_repository=app.state.settings,
             render_service=render_page,
             export_job_manager=app.state.export_jobs,

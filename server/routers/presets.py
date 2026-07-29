@@ -6,7 +6,8 @@ Pydantic 类型化契约留给 R0.8，本批保持 dict 负载 + 数据层校验
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
+from server.dependencies import get_app_context
 
 from core.data.presets import (
     list_all, load, save, delete, duplicate,
@@ -17,20 +18,20 @@ router = APIRouter()
 
 
 @router.get("/api/presets")
-def api_presets_list():
-    return list_all()
+def api_presets_list(req: Request):
+    return list_all(get_app_context(req).preset_repository)
 
 
 @router.get("/api/presets/{preset_id}")
-def api_presets_get(preset_id: str):
-    p = load(preset_id)
+def api_presets_get(preset_id: str, req: Request):
+    p = load(preset_id, get_app_context(req).preset_repository)
     if p is None:
         return Response("预设不存在", status_code=404)
     return _to_dict(p)
 
 
 @router.post("/api/presets")
-def api_presets_save(payload: dict):
+def api_presets_save(payload: dict, req: Request):
     """创建（无 id 时生成）或完整更新（有 id 时整体覆盖）预设。"""
     try:
         p = _from_dict(payload)
@@ -43,25 +44,25 @@ def api_presets_save(payload: dict):
     if not p.created_at:
         p.created_at = datetime.now().isoformat(timespec="seconds")
     try:
-        save(p)
+        save(p, get_app_context(req).preset_repository)
     except (TypeError, ValueError) as e:
         return Response(str(e), status_code=400)
     return {"ok": True, "id": p.id, "updated_at": p.updated_at}
 
 
 @router.post("/api/presets/{preset_id}/duplicate")
-def api_presets_duplicate(preset_id: str, payload: dict = None):
+def api_presets_duplicate(preset_id: str, req: Request, payload: dict = None):
     new_name = (payload or {}).get("name", "")
-    p = duplicate(preset_id, new_preset_id(), new_name)
+    p = duplicate(preset_id, new_preset_id(), get_app_context(req).preset_repository, new_name)
     if p is None:
         return Response("预设不存在", status_code=404)
     return {"ok": True, "id": p.id, "name": p.name}
 
 
 @router.delete("/api/presets/{preset_id}")
-def api_presets_delete(preset_id: str):
+def api_presets_delete(preset_id: str, req: Request):
     if preset_id == "_default":
         return Response("默认预设不可删除", status_code=400)
-    if not delete(preset_id):
+    if not delete(preset_id, get_app_context(req).preset_repository):
         return Response("预设不存在", status_code=404)
     return {"ok": True}

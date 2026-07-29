@@ -16,8 +16,6 @@ from datetime import datetime
 from typing import Optional
 
 
-PRESETS_DIR = None  # 由 server 初始化时设置
-
 # Song.id 格式（core/data/songs.py：song_<uuid hex>）。
 # R0.5：custom_ids 只允许稳定 song_id，旧歌名集合由 migrate_custom_ids 处理。
 SONG_ID_RE = re.compile(r"^song_[0-9a-f]{32}$")
@@ -137,48 +135,45 @@ class Preset:
 # ── 仓储 ──
 
 
-def _ensure_dir():
-    if PRESETS_DIR is None:
-        raise RuntimeError("PRESETS_DIR 未初始化（server 启动时调用 init_presets()）")
-    os.makedirs(PRESETS_DIR, exist_ok=True)
+def _ensure_dir(presets_dir: str):
+    os.makedirs(presets_dir, exist_ok=True)
 
 
-def _manifest_path():
-    return os.path.join(PRESETS_DIR, "manifest.json")
+def _manifest_path(presets_dir: str):
+    return os.path.join(presets_dir, "manifest.json")
 
 
-def _preset_dir(preset_id: str):
+def _preset_dir(presets_dir: str, preset_id: str):
     if not is_valid_preset_id(preset_id):
         raise ValueError(f"非法 preset_id：{preset_id!r}")
-    return os.path.join(PRESETS_DIR, preset_id)
+    return os.path.join(presets_dir, preset_id)
 
 
 def init_presets(data_root: str):
-    global PRESETS_DIR
-    PRESETS_DIR = os.path.join(data_root, "presets")
-    _ensure_dir()
-    manifest = _load_manifest()
+    presets_dir = os.path.join(data_root, "presets")
+    _ensure_dir(presets_dir)
+    manifest = _load_manifest(presets_dir)
     if "_default" not in manifest:
         p = Preset.default()
-        save(p)
-    return PRESETS_DIR
+        save(p, presets_dir)
+    return presets_dir
 
 
-def _load_manifest() -> dict:
-    path = _manifest_path()
+def _load_manifest(presets_dir: str) -> dict:
+    path = _manifest_path(presets_dir)
     if os.path.isfile(path):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 
-def _save_manifest(manifest: dict):
-    with open(_manifest_path(), "w", encoding="utf-8") as f:
+def _save_manifest(presets_dir: str, manifest: dict):
+    with open(_manifest_path(presets_dir), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 
-def list_all() -> list:
-    manifest = _load_manifest()
+def list_all(presets_dir: str) -> list:
+    manifest = _load_manifest(presets_dir)
     result = []
     for pid, info in manifest.items():
         info["id"] = pid
@@ -187,13 +182,13 @@ def list_all() -> list:
     return result
 
 
-def load(preset_id: str) -> Optional[Preset]:
+def load(preset_id: str, presets_dir: str) -> Optional[Preset]:
     if not is_valid_preset_id(preset_id):
         return None
-    manifest = _load_manifest()
+    manifest = _load_manifest(presets_dir)
     if preset_id not in manifest:
         return None
-    path = os.path.join(_preset_dir(preset_id), "preset.json")
+    path = os.path.join(_preset_dir(presets_dir, preset_id), "preset.json")
     if not os.path.isfile(path):
         return None
     with open(path, "r", encoding="utf-8") as f:
@@ -201,19 +196,19 @@ def load(preset_id: str) -> Optional[Preset]:
     return _from_dict(data)
 
 
-def save(preset: Preset):
-    _ensure_dir()
+def save(preset: Preset, presets_dir: str):
+    _ensure_dir(presets_dir)
     if not is_valid_preset_id(preset.id):
         raise ValueError(f"非法 preset_id：{preset.id!r}")
     validate_song_query(preset.song_query)
     preset.updated_at = datetime.now().isoformat(timespec="seconds")
     d = _to_dict(preset)
-    pdir = _preset_dir(preset.id)
+    pdir = _preset_dir(presets_dir, preset.id)
     os.makedirs(pdir, exist_ok=True)
     with open(os.path.join(pdir, "preset.json"), "w", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, indent=2)
     # 更新 manifest
-    manifest = _load_manifest()
+    manifest = _load_manifest(presets_dir)
     manifest[preset.id] = {
         "name": preset.name,
         "layout_id": preset.layout_id,
@@ -221,18 +216,18 @@ def save(preset: Preset):
         "created_at": preset.created_at,
         "updated_at": preset.updated_at,
     }
-    _save_manifest(manifest)
+    _save_manifest(presets_dir, manifest)
 
 
-def delete(preset_id: str) -> bool:
+def delete(preset_id: str, presets_dir: str) -> bool:
     """软删除：移入 .trash 子目录。返回预设是否存在过。"""
     if not is_valid_preset_id(preset_id):
         return False
-    manifest = _load_manifest()
-    pdir = _preset_dir(preset_id)
+    manifest = _load_manifest(presets_dir)
+    pdir = _preset_dir(presets_dir, preset_id)
     existed = preset_id in manifest or os.path.isdir(pdir)
     if os.path.isdir(pdir):
-        trash = os.path.join(PRESETS_DIR, ".trash")
+        trash = os.path.join(presets_dir, ".trash")
         os.makedirs(trash, exist_ok=True)
         dst = os.path.join(trash, preset_id)
         i = 1
@@ -241,21 +236,22 @@ def delete(preset_id: str) -> bool:
             i += 1
         shutil.move(pdir, dst)
     manifest.pop(preset_id, None)
-    _save_manifest(manifest)
+    _save_manifest(presets_dir, manifest)
     return existed
 
 
-def duplicate(preset_id: str, new_id: str, new_name: str = "") -> Optional[Preset]:
+def duplicate(preset_id: str, new_id: str, presets_dir: str,
+              new_name: str = "") -> Optional[Preset]:
     if not is_valid_preset_id(new_id):
         raise ValueError(f"非法 preset_id：{new_id!r}")
-    p = load(preset_id)
+    p = load(preset_id, presets_dir)
     if p is None:
         return None
     p.id = new_id
     p.name = new_name or f"{p.name} (副本)"
     p.created_at = datetime.now().isoformat(timespec="seconds")
     p.is_default = False
-    save(p)
+    save(p, presets_dir)
     return p
 
 
