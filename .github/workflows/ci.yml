@@ -64,6 +64,9 @@ jobs:
       - name: Preset Application Service 测试
         run: .venv/bin/python tests/test_preset_service.py
 
+      - name: Settings Application Service 测试
+        run: .venv/bin/python tests/test_settings_service.py
+
       - name: RenderDocument 与冻结导出测试
         run: .venv/bin/python tests/test_render_document.py
 

@@ -18,6 +18,11 @@ class SettingsUpdateRequest(StrictRequest):
     font_path: str | None = None
     backup_count: int | None = None
     render_threads: int | None = None
+    appearanceMode: Literal["system", "light", "dark"] | None = None
+    applicationAccentId: Literal[
+        "bambooMoon", "rainSky", "distantMountain", "rouge",
+        "begonia", "wisteria", "amber", "pineFlower",
+    ] | None = None
 
 
 class SettingsResponse(BaseModel):
@@ -28,6 +33,11 @@ class SettingsResponse(BaseModel):
     font_path: str
     backup_count: int
     render_threads: int
+    appearanceMode: Literal["system", "light", "dark"] = "system"
+    applicationAccentId: Literal[
+        "bambooMoon", "rainSky", "distantMountain", "rouge",
+        "begonia", "wisteria", "amber", "pineFlower",
+    ] = "bambooMoon"
 
 
 class SettingsUpdateResponse(BaseModel):
