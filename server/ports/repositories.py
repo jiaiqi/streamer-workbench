@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Generic, Iterator, Literal, Protocol, TypeAlias, TypeVar
 
 from core.data.songs import SongLibrary
+from core.data.presets import Preset
 
 
 T = TypeVar("T")
@@ -56,6 +57,16 @@ class RecoveryReport:
     recovered: tuple[str, ...] = ()
     quarantined: tuple[str, ...] = ()
     unresolved: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PresetSummary:
+    id: str
+    name: str
+    layout_id: str
+    is_default: bool
+    created_at: str
+    updated_at: str
 
 
 class RepositoryError(Exception):
@@ -108,6 +119,42 @@ class SettingsRepository(Protocol):
         *,
         expected_revision: str | None,
     ) -> StoredSnapshot[SettingsDocument]: ...
+
+    def close(self) -> None: ...
+
+
+class PresetRepository(Protocol):
+    def list(self) -> StoredSnapshot[tuple[PresetSummary, ...]]: ...
+
+    def get(self, preset_id: str) -> StoredSnapshot[Preset] | None: ...
+
+    def save(
+        self,
+        preset: Preset,
+        *,
+        expected_revision: str | None,
+    ) -> StoredSnapshot[Preset]: ...
+
+    def rename(
+        self,
+        preset_id: str,
+        name: str,
+        *,
+        expected_revision: str | None,
+    ) -> StoredSnapshot[Preset]: ...
+
+    def delete(self, preset_id: str, *, expected_revision: str | None) -> bool: ...
+
+    def duplicate(self, source_id: str, target: Preset) -> StoredSnapshot[Preset]: ...
+
+    def set_default(
+        self,
+        preset_id: str,
+        *,
+        expected_revision: str | None,
+    ) -> StoredSnapshot[tuple[PresetSummary, ...]]: ...
+
+    def recover(self) -> RecoveryReport: ...
 
     def close(self) -> None: ...
 
