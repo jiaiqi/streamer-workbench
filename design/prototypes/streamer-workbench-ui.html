@@ -276,6 +276,41 @@
     .queue-item { min-height:57px; padding:8px 11px; border:1px solid var(--line); border-radius:13px; background:var(--surface); display:flex; align-items:center; gap:10px; }
     .queue-no { width:28px; color:var(--text-3); font-size:12px; font-variant-numeric:tabular-nums; text-align:center; }
     .queue-item.active { border-color:color-mix(in srgb,var(--primary) 35%,transparent); background:var(--primary-soft); }
+    .request-context { margin-top:22px; padding:12px; border:1px solid rgba(255,255,255,.12); border-radius:14px; background:rgba(255,255,255,.055); display:flex; align-items:center; gap:10px; }
+    .request-avatar { width:36px; height:36px; flex:0 0 auto; border-radius:50%; color:#11231c; background:#d7b36c; display:grid; place-items:center; font-size:13px; font-weight:750; }
+    .request-copy { min-width:0; flex:1; }
+    .request-copy strong,.request-copy small { display:block; }
+    .request-copy strong { font-size:13px; }
+    .request-copy small { margin-top:1px; color:#9eaea6; font-size:10px; }
+    .request-badges,.queue-meta { display:flex; flex-wrap:wrap; gap:5px; }
+    .request-badge { min-height:22px; padding:0 7px; border:1px solid var(--line); border-radius:999px; color:var(--text-2); background:var(--surface-subtle); display:inline-flex; align-items:center; font-size:9px; font-weight:650; }
+    .request-badge.gift { color:#9b6111; background:#fff3d7; border-color:#f0d49c; }
+    .request-badge.member { color:#7556a8; background:#f0e9ff; border-color:#d9caf3; }
+    [data-theme="dark"] .request-badge.gift { color:#f1c572; background:#3a2c15; border-color:#62491f; }
+    [data-theme="dark"] .request-badge.member { color:#d6c0ff; background:#2d2340; border-color:#4a3867; }
+    .now-actions { margin-top:18px; display:flex; flex-wrap:wrap; gap:8px; }
+    .now-actions .btn { color:#eef5f1; border-color:rgba(255,255,255,.16); background:rgba(255,255,255,.06); }
+    .now-actions .btn-primary { border-color:transparent; background:#2f8e75; }
+    .queue-item .song-main { min-width:0; }
+    .queue-meta { margin-top:4px; }
+    .live-insights { max-width:1200px; margin:16px auto 0; display:grid; grid-template-columns:1.15fr .85fr .85fr; gap:16px; align-items:start; }
+    .insight-card { min-height:220px; }
+    .history-list,.signal-list { display:grid; gap:8px; }
+    .history-row,.signal-row { min-height:48px; padding:8px 10px; border:1px solid var(--line); border-radius:12px; display:flex; align-items:center; gap:9px; }
+    .history-time { width:38px; color:var(--text-3); font:10px ui-monospace,SFMono-Regular,monospace; }
+    .history-main { min-width:0; flex:1; }
+    .history-main strong,.history-main small { display:block; }
+    .history-main strong { font-size:12px; }
+    .history-main small { margin-top:2px; color:var(--text-3); font-size:10px; }
+    .outcome { min-height:23px; padding:0 7px; border-radius:999px; color:var(--success); background:color-mix(in srgb,var(--success) 10%,transparent); display:inline-flex; align-items:center; font-size:9px; font-weight:700; }
+    .outcome.unknown { color:var(--spot); background:var(--spot-soft); }
+    .signal-rank { width:26px; height:26px; border-radius:8px; color:var(--primary-strong); background:var(--primary-soft); display:grid; place-items:center; font-size:10px; font-weight:750; }
+    .signal-value { margin-left:auto; color:var(--text-3); font-size:10px; text-align:right; }
+    .metric-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:10px; }
+    .metric-mini { padding:9px; border-radius:11px; background:var(--surface-subtle); }
+    .metric-mini strong,.metric-mini span { display:block; }
+    .metric-mini strong { font-size:18px; font-variant-numeric:tabular-nums; }
+    .metric-mini span { margin-top:2px; color:var(--text-3); font-size:9px; }
 
     .learning-grid { max-width:1200px; margin:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
     .learning-card { padding:18px; border:1px solid var(--line); border-radius:18px; background:var(--surface); box-shadow:var(--shadow-1); }
@@ -358,7 +393,7 @@
       .inspector .setting-block { border-right:0; border-bottom:1px solid var(--line); }
       .export-bar { position:sticky; bottom:76px; z-index:20; }
       .stats-grid { grid-template-columns:repeat(2,1fr); }
-      .live-layout,.learning-grid { grid-template-columns:1fr; }
+      .live-layout,.learning-grid,.live-insights { grid-template-columns:1fr; }
       .content-grid > aside { display:block; }
       .content-grid > aside .panel { margin-top:14px; }
       .table-scroll { overflow-x:auto; }
@@ -514,8 +549,9 @@
         </section>
 
         <section class="page" id="page-live" aria-labelledby="title-live">
-          <div class="page-head"><div><div class="eyebrow">Live Control</div><h1 id="title-live">直播</h1><p class="page-desc">队列、当前歌曲和曲谱独立保存；开播不要求创建或导出歌单海报。</p></div><div class="head-actions"><button class="btn">打开置顶速查</button><button class="btn btn-primary" id="finishSong"><svg class="icon icon-sm"><use href="#i-check"/></svg>标记已唱</button></div></div>
-          <div class="live-layout"><section class="panel now-playing"><div class="live-label">NOW PLAYING · 当前歌曲</div><h2 id="nowSong">知足</h2><p>五月天 · C 调 · 变调夹 0</p><span class="key-cap">Space 标记已唱</span></section><aside class="panel"><div class="panel-head"><div class="panel-title">今晚队列</div><div class="panel-meta">5 首待唱</div></div><div class="panel-body queue" id="liveQueue"><div class="queue-item active"><div class="queue-no">01</div><div class="song-main"><div class="song-name">知足</div><div class="song-sub">五月天</div></div><span class="status">当前</span></div><div class="queue-item"><div class="queue-no">02</div><div class="song-main"><div class="song-name">慢冷</div><div class="song-sub">梁静茹</div></div></div><div class="queue-item"><div class="queue-no">03</div><div class="song-main"><div class="song-name">如果可以</div><div class="song-sub">韦礼安</div></div></div><div class="queue-item"><div class="queue-no">04</div><div class="song-main"><div class="song-name">晴天</div><div class="song-sub">周杰伦</div></div></div><div class="queue-item"><div class="queue-no">05</div><div class="song-main"><div class="song-name">唯一</div><div class="song-sub">告五人</div></div></div></div></aside></div>
+          <div class="page-head"><div><div class="eyebrow">Live Control</div><h1 id="title-live">直播</h1><p class="page-desc">记录每次点歌从排队到演唱的完整结果；点歌人、礼物与会员来源均为选填。</p></div><div class="head-actions"><button class="btn" id="openRequest"><svg class="icon icon-sm"><use href="#i-plus"/></svg>记录点歌</button><button class="btn">打开置顶速查</button></div></div>
+          <div class="live-layout"><section class="panel now-playing"><div class="live-label">NOW PLAYING · 当前歌曲</div><h2 id="nowSong">知足</h2><p id="nowSongMeta">五月天 · C 调 · 变调夹 0</p><div class="request-context" id="nowRequest"><div class="request-avatar">满</div><div class="request-copy"><strong>小满 点的歌</strong><small>20:18 加入 · 本场第 3 次点歌</small></div><div class="request-badges"><span class="request-badge gift">礼物点歌</span><span class="request-badge">小心心 ×10</span></div></div><div class="now-actions"><button class="btn btn-primary" id="finishSong"><svg class="icon icon-sm"><use href="#i-check"/></svg>标记已唱</button><button class="btn" id="unknownSong">不会唱</button><button class="btn" id="skipSong">稍后再唱</button><span class="key-cap">Space 已唱</span></div></section><aside class="panel"><div class="panel-head"><div class="panel-title">今晚队列</div><div class="panel-meta" id="queueCount">5 首待处理</div></div><div class="panel-body queue" id="liveQueue"><div class="queue-item active" data-requester="小满" data-source="礼物点歌" data-detail="小心心 ×10"><div class="queue-no">01</div><div class="song-main"><div class="song-name">知足</div><div class="song-sub">五月天</div><div class="queue-meta"><span class="request-badge gift">小满 · 礼物点歌</span></div></div><span class="status">当前</span></div><div class="queue-item" data-requester="阿澈" data-source="会员特权" data-detail="月度会员"><div class="queue-no">02</div><div class="song-main"><div class="song-name">慢冷</div><div class="song-sub">梁静茹</div><div class="queue-meta"><span class="request-badge member">阿澈 · 会员特权</span></div></div></div><div class="queue-item" data-requester="" data-source="" data-detail=""><div class="queue-no">03</div><div class="song-main"><div class="song-name">如果可以</div><div class="song-sub">韦礼安</div><div class="queue-meta"><span class="request-badge">自主安排</span></div></div></div><div class="queue-item" data-requester="橘子汽水" data-source="普通点歌" data-detail=""><div class="queue-no">04</div><div class="song-main"><div class="song-name">晴天</div><div class="song-sub">周杰伦</div><div class="queue-meta"><span class="request-badge">橘子汽水 · 普通点歌</span></div></div></div><div class="queue-item" data-requester="小满" data-source="礼物点歌" data-detail="玫瑰 ×1"><div class="queue-no">05</div><div class="song-main"><div class="song-name">唯一</div><div class="song-sub">告五人</div><div class="queue-meta"><span class="request-badge gift">小满 · 礼物点歌</span></div></div></div></div></aside></div>
+          <div class="live-insights"><section class="panel insight-card"><div class="panel-head"><div><div class="panel-title">本场演唱历史</div><div class="panel-meta">退出直播后仍可回看</div></div><button class="btn btn-small">查看完整记录</button></div><div class="panel-body"><div class="metric-strip"><div class="metric-mini"><strong id="sungMetric">7</strong><span>已唱</span></div><div class="metric-mini"><strong id="unknownMetric">2</strong><span>不会 / 待学</span></div><div class="metric-mini"><strong>6m</strong><span>平均等待</span></div></div><div class="history-list" id="sungHistory"><div class="history-row"><span class="history-time">20:12</span><div class="history-main"><strong>后来</strong><small>阿梨 · 会员特权 · 等待 4 分钟</small></div><span class="outcome">已唱</span></div><div class="history-row"><span class="history-time">20:06</span><div class="history-main"><strong>安静</strong><small>自主安排 · 演唱 4 分 52 秒</small></div><span class="outcome">已唱</span></div><div class="history-row"><span class="history-time">19:58</span><div class="history-main"><strong>恶作剧</strong><small>橘子汽水 · 普通点歌</small></div><span class="outcome unknown">不会唱</span></div></div></div></section><section class="panel insight-card"><div class="panel-head"><div><div class="panel-title">高频点歌人</div><div class="panel-meta">跨场累计</div></div></div><div class="panel-body signal-list"><div class="signal-row"><span class="signal-rank">1</span><div class="history-main"><strong>小满</strong><small>近 30 天 · 8 场出现</small></div><span class="signal-value">26 次<br>履约 92%</span></div><div class="signal-row"><span class="signal-rank">2</span><div class="history-main"><strong>橘子汽水</strong><small>近 30 天 · 6 场出现</small></div><span class="signal-value">18 次<br>履约 83%</span></div><div class="signal-row"><span class="signal-rank">3</span><div class="history-main"><strong>阿澈</strong><small>近 30 天 · 会员点歌</small></div><span class="signal-value">12 次<br>履约 100%</span></div></div></section><section class="panel insight-card"><div class="panel-head"><div><div class="panel-title">不会唱的点歌</div><div class="panel-meta">自动进入待学线索</div></div><button class="btn btn-small">加入学歌</button></div><div class="panel-body signal-list" id="unknownHistory"><div class="history-row"><span class="history-time">本场</span><div class="history-main"><strong>恶作剧</strong><small>橘子汽水点歌 · 第 2 次被请求</small></div><span class="outcome unknown">待学</span></div><div class="history-row"><span class="history-time">3 场</span><div class="history-main"><strong>你要的爱</strong><small>累计 5 人点过 · 礼物 2 次</small></div><span class="outcome unknown">高频</span></div><div class="capability-note">同时记录跳过、取消、重复点歌、等待时长和最终履约结果，统计时不会把“没唱”误算成“没发生”。</div></div></section></div>
         </section>
 
         <section class="page" id="page-learning" aria-labelledby="title-learning">
@@ -541,6 +577,10 @@
     <button class="active" data-page="poster"><svg class="icon"><use href="#i-home"/></svg><span>海报</span></button><button data-page="songs"><svg class="icon"><use href="#i-music"/></svg><span>歌曲</span></button><button data-page="live"><svg class="icon"><use href="#i-live"/></svg><span>直播</span></button><button data-page="learning"><svg class="icon"><use href="#i-book"/></svg><span>学歌</span></button><button data-page="stats"><svg class="icon"><use href="#i-chart"/></svg><span>统计</span></button><button data-page="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></button>
   </nav>
 
+  <div class="scrim" id="requestDialog" role="dialog" aria-modal="true" aria-labelledby="requestTitle">
+    <div class="dialog"><div class="dialog-head"><div><h2 id="requestTitle">记录一条点歌</h2><p>只需填写歌曲；点歌人、权益来源和礼物信息都可以留空。</p></div><button class="icon-btn" data-close-request aria-label="关闭点歌对话框"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="dialog-body"><div class="form-grid"><div class="form-row"><label for="requestSong">歌曲或观众输入</label><input class="input" id="requestSong" value="想见你想见你想见你"></div><div class="form-row"><label for="requesterName">点歌人昵称（选填）</label><input class="input" id="requesterName" placeholder="例如：小满"></div><div class="form-row"><label for="requestSource">点歌来源（选填）</label><div class="select-wrap"><select class="select" id="requestSource"><option value="">未记录</option><option value="普通点歌">普通点歌</option><option value="礼物点歌">礼物点歌</option><option value="会员特权">会员特权</option><option value="活动奖励">活动奖励</option><option value="主播邀请">主播邀请</option></select></div></div><div class="form-row"><label for="requestDetail">礼物或权益详情（选填）</label><input class="input" id="requestDetail" placeholder="例如：小心心 ×10、月度会员"></div><p class="helper">系统会自动记录时间、场次、排队位置和最终结果；不会唱也会保留为待学线索。</p></div></div><div class="dialog-actions"><button class="btn" data-close-request>取消</button><button class="btn btn-primary" id="confirmRequest">加入队列</button></div></div>
+  </div>
+
   <div class="scrim" id="exportDialog" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
     <div class="dialog"><div class="dialog-head"><div><h2 id="exportTitle">导出这份设计</h2><p>页数由歌曲数量、布局、比例和分页方式共同决定，不与直播场次关联。</p></div><button class="icon-btn" data-close-dialog aria-label="关闭导出对话框"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="dialog-body"><div class="form-grid"><div class="form-row"><label for="filename">文件名</label><input class="input" id="filename" value="我的常用歌单"></div><div class="form-row"><label for="exportFormat">格式</label><div class="select-wrap"><select class="select" id="exportFormat"><option>PNG · 高清</option><option>JPEG · 适合分享</option></select></div></div><div class="form-row"><label for="exportPath">保存位置</label><input class="input" id="exportPath" readonly value="~/Pictures/主播工作台"></div><div class="export-progress" id="exportProgress"><strong id="progressText">正在冻结渲染输入…</strong><div class="export-progress-line"><span id="progressBar"></span></div></div></div></div><div class="dialog-actions"><button class="btn" data-close-dialog>稍后再说</button><button class="btn btn-primary" id="confirmExport"><svg class="icon icon-sm"><use href="#i-export"/></svg><span id="confirmExportLabel">导出 3 张 PNG</span></button></div></div>
   </div>
@@ -553,6 +593,7 @@
       const navButtons = [...document.querySelectorAll('[data-page]')];
       const toast = document.getElementById('toast');
       let toastTimer;
+      const escapeHTML = value => String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
 
       function showToast(message) {
         document.getElementById('toastText').textContent = message;
@@ -698,16 +739,78 @@
         setTimeout(() => { bar.style.width='100%'; text.textContent='导出完成'; button.disabled=false; setTimeout(closeDialog,380); showToast(`已导出 ${pageTotal} 张 PNG 到默认输出目录`); },1450);
       });
 
+      const requestDialog = document.getElementById('requestDialog');
+      let requestLastFocus;
+      function openRequestDialog() { requestLastFocus=document.activeElement; requestDialog.classList.add('open'); document.getElementById('requestSong').focus(); }
+      function closeRequestDialog() { requestDialog.classList.remove('open'); requestLastFocus?.focus(); }
+      document.getElementById('openRequest').addEventListener('click',openRequestDialog);
+      document.querySelectorAll('[data-close-request]').forEach(button=>button.addEventListener('click',closeRequestDialog));
+      requestDialog.addEventListener('click',event=>{ if(event.target===requestDialog) closeRequestDialog(); });
+      document.addEventListener('keydown',event=>{ if(event.key==='Escape'&&requestDialog.classList.contains('open')) closeRequestDialog(); });
+
       const finishSong = document.getElementById('finishSong');
-      function markSung() {
+      function queueItems() { return [...document.querySelectorAll('#liveQueue .queue-item')]; }
+      function updateQueueNumbers() {
+        queueItems().forEach((item,index)=>item.querySelector('.queue-no').textContent=String(index+1).padStart(2,'0'));
+        document.getElementById('queueCount').textContent=`${queueItems().length} 首待处理`;
+      }
+      function updateNowPlaying() {
         const active = document.querySelector('#liveQueue .queue-item.active');
-        const next = active?.nextElementSibling;
-        if (!active) return showToast('今晚队列已经完成');
+        if(!active) { document.getElementById('nowSong').textContent='队列已完成'; document.getElementById('nowSongMeta').textContent='可以继续记录新的点歌'; document.getElementById('nowRequest').innerHTML='<div class="request-copy"><strong>本场暂时没有待处理歌曲</strong><small>所有请求结果均已保存</small></div>'; return; }
+        document.getElementById('nowSong').textContent=active.querySelector('.song-name').textContent;
+        document.getElementById('nowSongMeta').textContent=`${active.querySelector('.song-sub').textContent} · 曲库信息已就绪`;
+        const requester=active.dataset.requester;
+        const source=active.dataset.source;
+        const detail=active.dataset.detail;
+        document.getElementById('nowRequest').innerHTML=requester ? `<div class="request-avatar">${escapeHTML(requester.slice(0,1))}</div><div class="request-copy"><strong>${escapeHTML(requester)} 点的歌</strong><small>本场请求 · 来源信息已记录</small></div><div class="request-badges">${source?`<span class="request-badge ${source==='礼物点歌'?'gift':source==='会员特权'?'member':''}">${escapeHTML(source)}</span>`:''}${detail?`<span class="request-badge">${escapeHTML(detail)}</span>`:''}</div>` : '<div class="request-copy"><strong>自主安排</strong><small>未记录点歌人或权益来源</small></div>';
+      }
+      function appendHistory(item,outcome) {
+        const requester=item.dataset.requester;
+        const source=item.dataset.source;
+        const now=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
+        const cls=outcome==='不会唱'?'outcome unknown':'outcome';
+        document.getElementById('sungHistory').insertAdjacentHTML('afterbegin',`<div class="history-row"><span class="history-time">${now}</span><div class="history-main"><strong>${escapeHTML(item.querySelector('.song-name').textContent)}</strong><small>${requester?`${escapeHTML(requester)}${source?` · ${escapeHTML(source)}`:''}`:'自主安排'} · 结果已记录</small></div><span class="${cls}">${outcome}</span></div>`);
+      }
+      function advanceQueue(outcome) {
+        const active=document.querySelector('#liveQueue .queue-item.active');
+        if(!active) return showToast('今晚队列已经完成');
+        const next=active.nextElementSibling;
+        appendHistory(active,outcome);
+        if(outcome==='已唱') document.getElementById('sungMetric').textContent=Number(document.getElementById('sungMetric').textContent)+1;
+        if(outcome==='不会唱') {
+          document.getElementById('unknownMetric').textContent=Number(document.getElementById('unknownMetric').textContent)+1;
+          document.getElementById('unknownHistory').insertAdjacentHTML('afterbegin',`<div class="history-row"><span class="history-time">本场</span><div class="history-main"><strong>${escapeHTML(active.querySelector('.song-name').textContent)}</strong><small>${active.dataset.requester?`${escapeHTML(active.dataset.requester)}点歌`:'未记录点歌人'} · 新增待学线索</small></div><span class="outcome unknown">待学</span></div>`);
+        }
         active.remove();
-        if (next) { next.classList.add('active'); next.insertAdjacentHTML('beforeend','<span class="status">当前</span>'); document.getElementById('nowSong').textContent=next.querySelector('.song-name').textContent; }
-        showToast('已记录演唱，队列自动进入下一首');
+        if(next) { next.classList.add('active'); next.insertAdjacentHTML('beforeend','<span class="status">当前</span>'); }
+        updateQueueNumbers(); updateNowPlaying();
+        showToast(outcome==='已唱'?'已保存演唱记录，进入下一首':'已记录不会唱，并加入待学线索');
+      }
+      function markSung() { advanceQueue('已唱'); }
+      function postponeSong() {
+        const active=document.querySelector('#liveQueue .queue-item.active');
+        const next=active?.nextElementSibling;
+        if(!active||!next) return showToast('当前没有可延后的下一首歌曲');
+        active.querySelector('.status')?.remove(); active.classList.remove('active'); active.dataset.postponed='true';
+        document.getElementById('liveQueue').appendChild(active);
+        next.classList.add('active'); next.insertAdjacentHTML('beforeend','<span class="status">当前</span>');
+        updateQueueNumbers(); updateNowPlaying(); showToast('已记录延后，本首移到队尾');
       }
       finishSong.addEventListener('click',markSung);
+      document.getElementById('unknownSong').addEventListener('click',()=>advanceQueue('不会唱'));
+      document.getElementById('skipSong').addEventListener('click',postponeSong);
+      document.getElementById('confirmRequest').addEventListener('click',()=>{
+        const song=document.getElementById('requestSong').value.trim();
+        if(!song) { showToast('请先填写歌曲名称'); document.getElementById('requestSong').focus(); return; }
+        const requester=document.getElementById('requesterName').value.trim();
+        const source=document.getElementById('requestSource').value;
+        const detail=document.getElementById('requestDetail').value.trim();
+        const badgeClass=source==='礼物点歌'?'gift':source==='会员特权'?'member':'';
+        const item=document.createElement('div'); item.className='queue-item'; item.dataset.requester=requester; item.dataset.source=source; item.dataset.detail=detail;
+        item.innerHTML=`<div class="queue-no"></div><div class="song-main"><div class="song-name">${escapeHTML(song)}</div><div class="song-sub">待匹配曲库</div><div class="queue-meta"><span class="request-badge ${badgeClass}">${escapeHTML(requester||'匿名')}${source?` · ${escapeHTML(source)}`:' · 来源未记录'}</span></div></div>`;
+        document.getElementById('liveQueue').appendChild(item); updateQueueNumbers(); if(queueItems().length===1){item.classList.add('active');item.insertAdjacentHTML('beforeend','<span class="status">当前</span>');updateNowPlaying();}
+        closeRequestDialog(); showToast(`已记录「${song}」，点歌信息稍后仍可补充`);
+      });
       document.addEventListener('keydown', event => { if (event.code === 'Space' && document.getElementById('page-live').classList.contains('active') && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) { event.preventDefault(); markSung(); } });
 
       document.getElementById('newSong').addEventListener('click', () => showToast('新建歌曲表单将在右侧面板打开'));
