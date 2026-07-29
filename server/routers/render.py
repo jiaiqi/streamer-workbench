@@ -2,11 +2,15 @@
 import io
 import os
 from dataclasses import replace
+from typing import Annotated
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 from PIL import Image
 
 from server.dependencies import get_app_context
+from server.api.errors import ApiError
+from server.api.handlers import api_error_response
+from server.api.secondary_models import RenderRequest
 from core.spec import get_canvas_spec
 from core.layouts import get_layout, list_layouts, layout_params
 from server.services.render_document import build_render_document, render_document
@@ -59,23 +63,25 @@ def api_layout_params(layout_id: str):
         return Response(str(e), status_code=404)
 
 
-@router.get("/api/render")
-def api_render(req: Request,
-               theme: str, page: int = 1,
-               canvas: str = "标准 9:16", avoid: bool = False,
-               layout: str = "grid-wrap",
-               margin: int = None, font_song: int = None,
-               row_h: int = None, sec_gap: int = None):
+@router.get("/api/render", response_class=Response,
+            responses={200: {"content": {"image/png": {}}}})
+def api_render(req: Request, query: Annotated[RenderRequest, Query()]):
+    theme, page = query.theme, query.page
+    canvas, avoid, layout = query.canvas, query.avoid, query.layout
+    margin, font_song = query.margin, query.font_song
+    row_h, sec_gap = query.row_h, query.sec_gap
     context = get_app_context(req)
     themes = context.themes
     songs = context.song_repository.load()
     font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     if theme not in themes:
-        return Response(f"未知主题：{theme}", status_code=404)
+        return api_error_response(
+            req, 404, ApiError("theme_not_found", f"未知主题：{theme}"))
     try:
         layout_plugin = get_layout(layout)
     except KeyError as e:
-        return Response(str(e), status_code=404)
+        return api_error_response(
+            req, 404, ApiError("layout_not_found", str(e)))
     spec = get_canvas_spec(canvas, avoid=avoid)
     overrides = {k: v for k, v in
                  {"margin": margin, "font_song": font_song,

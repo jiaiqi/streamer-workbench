@@ -20,10 +20,11 @@ _SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
 
 def _request_id(request: Request) -> str:
-    return getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex}"
+    state = getattr(request, "state", None)
+    return getattr(state, "request_id", None) or f"req_{uuid.uuid4().hex}"
 
 
-def _response(request: Request, status_code: int, error: ApiError) -> JSONResponse:
+def api_error_response(request: Request, status_code: int, error: ApiError) -> JSONResponse:
     request_id = _request_id(request)
     response = JSONResponse(
         status_code=status_code,
@@ -65,7 +66,7 @@ def install_api_contract(app: FastAPI) -> None:
                 for issue in error.errors()
             ]
         }
-        return _response(
+        return api_error_response(
             request,
             422,
             ApiError(
@@ -79,7 +80,7 @@ def install_api_contract(app: FastAPI) -> None:
     @app.exception_handler(RepositoryError)
     async def repository_error(request: Request, error: RepositoryError):
         status_code, api_error = map_repository_error(error)
-        return _response(request, status_code, api_error)
+        return api_error_response(request, status_code, api_error)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, error: StarletteHTTPException):
@@ -88,13 +89,13 @@ def install_api_contract(app: FastAPI) -> None:
         else:
             message = error.detail if isinstance(error.detail, str) else "请求失败"
             api_error = ApiError("http_error", message)
-        return _response(request, error.status_code, api_error)
+        return api_error_response(request, error.status_code, api_error)
 
     @app.exception_handler(Exception)
     async def unhandled_error(request: Request, error: Exception):
         request_id = _request_id(request)
         logger.exception("未处理的 API 异常 request_id=%s", request_id, exc_info=error)
-        return _response(
+        return api_error_response(
             request,
             500,
             ApiError(

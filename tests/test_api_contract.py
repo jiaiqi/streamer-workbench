@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -94,8 +95,33 @@ def test_songs_openapi_uses_named_models_for_id_and_title_compat_routes():
     assert schema["components"]["schemas"]["SongEditableFields"]["additionalProperties"] is False
 
 
+def test_secondary_openapi_uses_named_body_query_and_response_models():
+    from server.app import create_app
+
+    with tempfile.TemporaryDirectory() as raw:
+        app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+        schema = app.openapi()
+    settings = schema["paths"]["/api/settings"]["post"]
+    presets = schema["paths"]["/api/presets"]["post"]
+    render = schema["paths"]["/api/render"]["get"]
+    export = schema["paths"]["/api/export"]["post"]
+    assert settings["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/SettingsUpdateRequest"
+    )
+    assert presets["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/PresetRequest"
+    )
+    assert export["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/ExportResponse"
+    )
+    assert {item["name"] for item in render["parameters"]} >= {"theme", "layout", "canvas", "t"}
+    assert schema["components"]["schemas"]["SettingsUpdateRequest"]["additionalProperties"] is False
+    assert schema["components"]["schemas"]["PresetRequest"]["additionalProperties"] is False
+
+
 async def _request(app, method: str, path: str, payload: dict | None = None,
                    headers: dict[str, str] | None = None):
+    target = urlsplit(path)
     body = (json.dumps(payload, ensure_ascii=False).encode("utf-8")
             if payload is not None else b"")
     sent = False
@@ -115,8 +141,8 @@ async def _request(app, method: str, path: str, payload: dict | None = None,
         await app(
             {
                 "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
-                "method": method, "scheme": "http", "path": path,
-                "raw_path": path.encode(), "query_string": b"",
+                "method": method, "scheme": "http", "path": target.path,
+                "raw_path": target.path.encode(), "query_string": target.query.encode(),
                 "headers": [
                     (key.lower().encode(), value.encode())
                     for key, value in ({"content-type": "application/json"} | (headers or {})).items()
@@ -197,6 +223,73 @@ def test_songs_reject_unknown_fields_and_keep_title_compatibility_routes():
                 )
                 assert status == 200
                 assert changed["status"] == "active"
+
+    asyncio.run(scenario())
+
+
+def test_settings_and_presets_are_typed_without_losing_compatible_fields():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+            async with app.router.lifespan_context(app):
+                status, body, _ = await _request(
+                    app, "POST", "/api/settings", {"unknown_setting": True})
+                assert status == 422 and body["error"]["code"] == "validation_error"
+
+                status, body, _ = await _request(
+                    app, "POST", "/api/settings", {"render_threads": 2})
+                assert status == 200 and body["settings"]["render_threads"] == 2
+
+                status, body, _ = await _request(
+                    app, "POST", "/api/presets",
+                    {"id": "contract-preset", "name": "契约预设", "unexpected": True},
+                )
+                assert status == 422 and body["error"]["code"] == "validation_error"
+
+                status, body, _ = await _request(
+                    app, "POST", "/api/presets",
+                    {
+                        "id": "contract-preset", "name": "契约预设",
+                        "song_query": {"status": "active", "custom_ids": []},
+                        "params": {"margin": 52},
+                    },
+                )
+                assert status == 200 and body["id"] == "contract-preset"
+                status, preset, _ = await _request(
+                    app, "GET", "/api/presets/contract-preset")
+                assert status == 200
+                assert preset["song_query"]["status"] == "active"
+                assert preset["params"] == {"margin": 52}
+
+                status, body, _ = await _request(app, "GET", "/api/presets/missing")
+                assert status == 404 and body["error"]["code"] == "preset_not_found"
+
+    asyncio.run(scenario())
+
+
+def test_render_and_export_query_models_reject_unknown_fields_before_services():
+    from server.app import create_app
+
+    async def scenario():
+        with tempfile.TemporaryDirectory() as raw:
+            app = create_app(AppConfig(PROJECT_ROOT, mode="test", data_root=Path(raw)))
+            async with app.router.lifespan_context(app):
+                for path in (
+                    "/api/render?theme=missing&unexpected=1",
+                    "/api/export?theme=missing&unexpected=1",
+                    "/api/export/batch?unexpected=1",
+                ):
+                    status, body, _ = await _request(
+                        app, "GET" if path.startswith("/api/render") else "POST", path)
+                    assert status == 422
+                    assert body["error"]["code"] == "validation_error"
+
+                # 旧图片缓存字段 t 仍可通过边界校验，随后进入原有主题 404 语义。
+                status, body, _ = await _request(
+                    app, "GET", "/api/render?theme=missing&t=123")
+                assert status == 404 and body["error"]["code"] == "theme_not_found"
 
     asyncio.run(scenario())
 
