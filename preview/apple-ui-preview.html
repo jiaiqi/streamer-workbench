@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>主播工作台 · Apple UI 主题预览</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f5f7; --surface: rgba(255,255,255,.78); --surface-solid: #fff;
+      --text: #1d1d1f; --muted: #86868b; --line: rgba(0,0,0,.08); --accent: #0071e3;
+      --accent-soft: rgba(0,113,227,.1); --shadow: 0 18px 50px rgba(0,0,0,.08);
+    }
+    [data-theme="dark"] { color-scheme: dark; --bg:#000; --surface:rgba(29,29,31,.82); --surface-solid:#1d1d1f; --text:#f5f5f7; --muted:#98989d; --line:rgba(255,255,255,.12); --accent:#2997ff; --accent-soft:rgba(41,151,255,.16); --shadow:0 18px 50px rgba(0,0,0,.35); }
+    * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif; transition:background .3s,color .3s; }
+    .app { min-height:100vh; display:grid; grid-template-columns:76px 1fr; }
+    aside { padding:24px 14px; border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; gap:10px; background:var(--surface); backdrop-filter:blur(24px); }
+    .logo { width:42px; height:42px; border-radius:14px; display:grid; place-items:center; color:#fff; background:linear-gradient(145deg,#0071e3,#5ac8fa); box-shadow:0 8px 22px rgba(0,113,227,.28); margin-bottom:20px; font-size:21px; }
+    .nav { width:44px; height:44px; border:0; border-radius:14px; background:transparent; color:var(--muted); font-size:19px; cursor:pointer; transition:.25s cubic-bezier(.25,.1,.25,1); }
+    .nav:hover,.nav.active { color:var(--accent); background:var(--accent-soft); transform:scale(1.04); } .spacer{flex:1}
+    main { max-width:1180px; width:100%; margin:auto; padding:40px 56px 64px; }
+    header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:40px; } .eyebrow{font-size:13px;color:var(--muted);letter-spacing:.02em} h1{font-size:40px;line-height:1.1;letter-spacing:-.03em;margin:8px 0 0;font-weight:650} h2{font-size:21px;margin:0 0 18px;letter-spacing:-.02em}
+    .actions{display:flex;gap:10px}.btn{min-height:44px;padding:0 18px;border-radius:980px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:14px;cursor:pointer;transition:.25s}.btn:hover{transform:scale(1.02);box-shadow:var(--shadow)}.btn.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:550}
+    .hero{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;margin-bottom:42px}.card{background:var(--surface);border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow);backdrop-filter:blur(24px)}
+    .preview{min-height:330px;padding:30px;position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(0,113,227,.14),transparent 60%),var(--surface)}.preview:after{content:"";position:absolute;width:240px;height:240px;border-radius:50%;right:-60px;bottom:-90px;background:rgba(90,200,250,.3);filter:blur(3px)}.preview-label{font-size:12px;color:var(--muted);margin-bottom:52px}.poster-title{font-size:36px;font-weight:650;letter-spacing:-.04em;max-width:340px}.poster-sub{color:var(--muted);margin-top:12px}.poster-meta{position:absolute;bottom:28px;left:30px;font-size:12px;color:var(--muted)}
+    .insight{padding:28px;display:flex;flex-direction:column;justify-content:space-between}.metric{font-size:48px;font-weight:650;letter-spacing:-.05em}.metric small{font-size:15px;color:var(--muted);font-weight:400;letter-spacing:0}.progress{height:7px;background:var(--line);border-radius:99px;overflow:hidden;margin:18px 0 10px}.progress i{display:block;width:72%;height:100%;background:var(--accent);border-radius:inherit}.caption{font-size:13px;color:var(--muted)}
+    .section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.link{color:var(--accent);font-size:14px}.songs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.song{padding:18px;min-height:122px;transition:.25s}.song:hover{transform:translateY(-3px);box-shadow:0 22px 52px rgba(0,0,0,.12)}.song-num{font-size:12px;color:var(--muted);float:right}.song h3{font-size:17px;margin:0 0 8px;font-weight:600}.song p{font-size:13px;color:var(--muted);margin:0}.pill{display:inline-flex;margin-top:18px;padding:6px 10px;border-radius:980px;background:var(--accent-soft);color:var(--accent);font-size:12px}
+    @media(max-width:800px){main{padding:28px 22px}.hero{grid-template-columns:1fr}.songs{grid-template-columns:1fr 1fr}h1{font-size:32px}} @media(max-width:520px){.app{grid-template-columns:1fr}aside{position:fixed;z-index:2;bottom:0;left:0;right:0;height:66px;flex-direction:row;justify-content:center;padding:8px;border-right:0;border-top:1px solid var(--line)}.logo,.spacer{display:none}main{padding-bottom:92px}.songs{grid-template-columns:1fr}header{gap:16px;flex-direction:column}.actions{width:100%}.actions .btn{flex:1}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside aria-label="主导航"><div class="logo">♫</div><button class="nav active" aria-label="工作台">⌂</button><button class="nav" aria-label="歌曲库">☷</button><button class="nav" aria-label="学歌">◌</button><button class="nav" aria-label="主题">✦</button><div class="spacer"></div><button class="nav" id="mode" aria-label="切换深色模式">◐</button><button class="nav" aria-label="设置">⚙</button></aside>
+    <main>
+      <header><div><div class="eyebrow">主播工作台 · 星期三，7月29日</div><h1>今晚，唱点好听的。</h1></div><div class="actions"><button class="btn" id="refresh">↻ 刷新预览</button><button class="btn primary">导出海报　→</button></div></header>
+      <section class="hero"><article class="card preview"><div class="preview-label">当前海报 · 抖音全屏 9:20</div><div class="poster-title">夏日歌单<br/>Vol. 07</div><div class="poster-sub">12 首精选 · 预计 48 分钟</div><div class="poster-meta">Apple UI · 默认主题预览</div></article><article class="card insight"><div><div class="eyebrow">本周演出准备度</div><div class="metric">72<span style="font-size:24px">%</span> <small>已完成</small></div><div class="progress"><i></i></div><div class="caption">还差 5 首歌完成今晚的歌单</div></div><button class="btn primary" style="width:max-content">继续准备　→</button></article></section>
+      <section><div class="section-head"><h2>最近使用的歌曲</h2><span class="link">查看全部　→</span></div><div class="songs"><article class="card song"><span class="song-num">01</span><h3>想去海边</h3><p>夏日歌单 · 已学会</p><span class="pill">主推</span></article><article class="card song"><span class="song-num">02</span><h3>晴天</h3><p>周杰伦 · C 大调</p><span class="pill">熟练度 90%</span></article><article class="card song"><span class="song-num">03</span><h3>慢慢喜欢你</h3><p>莫文蔚 · G 大调</p><span class="pill">熟练度 76%</span></article></div></section>
+    </main>
+  </div>
+  <script>const root=document.documentElement;document.getElementById('mode').onclick=()=>{root.dataset.theme=root.dataset.theme==='dark'?'':'dark'};document.getElementById('refresh').onclick=e=>{e.currentTarget.textContent='✓ 已刷新';setTimeout(()=>e.currentTarget.textContent='↻ 刷新预览',1200)};</script>
+</body>
+</html>
