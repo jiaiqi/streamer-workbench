@@ -1079,8 +1079,8 @@ def test_event_v2_route_idempotency_and_conflict():
     assert first["event"]["event_id"] == "evt_route_fixed"
     assert second["event"] == first["event"]
     assert first["event"]["title_snapshot"] == "当前歌名"
-    assert conflict.status_code == 400
-    assert b"event_id" in conflict.body
+    assert conflict.status_code == 409
+    assert b"repository_conflict" in conflict.body
 
 def test_preset_api_rejects_malformed_query_and_protects_default_flag():
     import tempfile
