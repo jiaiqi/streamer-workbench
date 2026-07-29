@@ -3,6 +3,7 @@
 覆盖设计结论 §9.1 要求的主题校验异常路径、Song 模型生命周期、
 分组规则（section 标记 + 字数回退）。
 """
+import copy
 import os
 import sys
 
@@ -109,6 +110,30 @@ def test_library_get_by_id_survives_rename():
     assert lib.update("a", {"title": "renamed"}) is True
     assert lib.get_by_id(song.id).title == "renamed"
 
+def test_library_id_operations_survive_rename():
+    song = Song(title="a", status="draft")
+    lib = SongLibrary([song, Song(title="b")])
+    assert lib.update_by_id(song.id, {"title": "renamed", "key": "G"}) is True
+    assert lib.get_by_id(song.id).title == "renamed"
+    assert lib.get_by_id(song.id).key == "G"
+    assert lib.mark_active_by_id(song.id) is True
+    assert lib.get_by_id(song.id).status == "active"
+    assert lib.mark_draft_by_id(song.id) is True
+    assert lib.get_by_id(song.id).status == "draft"
+    assert lib.remove_by_id(song.id) is True
+    assert lib.get_by_id(song.id) is None
+
+def test_library_id_rename_rejects_duplicate_without_mutation():
+    song = Song(title="a")
+    lib = SongLibrary([song, Song(title="b")])
+    try:
+        lib.update_by_id(song.id, {"title": "b", "key": "G"})
+        assert False, "按 ID 改名撞车应抛 ValueError"
+    except ValueError:
+        pass
+    assert lib.get_by_id(song.id).title == "a"
+    assert lib.get_by_id(song.id).key == ""
+
 def test_mark_active():
     lib = SongLibrary([Song(title="a", status="draft"), Song(title="b", status="active")])
     assert lib.mark_active("a") is True
@@ -188,7 +213,6 @@ def test_migration_chain_v1_to_v5():
     assert out["version"] == 5
 
 def test_migration_v4_to_v5_is_deterministic():
-    import copy
     source = {"version": 4, "songs": [{"title": "知足"}, {"title": "枫"}]}
     first = SongLibrary._migrate(copy.deepcopy(source))
     second = SongLibrary._migrate(copy.deepcopy(source))
@@ -347,6 +371,192 @@ def test_event_v1_read_compatibility():
     d.cleanup()
 
 
+# ═══════ R0.5 Song ID 服务端主链路 ═══════
+
+def _request_for_library(library):
+    from types import SimpleNamespace
+    import tempfile
+    import copy
+    from server.repositories.events import FileEventStore
+    from server.ports.repositories import StoredSnapshot
+
+    class MemorySongRepository:
+        def __init__(self, value):
+            self.value = value
+            self.revision = "memory-1"
+
+        def load(self):
+            return StoredSnapshot(self.value, self.revision)
+
+        def save(self, value, *, expected_revision):
+            self.value = value
+            self.revision = "memory-2"
+            return self.load()
+
+    root = tempfile.mkdtemp(prefix="streamer-workbench-test-")
+    paths = SimpleNamespace(
+        songs_json=os.path.join(root, "songs.json"),
+        events_jsonl=os.path.join(root, "events.jsonl"),
+        tabs_dir=os.path.join(root, "tabs"),
+        backups_dir=os.path.join(root, "backups"),
+        settings_json=os.path.join(root, "settings.json"),
+        presets_dir=os.path.join(root, "presets"),
+    )
+    context = SimpleNamespace(song_repository=MemorySongRepository(library),
+                              event_store=FileEventStore(paths.events_jsonl),
+                              settings_repository={"backup_count": 20},
+                              preset_repository=paths.presets_dir,
+                              paths=paths)
+    state = SimpleNamespace(library=library, settings=context.settings_repository,
+                            context=context)
+    return SimpleNamespace(app=SimpleNamespace(state=state))
+
+def test_song_id_api_rename_keeps_identity_and_event_link():
+    import server.routers.songs as songs_router
+    song = Song(title="旧歌名", id="song_stable")
+    library = SongLibrary([song])
+    request = _request_for_library(library)
+    saved = []
+    events = []
+    old_save = songs_router._save_library
+    old_append = songs_router._append_event
+    old_events_path = songs_router._events_path
+    try:
+        songs_router._save_library = lambda context, library: saved.append(library)
+        songs_router._events_path = lambda context: "unused-events.jsonl"
+        songs_router._append_event = lambda context, event_type, **kwargs: events.append(
+            {"type": event_type, **kwargs})
+        result = songs_router.api_song_update_by_id(
+            request, "song_stable", {"title": "新歌名", "key": "G"})
+    finally:
+        songs_router._save_library = old_save
+        songs_router._append_event = old_append
+        songs_router._events_path = old_events_path
+    assert result["ok"] is True
+    assert result["song"]["id"] == "song_stable"
+    assert result["song"]["title"] == "新歌名"
+    assert library.get_by_id("song_stable").title == "新歌名"
+    assert len(saved) == 1
+    assert events[0]["song_id"] == "song_stable"
+    assert events[0]["title_snapshot"] == "新歌名"
+
+def test_song_id_api_rename_conflict_does_not_save():
+    import server.routers.songs as songs_router
+    first = Song(title="第一首", id="song_first")
+    library = SongLibrary([first, Song(title="第二首", id="song_second")])
+    request = _request_for_library(library)
+    saves = []
+    old_save = songs_router._save_library
+    try:
+        songs_router._save_library = lambda context, library: saves.append(library)
+        response = songs_router.api_song_update_by_id(
+            request, "song_first", {"title": "第二首"})
+    finally:
+        songs_router._save_library = old_save
+    assert response.status_code == 409
+    assert library.get_by_id("song_first").title == "第一首"
+    assert saves == []
+
+def test_song_id_api_delete_preserves_snapshot_in_event():
+    import server.routers.songs as songs_router
+    song = Song(title="待删除", id="song_delete")
+    library = SongLibrary([song])
+    request = _request_for_library(library)
+    events = []
+    old_save = songs_router._save_library
+    old_append = songs_router._append_event
+    old_events_path = songs_router._events_path
+    try:
+        songs_router._save_library = lambda context, library: None
+        songs_router._events_path = lambda context: "unused-events.jsonl"
+        songs_router._append_event = lambda context, event_type, **kwargs: events.append(
+            {"type": event_type, **kwargs})
+        result = songs_router.api_song_delete_by_id(request, "song_delete")
+    finally:
+        songs_router._save_library = old_save
+        songs_router._append_event = old_append
+        songs_router._events_path = old_events_path
+    assert result["song_id"] == "song_delete"
+    assert result["title_snapshot"] == "待删除"
+    assert library.get_by_id("song_delete") is None
+    assert events == [{"type": "song_deleted", "song_id": "song_delete",
+                       "title_snapshot": "待删除", "source": "songs-api"}]
+
+def test_event_report_rejects_unknown_explicit_song_id():
+    import server.routers.events as events_router
+    request = _request_for_library(SongLibrary([Song(title="知足", id="song_known")]))
+    response = events_router.api_events_report(request, {
+        "type": "song_sung", "song_id": "song_missing", "title_snapshot": "知足",
+    })
+    assert response.status_code == 404
+
+def test_event_report_explicit_song_id_requires_complete_v2_envelope():
+    import server.routers.events as events_router
+    request = _request_for_library(SongLibrary([Song(title="知足", id="song_known")]))
+    response = events_router.api_events_report(request, {
+        "type": "song_sung", "song_id": "song_known", "title_snapshot": "知足",
+    })
+    assert response.status_code == 400
+    assert b"event_id" in response.body
+    assert b"occurred_at" in response.body
+    assert b"source" in response.body
+
+def test_event_report_complete_v2_refreshes_title_and_keeps_client_identity():
+    import server.routers.events as events_router
+    request = _request_for_library(SongLibrary([Song(title="新歌名", id="song_known")]))
+    result = events_router.api_events_report(request, {
+            "type": "song_sung",
+            "event_id": "evt_client_fixed",
+            "song_id": "song_known",
+            "title_snapshot": "旧歌名",
+            "occurred_at": "2026-07-28T20:00:00+08:00",
+            "source": "quick-view",
+    })
+    assert result["ok"] is True
+    assert result["event"]["event_id"] == "evt_client_fixed"
+    assert result["event"]["song_id"] == "song_known"
+    assert result["event"]["title_snapshot"] == "新歌名"
+    assert result["event"]["occurred_at"] == "2026-07-28T20:00:00+08:00"
+
+def test_event_report_legacy_title_must_resolve_to_song_id():
+    import server.routers.events as events_router
+    request = _request_for_library(SongLibrary([]))
+    response = events_router.api_events_report(request, {
+        "type": "queue_added", "title": "不存在的歌",
+    })
+    assert response.status_code == 400
+
+def test_song_router_registers_id_primary_and_title_compat_routes():
+    from server.routers.songs import router as songs_router
+    routes = {(route.path, frozenset(route.methods or set())) for route in songs_router.routes}
+    assert ("/api/songs/{song_id}", frozenset({"GET"})) in routes
+    assert ("/api/songs/{song_id}", frozenset({"PATCH"})) in routes
+    assert ("/api/songs/{song_id}", frozenset({"DELETE"})) in routes
+    assert ("/api/songs/{song_id}/status", frozenset({"PATCH"})) in routes
+    assert ("/api/songs/update", frozenset({"POST"})) in routes
+    assert ("/api/songs/delete", frozenset({"POST"})) in routes
+    assert ("/api/songs/status", frozenset({"POST"})) in routes
+
+def test_song_title_compat_rename_conflict_matches_id_api():
+    import server.routers.songs as songs_router
+    library = SongLibrary([
+        Song(title="第一首", id="song_first"),
+        Song(title="第二首", id="song_second"),
+    ])
+    request = _request_for_library(library)
+    saves = []
+    old_save = songs_router._save_library
+    try:
+        songs_router._save_library = lambda context, library: saves.append(library)
+        response = songs_router.api_songs_update(
+            request, {"title": "第一首", "fields": {"title": "第二首"}})
+    finally:
+        songs_router._save_library = old_save
+    assert response.status_code == 409
+    assert library.get_by_id("song_first").title == "第一首"
+    assert saves == []
+
+
 # ═══════ 曲谱存储（core/data/tabs.py）═══════
 from core.data import tabs as tabs_store
 
@@ -356,39 +566,64 @@ def test_tabs_sanitize_name():
     assert tabs_store.sanitize_name("a/b\\c") == "a_b_c"
     assert tabs_store.sanitize_name("") == "未命名"
 
-def test_tabs_save_and_dedup():
+def test_tabs_save_and_dedup_id_dir():
     import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
     with tempfile.TemporaryDirectory() as d:
-        r1 = tabs_store.save_tab(d, "知足", "主歌.png", b"\x89PNG fake")
-        r2 = tabs_store.save_tab(d, "知足", "主歌.png", b"\x89PNG fake2")
-        assert r1 == "tabs/知足/主歌.png"
-        assert r2 == "tabs/知足/主歌-1.png"          # 重名自动加后缀
-        assert open(os.path.join(d, "知足", "主歌-1.png"), "rb").read() == b"\x89PNG fake2"
+        r1 = tabs_store.save_tab(d, sid, "主歌.png", b"\x89PNG fake")
+        r2 = tabs_store.save_tab(d, sid, "主歌.png", b"\x89PNG fake2")
+        assert r1 == f"tabs/{sid}/主歌.png"
+        assert r2 == f"tabs/{sid}/主歌-1.png"          # 重名自动加后缀
+        assert open(os.path.join(d, sid, "主歌-1.png"), "rb").read() == b"\x89PNG fake2"
 
 def test_tabs_save_rejects_bad_ext_and_oversize():
     import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
     with tempfile.TemporaryDirectory() as d:
         for bad in ("谱.exe", "谱", "谱.svg"):
             try:
-                tabs_store.save_tab(d, "知足", bad, b"x")
+                tabs_store.save_tab(d, sid, bad, b"x")
                 assert False, f"{bad} 应被拦截"
             except ValueError:
                 pass
         try:
-            tabs_store.save_tab(d, "知足", "big.png", b"x" * (tabs_store.MAX_FILE_BYTES + 1))
+            tabs_store.save_tab(d, sid, "big.png", b"x" * (tabs_store.MAX_FILE_BYTES + 1))
             assert False, "超尺寸应被拦截"
         except ValueError:
             pass
 
-def test_tabs_delete_traversal_guard():
+def test_tabs_save_rejects_invalid_song_id():
+    """目录键只接受稳定 song_id：title、空值、路径穿越全部拒绝。"""
     import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
+    with tempfile.TemporaryDirectory() as d:
+        for bad in ("知足", "", "../x", "song_短"):
+            try:
+                tabs_store.save_tab(d, bad, "a.png", b"x")
+                assert False, f"{bad!r} 应被拒绝"
+            except ValueError:
+                pass
+        try:
+            tabs_store.delete_tab(d, "知足", f"tabs/{sid}/a.png")
+            assert False, "delete 用 title 应被拒绝"
+        except ValueError:
+            pass
+
+def test_tabs_delete_traversal_guard_id_dir():
+    import tempfile
+    from core.data.songs import legacy_song_id
+    sid = legacy_song_id("知足")
+    other = legacy_song_id("别的歌")
     with tempfile.TemporaryDirectory() as d:
         tabs_root = os.path.join(d, "data", "tabs")  # 与生产一致：relpath 相对 data/
-        rel = tabs_store.save_tab(tabs_root, "知足", "主歌.png", b"\x89PNG fake")
-        assert tabs_store.delete_tab(tabs_root, "知足", "tabs/知足/../songs.json") is False
-        assert tabs_store.delete_tab(tabs_root, "知足", "tabs/别的歌/x.png") is False
-        assert tabs_store.delete_tab(tabs_root, "知足", rel) is True
-        assert tabs_store.delete_tab(tabs_root, "知足", rel) is False  # 已删 → False
+        rel = tabs_store.save_tab(tabs_root, sid, "主歌.png", b"\x89PNG fake")
+        assert tabs_store.delete_tab(tabs_root, sid, f"tabs/{sid}/../songs.json") is False
+        assert tabs_store.delete_tab(tabs_root, sid, f"tabs/{other}/x.png") is False
+        assert tabs_store.delete_tab(tabs_root, sid, rel) is True
+        assert tabs_store.delete_tab(tabs_root, sid, rel) is False  # 已删 → False
 
 def test_pinyin_initials():
     from core.data.songs import pinyin_initials
@@ -572,8 +807,8 @@ def test_preset_crud():
     import tempfile
     from core.data.presets import Preset, SongQuery, init_presets, save, load, delete, list_all, duplicate
     with tempfile.TemporaryDirectory() as path:
-        init_presets(path)
-        all_p = list_all()
+        presets_dir = init_presets(path)
+        all_p = list_all(presets_dir)
         assert len(all_p) == 1  # 默认预设
         assert all_p[0]["id"] == "_default"
 
@@ -583,19 +818,424 @@ def test_preset_crud():
             layout_id="magazine-flow",
             canvas={"width": 1080, "height": 1920},
         )
-        save(p)
-        loaded = load("test1")
+        save(p, presets_dir)
+        loaded = load("test1", presets_dir)
         assert loaded is not None
         assert loaded.name == "测试预设"
         assert loaded.layout_id == "magazine-flow"
 
-        d = duplicate("test1", "test1-copy", "副本")
+        d = duplicate("test1", "test1-copy", presets_dir, "副本")
         assert d is not None
         assert d.id == "test1-copy"
         assert "副本" in d.name
 
-        delete("test1")
-        assert load("test1") is None
+        delete("test1", presets_dir)
+        assert load("test1", presets_dir) is None
+
+
+# ═══════ R0.5 Tabs title→ID 目录迁移 ═══════
+
+def _sid(title):
+    from core.data.songs import legacy_song_id
+    return legacy_song_id(title)
+
+
+def _mk_dir(root, dirname, files: dict):
+    d = os.path.join(root, dirname)
+    os.makedirs(d, exist_ok=True)
+    for name, content in files.items():
+        with open(os.path.join(d, name), "wb") as f:
+            f.write(content)
+    return d
+
+
+def test_tabs_migration_moves_title_dir():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"A", "副歌.png": b"B"})
+        id_map = {"知足": sid}
+        plan = tabs_store.plan_migration(d, id_map)
+        assert [p["dirname"] for p in plan["planned"]] == ["知足"]
+        assert plan["conflicts"] == []
+        backup = os.path.join(d, "backup")
+        rep = tabs_store.migrate_title_dirs(d, id_map, backup_root=backup, apply=True)
+        assert rep["errors"] == []
+        assert open(os.path.join(d, sid, "主歌.png"), "rb").read() == b"A"
+        assert not os.path.isdir(os.path.join(d, "知足"))           # 旧目录已搬走
+        assert os.path.isdir(os.path.join(backup, "知足"))          # 进可恢复备份，未删除
+        assert rep["moved"][0]["files"] == ["主歌.png", "副歌.png"] or \
+               sorted(rep["moved"][0]["files"]) == ["主歌.png", "副歌.png"]
+
+def test_tabs_migration_idempotent():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"A"})
+        id_map = {"知足": sid}
+        backup = os.path.join(d, "backup")
+        tabs_store.migrate_title_dirs(d, id_map, backup_root=backup, apply=True)
+        snapshot = {sid: sorted(os.listdir(os.path.join(d, sid)))}
+        rep2 = tabs_store.migrate_title_dirs(d, id_map, backup_root=backup, apply=True)
+        assert rep2["planned"] == []                                # 第二次无可迁目录
+        assert rep2["moved"] == []                                  # 不产生第二份关系
+        assert sorted(os.listdir(os.path.join(d, sid))) == snapshot[sid]
+
+def test_tabs_migration_conflict_no_overwrite():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"OLD"})
+        _mk_dir(d, sid, {"主歌.png": b"NEW-DIFFERENT"})
+        id_map = {"知足": sid}
+        plan = tabs_store.plan_migration(d, id_map)
+        assert plan["conflicts"] and plan["planned"] == []          # 冲突 → 整目录停止
+        rep = tabs_store.migrate_title_dirs(d, id_map, backup_root=os.path.join(d, "b"), apply=True)
+        assert rep["moved"] == []
+        assert open(os.path.join(d, sid, "主歌.png"), "rb").read() == b"NEW-DIFFERENT"  # 不覆盖
+        assert os.path.isdir(os.path.join(d, "知足"))               # 旧目录保留
+
+def test_tabs_migration_any_conflict_stops_entire_batch():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid_ok, sid_bad = _sid("知足"), _sid("温柔")
+        _mk_dir(d, "知足", {"主歌.png": b"OK"})
+        _mk_dir(d, "温柔", {"主歌.png": b"OLD"})
+        _mk_dir(d, sid_bad, {"主歌.png": b"CONFLICT"})
+        rep = tabs_store.migrate_title_dirs(
+            d, {"知足": sid_ok, "温柔": sid_bad},
+            backup_root=os.path.join(d, "backup"), apply=True)
+        assert rep["conflicts"]
+        assert rep["moved"] == []
+        assert os.path.isfile(os.path.join(d, "知足", "主歌.png"))
+        assert not os.path.exists(os.path.join(d, sid_ok))
+        assert open(os.path.join(d, sid_bad, "主歌.png"), "rb").read() == b"CONFLICT"
+
+def test_tabs_migration_same_content_is_idempotent():
+    """目标已存在同名同内容文件 → 视为已迁移，源文件去重，不算冲突。"""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"SAME"})
+        _mk_dir(d, sid, {"主歌.png": b"SAME"})
+        id_map = {"知足": sid}
+        rep = tabs_store.migrate_title_dirs(d, id_map, backup_root=os.path.join(d, "b"), apply=True)
+        assert rep["conflicts"] == [] and rep["errors"] == []
+        assert open(os.path.join(d, sid, "主歌.png"), "rb").read() == b"SAME"
+        assert not os.path.isdir(os.path.join(d, "知足"))
+
+def test_tabs_migration_unresolved_reported():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _mk_dir(d, "幽灵歌", {"x.png": b"X"})
+        rep = tabs_store.migrate_title_dirs(d, {}, backup_root=os.path.join(d, "b"), apply=True)
+        assert rep["unresolved"] == ["幽灵歌"]                      # 进报告
+        assert os.path.isdir(os.path.join(d, "幽灵歌"))             # 保留原地，不丢
+
+def test_tabs_migration_dry_run_no_writes():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        sid = _sid("知足")
+        _mk_dir(d, "知足", {"主歌.png": b"A"})
+        before = sorted(os.listdir(d))
+        rep = tabs_store.migrate_title_dirs(d, {"知足": sid}, apply=False)
+        assert rep["planned"] and not os.path.exists(os.path.join(d, sid))
+        assert sorted(os.listdir(d)) == before                      # dry-run 零写入
+
+def test_tabs_rewrite_tab_files():
+    sid = _sid("知足")
+    old = [f"tabs/知足/主歌.png", "tabs/其他/x.png"]
+    new = tabs_store.rewrite_tab_files(old, "知足", sid)
+    assert new == [f"tabs/{sid}/主歌.png", "tabs/其他/x.png"]       # 只改本歌前缀
+
+
+# ═══════ R0.5 Preset custom_ids 迁移与校验 ═══════
+
+def test_preset_custom_ids_migration():
+    from core.data.presets import Preset, SongQuery, migrate_custom_ids
+    sid, sid2 = _sid("知足"), _sid("温柔")
+    p = Preset(id="p1", schema_version=1,
+               song_query=SongQuery(custom_ids=["知足", sid2, "不存在的歌", "知足"]))
+    rep = migrate_custom_ids(p, {"知足": sid, "温柔": sid2})
+    assert rep["resolved"] == {"知足": sid}
+    assert rep["unresolved"] == ["不存在的歌"]                      # 未匹配不丢
+    assert p.song_query.custom_ids == [sid, sid2]                   # 歌名→ID + 去重
+    assert p.song_query.unresolved == ["不存在的歌"]
+    assert p.schema_version == 2                                    # 版本提升
+    rep2 = migrate_custom_ids(p, {"知足": sid})
+    assert rep2["changed"] is False                                 # 幂等
+
+def test_preset_custom_ids_validation_rejects_bad():
+    import tempfile
+    from core.data.presets import Preset, SongQuery, init_presets, save
+    with tempfile.TemporaryDirectory() as path:
+        presets_dir = init_presets(path)
+        for bad in (["知足"], ["song_短"], [_sid("a"), _sid("a")]):
+            try:
+                save(Preset(id="bad1", song_query=SongQuery(custom_ids=bad)), presets_dir)
+                assert False, f"{bad} 应被拒绝"
+            except ValueError:
+                pass
+
+def test_preset_id_rejects_directory_escape():
+    import tempfile
+    from core.data.presets import Preset, init_presets, save, load, delete, duplicate
+    with tempfile.TemporaryDirectory() as path:
+        presets_dir = init_presets(path)
+        for bad in ("", ".", "..", "../escape", "a/b", "a\\b", " bad"):
+            try:
+                save(Preset(id=bad), presets_dir)
+                assert False, f"preset_id {bad!r} 应被拒绝"
+            except ValueError:
+                pass
+            assert load(bad, presets_dir) is None
+            assert delete(bad, presets_dir) is False
+        try:
+            duplicate("_default", "../copy", presets_dir)
+            assert False, "duplicate 的目标 ID 逃逸应被拒绝"
+        except ValueError:
+            pass
+        assert not os.path.exists(os.path.join(path, "escape"))
+
+def test_tabs_api_resolves_id_first_and_title_as_compatibility():
+    import server.routers.songs as songs_router
+    song = Song(title="新歌名", id=_sid("旧歌名"),
+                tab_files=[f"tabs/{_sid('旧歌名')}/谱.png"])
+    request = _request_for_library(SongLibrary([song]))
+    by_id = songs_router.api_tab_list(request, song.id)
+    by_title = songs_router.api_tab_list(request, song.title)
+    assert by_id == by_title
+    assert by_id["song_id"] == song.id
+    assert by_id["title"] == "新歌名"
+
+def test_tabs_api_identity_collision_prefers_song_id():
+    import server.routers.songs as songs_router
+    primary_id = _sid("主路径")
+    primary = Song(title="主路径歌曲", id=primary_id)
+    title_collision = Song(title=primary_id, id=_sid("同名兼容歌曲"))
+    request = _request_for_library(SongLibrary([primary, title_collision]))
+    result = songs_router.api_tab_list(request, primary_id)
+    assert result["song_id"] == primary.id
+    assert result["title"] == primary.title
+
+def test_tabs_api_upload_and_delete_use_resolved_song_id():
+    import asyncio
+    import io
+    import tempfile
+    from starlette.datastructures import UploadFile
+    import server.routers.songs as songs_router
+
+    song = Song(title="可改名歌曲", id=_sid("曲谱主路径"))
+    library = SongLibrary([song])
+    request = _request_for_library(library)
+    old_save = songs_router._save_library
+    old_append = songs_router._append_event
+    old_events_path = songs_router._events_path
+    events = []
+    with tempfile.TemporaryDirectory() as data_root:
+        try:
+            request.app.state.context.paths.tabs_dir = os.path.join(data_root, "tabs")
+            songs_router._save_library = lambda context, library: None
+            songs_router._events_path = lambda context: os.path.join(data_root, "events.jsonl")
+            songs_router._append_event = lambda context, event_type, **kwargs: events.append(
+                {"type": event_type, **kwargs})
+            upload = UploadFile(io.BytesIO(b"PNG"), filename="主歌.png")
+            created = asyncio.run(songs_router.api_tab_upload(request, song.title, upload))
+            rel = created["file"]
+            assert created["song_id"] == song.id
+            assert rel == f"tabs/{song.id}/主歌.png"
+            assert os.path.isfile(os.path.join(data_root, rel))
+
+            deleted = songs_router.api_tab_delete(request, song.id, rel)
+            assert deleted["tab_files"] == []
+            assert not os.path.exists(os.path.join(data_root, rel))
+        finally:
+            songs_router._save_library = old_save
+            songs_router._append_event = old_append
+            songs_router._events_path = old_events_path
+    assert [event["source"] for event in events] == ["tabs-api", "tabs-api"]
+    assert all(event["song_id"] == song.id for event in events)
+
+def test_event_v2_route_idempotency_and_conflict():
+    import tempfile
+    import server.routers.events as events_router
+
+    song = Song(title="当前歌名", id="song_event_route")
+    request = _request_for_library(SongLibrary([song]))
+    payload = {
+        "type": "song_sung", "event_id": "evt_route_fixed",
+        "song_id": song.id, "title_snapshot": "旧歌名",
+        "occurred_at": "2026-07-29T01:00:00+08:00", "source": "quick-view",
+    }
+    with tempfile.TemporaryDirectory() as data_root:
+        try:
+            request.app.state.context.paths.events_jsonl = os.path.join(data_root, "events.jsonl")
+            first = events_router.api_events_report(request, payload)
+            second = events_router.api_events_report(request, payload)
+            conflict = events_router.api_events_report(
+                request, {**payload, "occurred_at": "2026-07-29T01:01:00+08:00"})
+        finally:
+            pass
+    assert first["event"]["event_id"] == "evt_route_fixed"
+    assert second["event"] == first["event"]
+    assert first["event"]["title_snapshot"] == "当前歌名"
+    assert conflict.status_code == 400
+    assert b"event_id" in conflict.body
+
+def test_preset_api_rejects_malformed_query_and_protects_default_flag():
+    import tempfile
+    import core.data.presets as presets_store
+    import server.routers.presets as presets_router
+
+    with tempfile.TemporaryDirectory() as data_root:
+        presets_dir = presets_store.init_presets(data_root)
+        request = _request_for_library(SongLibrary([]))
+        request.app.state.context.preset_repository = presets_dir
+        try:
+            malformed = presets_router.api_presets_save({"name": "坏数据", "song_query": "不是对象"}, request)
+            invalid_ids = presets_router.api_presets_save({
+                "name": "坏关系", "song_query": {"custom_ids": None},
+            }, request)
+            ordinary = presets_router.api_presets_save({
+                "id": "ordinary", "name": "普通预设", "is_default": True,
+            }, request)
+            default = presets_router.api_presets_save({
+                "id": "_default", "name": "默认预设", "is_default": False,
+            }, request)
+            saved_ordinary = presets_store.load("ordinary", presets_dir)
+            saved_default = presets_store.load("_default", presets_dir)
+        finally:
+            pass
+    assert malformed.status_code == 400
+    assert invalid_ids.status_code == 400
+    assert ordinary["ok"] is True and saved_ordinary.is_default is False
+    assert default["ok"] is True and saved_default.is_default is True
+
+def test_preset_full_fields_roundtrip():
+    import tempfile
+    from core.data.presets import Preset, SongQuery, init_presets, save, load, duplicate, delete
+    with tempfile.TemporaryDirectory() as path:
+        presets_dir = init_presets(path)
+        p = Preset(
+            id="full1", name="完整场景", layout_id="grid-wrap",
+            palette_id="pal-1", skin_id="skin-1",
+            canvas={"width": 1080, "height": 1920},
+            params={"margin": 58, "font_song": 36},
+            export={"format": "png", "scale": 2},
+            color_overrides={"text": "#111111"},
+            song_query=SongQuery(status="all", classify="artist",
+                                 sort_by="title", max_songs=30,
+                                 custom_ids=[_sid("知足")],
+                                 unresolved=["旧歌名"]),
+        )
+        save(p, presets_dir)
+        q = load("full1", presets_dir)
+        assert q is not None
+        assert q.palette_id == "pal-1" and q.skin_id == "skin-1"
+        assert q.canvas == {"width": 1080, "height": 1920}
+        assert q.params == {"margin": 58, "font_song": 36}
+        assert q.export == {"format": "png", "scale": 2}
+        assert q.color_overrides == {"text": "#111111"}
+        assert q.song_query.custom_ids == [_sid("知足")]
+        assert q.song_query.unresolved == ["旧歌名"]
+        assert q.schema_version == 2
+        d = duplicate("full1", "full1-copy", presets_dir, "副本")
+        assert d is not None and d.song_query.custom_ids == [_sid("知足")]
+        assert delete("full1", presets_dir) is True
+        assert load("full1", presets_dir) is None
+        assert delete("full1", presets_dir) is False                # 不存在 → False（路由 404）
+
+
+# ═══════ R0.5 迁移器端到端（tools/migrate_data.py）═══════
+
+def _write_v4_songs(data_root, titles_with_tabs):
+    """构造最小 v4 songs.json（无 id 字段），返回 data_root。"""
+    import json as _json
+    os.makedirs(data_root, exist_ok=True)
+    payload = {"version": 4, "songs": [
+        {"title": t, "tab_files": [f"tabs/{t}/主歌.png"] if t in titles_with_tabs else []}
+        for t in titles_with_tabs
+    ]}
+    with open(os.path.join(data_root, "songs.json"), "w", encoding="utf-8") as f:
+        _json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def test_r05_migrator_end_to_end():
+    import json as _json
+    import tempfile
+    from tools.migrate_data import run_r05_migration
+    with tempfile.TemporaryDirectory() as d:
+        data_root = os.path.join(d, "data")
+        _write_v4_songs(data_root, ["知足"])
+        sid = _sid("知足")
+        _mk_dir(os.path.join(data_root, "tabs"), "知足", {"主歌.png": b"A"})
+        # 旧 preset：custom_ids 为歌名
+        pdir = os.path.join(data_root, "presets", "legacy1")
+        os.makedirs(pdir)
+        with open(os.path.join(data_root, "presets", "manifest.json"), "w", encoding="utf-8") as f:
+            _json.dump({"legacy1": {"name": "旧预设"}}, f, ensure_ascii=False)
+        with open(os.path.join(pdir, "preset.json"), "w", encoding="utf-8") as f:
+            _json.dump({"schema_version": 1, "id": "legacy1", "name": "旧预设",
+                        "song_query": {"custom_ids": ["知足", "幽灵歌"]}}, f, ensure_ascii=False)
+
+        # 1. dry-run：零写入
+        before = sorted(os.listdir(os.path.join(data_root, "tabs")))
+        rep = run_r05_migration(data_root, apply=False)
+        assert rep["dry_run"] is True
+        assert sorted(os.listdir(os.path.join(data_root, "tabs"))) == before
+        assert rep["planned"] and rep["presets"]
+
+        # 2. apply：目录搬迁 + tab_files 改写 + v5 持久化 + preset 迁移 + 备份
+        rep = run_r05_migration(data_root, apply=True)
+        assert rep["conflicts"] == []
+        assert os.path.isfile(os.path.join(data_root, "tabs", sid, "主歌.png"))
+        assert not os.path.isdir(os.path.join(data_root, "tabs", "知足"))
+        saved = _json.load(open(os.path.join(data_root, "songs.json"), encoding="utf-8"))
+        assert saved["version"] == 5                                 # v4→v5 持久化
+        assert saved["songs"][0]["id"] == sid                        # 确定性 ID
+        assert saved["songs"][0]["tab_files"] == [f"tabs/{sid}/主歌.png"]
+        migrated = _json.load(open(os.path.join(pdir, "preset.json"), encoding="utf-8"))
+        assert migrated["song_query"]["custom_ids"] == [sid]
+        assert migrated["song_query"]["unresolved"] == ["幽灵歌"]    # 未解析不丢
+        assert migrated["schema_version"] == 2
+        assert rep["backups"]                                        # 备份存在
+        assert rep["verify"]["remaining_planned"] == 0
+
+        # 3. 重复运行：无副作用
+        rep3 = run_r05_migration(data_root, apply=True)
+        assert rep3["planned"] == [] and rep3["tab_files_rewritten"] == 0
+        assert rep3["presets"] == []
+
+
+def test_r05_rename_keeps_tabs_preset_and_event_relationships():
+    """R0.5 组合回归：改名只改变显示字段，三个长期关系继续使用原 song_id。"""
+    import tempfile
+    from core.data.presets import Preset, SongQuery, init_presets, save, load
+    with tempfile.TemporaryDirectory() as d:
+        song = Song(title="旧歌名", id=_sid("旧歌名"))
+        library = SongLibrary([song])
+        tabs_root = os.path.join(d, "data", "tabs")
+        rel = tabs_store.save_tab(tabs_root, song.id, "谱.png", b"TAB")
+        song.tab_files.append(rel)
+        presets_dir = init_presets(os.path.join(d, "data"))
+        save(Preset(id="rename-case",
+                    song_query=SongQuery(custom_ids=[song.id])), presets_dir)
+        events_path = os.path.join(d, "data", "events.jsonl")
+        append_event(events_path, "queue_added", event_id="evt_before_rename",
+                     song_id=song.id, title_snapshot=song.title,
+                     occurred_at="2026-07-29T00:00:00+08:00", source="test")
+
+        assert library.update_by_id(song.id, {"title": "新歌名"}) is True
+
+        current = library.get_by_id(song.id)
+        preset = load("rename-case", presets_dir)
+        event = list(iter_events(events_path))[0]
+        assert current.title == "新歌名"
+        assert current.tab_files == [rel]
+        assert os.path.isfile(os.path.join(d, "data", rel))
+        assert preset.song_query.custom_ids == [song.id]
+        assert event["song_id"] == song.id
+        assert event["title_snapshot"] == "旧歌名"  # 历史快照保持发生时标题
 
 
 # ═══════ Runner ═══════

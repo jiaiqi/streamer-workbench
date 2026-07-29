@@ -95,6 +95,14 @@ class SongLibrary:
                 return True
         return False
 
+    def mark_active_by_id(self, song_id: str) -> bool:
+        """按不可变 ID 将歌曲标记为 active。"""
+        song = self.get_by_id(song_id)
+        if song is None:
+            return False
+        song.status = "active"
+        return True
+
     def mark_draft(self, title: str) -> bool:
         """将歌曲状态从 active 改为 draft（「标回未会」，下海报）。返回是否成功找到。"""
         for s in self.songs:
@@ -102,6 +110,14 @@ class SongLibrary:
                 s.status = "draft"
                 return True
         return False
+
+    def mark_draft_by_id(self, song_id: str) -> bool:
+        """按不可变 ID 将歌曲标记为 draft。"""
+        song = self.get_by_id(song_id)
+        if song is None:
+            return False
+        song.status = "draft"
+        return True
 
     def get(self, title: str) -> Optional[Song]:
         """按歌名精确查找，未找到返回 None。"""
@@ -130,10 +146,19 @@ class SongLibrary:
         返回是否成功找到并更新。
         """
         song = self.get(title)
+        return self._update_song(song, fields)
+
+    def update_by_id(self, song_id: str, fields: dict) -> bool:
+        """按不可变 ID 更新歌曲；改名不会改变关联身份。"""
+        song = self.get_by_id(song_id)
+        return self._update_song(song, fields)
+
+    def _update_song(self, song: Optional[Song], fields: dict) -> bool:
+        """更新已解析的歌曲对象，供 ID 主接口和 title 兼容层共用。"""
         if song is None:
             return False
         new_title = fields.get("title")
-        if new_title and new_title != title and self.get(new_title) is not None:
+        if new_title and new_title != song.title and self.get(new_title) is not None:
             raise ValueError(f"改名失败：「{new_title}」已存在")
         for k, v in fields.items():
             if k in self.EDITABLE_FIELDS:
@@ -144,6 +169,14 @@ class SongLibrary:
         """删除歌曲。返回是否成功找到并删除。"""
         for i, s in enumerate(self.songs):
             if s.title == title:
+                self.songs.pop(i)
+                return True
+        return False
+
+    def remove_by_id(self, song_id: str) -> bool:
+        """按不可变 ID 删除歌曲。"""
+        for i, song in enumerate(self.songs):
+            if song.id == song_id:
                 self.songs.pop(i)
                 return True
         return False

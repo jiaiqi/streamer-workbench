@@ -1,9 +1,10 @@
-# 歌单海报生成器 · CI 流水线
+# 主播工作台 · CI 流水线
 #
-# 三件套质量门：
-#   1. Python 单元测试（21 项）
+# 质量门：
+#   1. Python 单元、AppContext 与持久化测试（当前 125 项）
 #   2. 金标准逐像素对比（16 张，diff=0 死线）
-#   3. TypeScript 编译检查
+#   3. 前端纯函数测试
+#   4. TypeScript 编译与生产构建
 #
 # 金标准参照图（tests/golden/）随 git 提交，是版本化的回归基准，
 # 由独立预言机（旧脚本 build_playlist.py，178 首版）生成。
@@ -46,6 +47,18 @@ jobs:
       - name: 单元测试
         run: .venv/bin/python tests/test_unit.py
 
+      - name: AppContext 与数据目录测试
+        run: .venv/bin/python tests/test_app_context.py
+
+      - name: Repository 可靠性测试
+        run: .venv/bin/python tests/test_repositories.py
+
+      - name: EventStore 索引与恢复测试
+        run: .venv/bin/python tests/test_event_store.py
+
+      - name: PresetRepository 跨文件事务测试
+        run: .venv/bin/python tests/test_preset_repository.py
+
       # ---- 门 2：金标准逐像素对比（参照图随仓库检出）----
       - name: 金标准测试（diff=0 死线）
         run: PYTHONPATH=. .venv/bin/python tests/test_golden.py
@@ -59,6 +72,14 @@ jobs:
         working-directory: ui
         run: npx tsc --noEmit
 
+      - name: 前端纯函数测试
+        working-directory: ui
+        run: npm test
+
+      - name: 前端生产构建
+        working-directory: ui
+        run: npm run build
+
       # ---- 汇总 ----
       - name: ✅ 全部质量门通过
-        run: echo "单元测试 + 金标准 diff=0 + TS 编译 —— 三件套全部通过"
+        run: echo "Python 单元/AppContext/Repository/EventStore/PresetRepository 测试 + 金标准 diff=0 + 前端测试 + TS 编译/构建 —— 全部通过"

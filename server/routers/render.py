@@ -7,7 +7,7 @@ from dataclasses import replace
 from fastapi import APIRouter, Request, Response
 from PIL import Image
 
-from server.deps import get_themes, get_library, get_settings, get_thumb_cache
+from server.dependencies import get_app_context
 from core.spec import get_canvas_spec
 from core.layouts import get_layout, list_layouts, layout_params
 from core.engine import render_page
@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.get("/api/themes")
 def api_themes(req: Request):
-    themes = get_themes(req.app.state)
+    themes = get_app_context(req).themes
     return [{"name": t.name, "prefix": t.output_prefix,
              "watermark_fix": t.watermark_fix,
              "backgrounds": t.backgrounds,
@@ -26,16 +26,16 @@ def api_themes(req: Request):
 
 @router.get("/api/thumb/{theme_name}")
 def api_thumb(theme_name: str, req: Request):
-    themes = get_themes(req.app.state)
-    cache = get_thumb_cache(req.app.state)
+    context = get_app_context(req)
+    themes = context.themes
+    cache = req.app.state.thumb_cache
     if theme_name in cache:
         return Response(content=cache[theme_name], media_type="image/jpeg")
     t = themes.get(theme_name)
     if t is None:
         return Response("主题不存在", status_code=404)
-    from server.deps import THEMES_DIR
     bg = t.backgrounds.get("1")
-    path = os.path.join(THEMES_DIR, theme_name, bg) if bg else ""
+    path = os.path.join(context.paths.themes_dir, theme_name, bg) if bg else ""
     if not bg or not os.path.isfile(path):
         return Response("背景不存在", status_code=404)
     im = Image.open(path).convert("RGB")
@@ -67,9 +67,10 @@ def api_render(req: Request,
                layout: str = "grid-wrap",
                margin: int = None, font_song: int = None,
                row_h: int = None, sec_gap: int = None):
-    themes = get_themes(req.app.state)
-    library = get_library(req.app.state)
-    from server.deps import FONT
+    context = get_app_context(req)
+    themes = context.themes
+    library = context.song_repository.load().value
+    font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     if theme not in themes:
         return Response(f"未知主题：{theme}", status_code=404)
     try:
@@ -83,7 +84,7 @@ def api_render(req: Request,
                  if v is not None}
     if overrides:
         spec = replace(spec, **overrides)
-    img = render_page(themes[theme], layout_plugin, library, spec, page, FONT)
+    img = render_page(themes[theme], layout_plugin, library, spec, page, font)
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return Response(buf.getvalue(), media_type="image/png")

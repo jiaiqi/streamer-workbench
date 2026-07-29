@@ -2,7 +2,7 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-28）**：旧 `grid-wrap` 金标准仍为 16/16 diff=0；S1–S3 代码已完成。当前唯一活跃阶段为 **R0 正确性与应用边界收口**：avoid/cache、Song v5、Event v2 已完成；tabs/queue/Preset 的 `song_id` 迁移、AppContext、Repository 写入可靠性、类型化 API、用户数据目录和本地服务安全待完成。下一条用户可见主线是使用现有 `grid-wrap` 跑通“样例数据 → 本场 → 歌曲集合 → 模板 → 导出”。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
+> **进度快照（2026-07-29）**：旧 `grid-wrap` 金标准保持 16/16 diff=0；S1–S3.5 已完成，Song v5/Event v2 以及 tabs/QuickView queue/Preset 的 `song_id` 关系已全链路落地，真实开发数据已迁移并验证可回退。当前唯一活跃阶段仍为 **R0 正确性与应用边界收口**：R0.1–R0.5 已完成；AppContext、Repository 写入可靠性、类型化 API、用户数据目录和本地服务安全仍待完成。下一条用户可见主线是使用现有 `grid-wrap` 跑通“样例数据 → 本场 → 歌曲集合 → 模板 → 导出”。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >
 > **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `.archive/design-docs/`（原 `design-docs/`，点号开头表示已归档；完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `.archive/design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
@@ -56,14 +56,14 @@ $env:PYTHONUTF8='1'
 cd ui; npx tsc --noEmit
 ```
 
-当前 Windows 直接单元测试 runner 为 56/56；Preset 测试已改用平台临时目录。金标准保持 16/16 diff=0。
+当前质量基线为 Python 单元测试 87/87、前端测试 6/6、金标准 16/16 diff=0，并通过 `tsc --noEmit`、前端 build 与 CI。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
 
 ## 后端 API
 
 当前路由按能力拆在 `server/routers/`：
 
 - 健康与资源：`GET /api/health`、`/api/themes`、`/api/layouts`、`/api/layouts/{id}/params`；
-- 歌曲与曲谱：`/api/songs*`、`/api/songs/{title}/tabs`（title 路由为待迁移兼容接口）；
+- 歌曲与曲谱：`/api/songs*`、`/api/songs/{identity}/tabs`（`song_id` 优先，title 仅为迁移期兼容）；
 - 渲染与导出：`GET /api/render`、`POST /api/export`、`POST /api/export/batch`；
 - 事件、设置、预设：`/api/events*`、`/api/settings`、`/api/presets*`。
 

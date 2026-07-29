@@ -9,7 +9,7 @@ from dataclasses import replace
 
 from fastapi import APIRouter, Request, Response
 
-from server.deps import get_themes, get_library, get_settings, get_export_jobs
+from server.dependencies import get_app_context
 from core.spec import get_canvas_spec
 from core.layouts import get_layout
 from core.engine import render_page
@@ -18,9 +18,8 @@ from core.data.events import append_event
 router = APIRouter()
 
 
-def _run_batch_job(job_id: str, themes, layout_plugin, spec, out_dir, library, font):
-    from server.deps import EVENTS_JSONL
-    jobs = _get_global_jobs()
+def _run_batch_job(job_id: str, themes, layout_plugin, spec, out_dir, library, font,
+                   jobs, events_path):
     job = jobs[job_id]
     t0 = time.perf_counter()
     try:
@@ -36,7 +35,7 @@ def _run_batch_job(job_id: str, themes, layout_plugin, spec, out_dir, library, f
                 job["done"] += 1
         job["status"] = "done"
         job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
-        append_event(EVENTS_JSONL, "poster_exported", meta={
+        append_event(events_path, "poster_exported", meta={
             "batch": True, "files": len(job["files"]), "total_ms": job["total_ms"]},
             source="export-api")
     except Exception as e:
@@ -46,14 +45,6 @@ def _run_batch_job(job_id: str, themes, layout_plugin, spec, out_dir, library, f
         job["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
 
 
-_EXPORT_JOBS_REF = None
-
-
-def _get_global_jobs():
-    global _EXPORT_JOBS_REF
-    return _EXPORT_JOBS_REF
-
-
 @router.post("/api/export")
 def api_export(req: Request,
                theme: str, page: int = 1,
@@ -61,10 +52,11 @@ def api_export(req: Request,
                layout: str = "grid-wrap",
                margin: int = None, font_song: int = None,
                row_h: int = None, sec_gap: int = None):
-    themes = get_themes(req.app.state)
-    library = get_library(req.app.state)
-    settings = get_settings(req.app.state)
-    from server.deps import FONT, EVENTS_JSONL
+    context = get_app_context(req)
+    themes = context.themes
+    library = context.song_repository.load().value
+    settings = context.settings_repository.load().value
+    font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     if theme not in themes:
         return Response(f"未知主题：{theme}", status_code=404)
     try:
@@ -80,7 +72,7 @@ def api_export(req: Request,
         spec = replace(spec, **overrides)
 
     t0 = time.perf_counter()
-    img = render_page(themes[theme], layout_plugin, library, spec, page, FONT)
+    img = render_page(themes[theme], layout_plugin, library, spec, page, font)
     duration = time.perf_counter() - t0
 
     tag = "糖圆体全屏绕排" if avoid and spec.height > 1920 else "糖圆体"
@@ -90,7 +82,7 @@ def api_export(req: Request,
     out_path = os.path.join(out_dir, filename)
     img.save(out_path, "PNG")
 
-    append_event(EVENTS_JSONL, "poster_exported", meta={
+    append_event(str(context.paths.events_jsonl), "poster_exported", meta={
         "theme": theme, "layout": layout, "canvas": canvas, "page": page,
         "duration_ms": round(duration * 1000, 1)}, source="export-api")
     return {"ok": True, "path": out_path, "filename": filename,
@@ -101,11 +93,11 @@ def api_export(req: Request,
 def api_export_batch(req: Request,
                      layout: str = "grid-wrap",
                      canvas: str = "抖音全屏 9:20", avoid: bool = True):
-    themes = get_themes(req.app.state)
-    library = get_library(req.app.state)
-    settings = get_settings(req.app.state)
-    from server.deps import FONT, EVENTS_JSONL
-    global _EXPORT_JOBS_REF
+    context = get_app_context(req)
+    themes = context.themes
+    library = context.song_repository.load().value
+    settings = context.settings_repository.load().value
+    font = str(context.paths.fonts_dir / "MaokenAssortedSans.ttf")
     try:
         layout_plugin = get_layout(layout)
     except KeyError as e:
@@ -116,22 +108,22 @@ def api_export_batch(req: Request,
     os.makedirs(out_dir, exist_ok=True)
     pages = layout_plugin.pages or 2
     job_id = uuid.uuid4().hex[:8]
-    jobs = get_export_jobs(req.app.state)
-    _EXPORT_JOBS_REF = jobs
+    jobs = context.export_job_manager
     jobs[job_id] = {
         "status": "running", "done": 0, "total": len(themes) * pages,
         "current": "", "files": [], "output_dir": out_dir,
         "total_ms": None, "error": None,
     }
     threading.Thread(target=_run_batch_job,
-                     args=(job_id, themes, layout_plugin, spec, out_dir, library, FONT),
+                     args=(job_id, themes, layout_plugin, spec, out_dir, library, font,
+                           jobs, str(context.paths.events_jsonl)),
                      daemon=True).start()
     return {"ok": True, "job_id": job_id, "total": len(themes) * pages}
 
 
 @router.get("/api/export/jobs/{job_id}")
 def api_export_job(job_id: str, req: Request):
-    jobs = get_export_jobs(req.app.state)
+    jobs = get_app_context(req).export_job_manager
     job = jobs.get(job_id)
     if job is None:
         return Response(f"未知任务：{job_id}", status_code=404)
@@ -140,7 +132,7 @@ def api_export_job(job_id: str, req: Request):
 
 @router.post("/api/export/open")
 def api_export_open(req: Request):
-    settings = get_settings(req.app.state)
+    settings = get_app_context(req).settings_repository.load().value
     out_dir = settings["output_dir"]
     os.makedirs(out_dir, exist_ok=True)
     try:
