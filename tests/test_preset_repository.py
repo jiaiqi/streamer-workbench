@@ -84,6 +84,7 @@ class FilePresetRepositoryTests(unittest.TestCase):
         expected_new = {
             "before_prepared": False,
             "after_prepared": True,
+            "after_item_publish": True,
             "after_items_publish": True,
             "after_manifest_publish": True,
             "after_committed": True,
@@ -125,7 +126,7 @@ class FilePresetRepositoryTests(unittest.TestCase):
             crashing = FilePresetRepository(
                 presets_root,
                 backup_policy(root),
-                fault_injector=PresetFaultInjector("after_items_publish"),
+                fault_injector=PresetFaultInjector("after_item_publish"),
             )
             with self.assertRaises(RepositoryUnavailable):
                 crashing.delete("delete_me", expected_revision=saved.revision)
@@ -150,7 +151,7 @@ class FilePresetRepositoryTests(unittest.TestCase):
             crashing = FilePresetRepository(
                 presets_root,
                 backup_policy(root),
-                fault_injector=PresetFaultInjector("after_items_publish"),
+                fault_injector=PresetFaultInjector("after_item_publish"),
             )
             with self.assertRaises(RepositoryUnavailable):
                 crashing.set_default("second", expected_revision=listing.revision)

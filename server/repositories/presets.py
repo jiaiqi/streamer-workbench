@@ -343,6 +343,7 @@ class FilePresetRepository:
                 if active_dir.exists():
                     self._ensure_control_dir(self._trash)
                     os.replace(active_dir, trash_target)
+                self._inject("after_item_publish")
                 continue
             payload = self._read_json(transaction_dir / "next" / f"{item_id}.json", "next preset")
             self._validate_payload(payload, expected_id=item_id)
@@ -356,6 +357,7 @@ class FilePresetRepository:
                 backup_policy=self._backup_policy,
                 backup_kind=f"preset-{hashlib.sha256(item_id.encode('utf-8')).hexdigest()[:16]}",
             )
+            self._inject("after_item_publish")
 
     def _publish_manifest(self, transaction_dir: Path) -> None:
         manifest = self._read_json(transaction_dir / "manifest.next.json", "next manifest")
