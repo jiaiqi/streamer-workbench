@@ -15,7 +15,7 @@ test: test-unit test-golden
 
 # ── 后端 ──
 run-backend:
-	uvicorn server.main:app --reload --port 8000
+	python -m server --reload --port 8000
 
 # ── 前端 ──
 run-ui:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import hmac
 import re
 import uuid
 
@@ -12,10 +13,13 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from server.api.errors import ApiError, map_repository_error
+from server.config import is_loopback_host
 from server.ports.repositories import RepositoryError
 
 logger = logging.getLogger("streamer-workbench")
 REQUEST_ID_HEADER = "X-Request-ID"
+SESSION_TOKEN_HEADER = "X-Streamer-Session"
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
 
@@ -50,6 +54,43 @@ def install_api_contract(app: FastAPI) -> None:
             incoming if _SAFE_REQUEST_ID.fullmatch(incoming)
             else f"req_{uuid.uuid4().hex}"
         )
+        config = request.app.state.config
+        client_host = request.client.host if request.client else ""
+        if config.mode != "test" and not is_loopback_host(client_host):
+            return api_error_response(
+                request,
+                403,
+                ApiError(
+                    "local_client_required",
+                    "本地服务只接受来自本机的请求",
+                    recovery="请在运行主播工作台的同一台设备上重试",
+                ),
+            )
+        if request.url.path.startswith("/api/") and request.method in _MUTATING_METHODS:
+            origin = request.headers.get("origin")
+            if origin and origin.rstrip("/") not in config.allowed_origins:
+                return api_error_response(
+                    request,
+                    403,
+                    ApiError(
+                        "origin_forbidden",
+                        "当前页面来源无权修改本地数据",
+                        recovery="请从主播工作台应用或受信任的开发地址重试",
+                    ),
+                )
+            expected_token = config.session_token
+            supplied_token = request.headers.get(SESSION_TOKEN_HEADER, "")
+            if expected_token and not hmac.compare_digest(
+                    supplied_token.encode("utf-8"), expected_token.encode("utf-8")):
+                return api_error_response(
+                    request,
+                    401,
+                    ApiError(
+                        "session_unauthorized",
+                        "本地会话凭证无效或已过期",
+                        recovery="重启主播工作台后重试",
+                    ),
+                )
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request.state.request_id
         return response

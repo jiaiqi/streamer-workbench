@@ -1,7 +1,7 @@
 # 主播工作台 · CI 流水线
 #
 # 质量门：
-#   1. Python 单元、AppContext、持久化、冻结导出与 API 合约测试（当前 174 项）
+#   1. Python 单元、AppContext、持久化、冻结导出、API 合约与本地安全测试（当前 189 项）
 #   2. 金标准逐像素对比（16 张，diff=0 死线）
 #   3. 前端纯函数测试
 #   4. TypeScript 编译与生产构建
@@ -75,6 +75,9 @@ jobs:
 
       - name: API 合约测试
         run: .venv/bin/python tests/test_api_contract.py
+
+      - name: 本地服务安全测试
+        run: .venv/bin/python tests/test_local_security.py
 
       - name: OpenAPI TypeScript 类型漂移检查
         run: .venv/bin/python tools/generate_api_types.py --check

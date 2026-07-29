@@ -9,7 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.engine import render_page
-from server.api.handlers import install_api_contract
+from server.api.handlers import (
+    REQUEST_ID_HEADER,
+    SESSION_TOKEN_HEADER,
+    install_api_contract,
+)
 from server.config import AppConfig, build_app_paths
 from server.context import AppContext
 from server.dependencies import get_app_context
@@ -116,6 +120,11 @@ def _lifespan(config: AppConfig, paths):
 def create_app(config: AppConfig | None = None) -> FastAPI:
     """创建尚未启动的 app；不得在此创建用户目录或加载业务数据。"""
     config = config or AppConfig.from_environment(mode="development")
+    if config.mode == "desktop":
+        if not config.session_token:
+            raise ValueError("desktop 模式必须配置每次启动生成的会话令牌")
+        if len(config.session_token) < 32:
+            raise ValueError("desktop 模式会话令牌至少需要 32 个字符")
     paths = build_app_paths(config)
     app = FastAPI(title="主播工作台 · 渲染后端",
                   lifespan=_lifespan(config, paths))
@@ -125,9 +134,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(config.allowed_origins) or ["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=list(config.allowed_origins),
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", REQUEST_ID_HEADER, SESSION_TOKEN_HEADER],
     )
 
     # `check_dir=False` 允许全新 data_root 在 lifespan 中初始化。

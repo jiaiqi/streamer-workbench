@@ -1,6 +1,6 @@
 """主播工作台本地后端兼容入口。
 
-运行：uvicorn server.main:app --reload --port 8000
+运行：python -m server --reload --port 8000
 """
 import logging
 
