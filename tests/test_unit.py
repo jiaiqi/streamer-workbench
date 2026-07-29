@@ -1084,13 +1084,15 @@ def test_event_v2_route_idempotency_and_conflict():
 
 def test_preset_api_rejects_malformed_query_and_protects_default_flag():
     import tempfile
-    import core.data.presets as presets_store
     import server.routers.presets as presets_router
+    from server.ports.repositories import BackupPolicy
+    from server.repositories.presets import FilePresetRepository
 
     with tempfile.TemporaryDirectory() as data_root:
-        presets_dir = presets_store.init_presets(data_root)
+        repository = FilePresetRepository(
+            os.path.join(data_root, "presets"), BackupPolicy(os.path.join(data_root, "backups")))
         request = _request_for_library(SongLibrary([]))
-        request.app.state.context.preset_repository = presets_dir
+        request.app.state.context.preset_repository = repository
         try:
             malformed = presets_router.api_presets_save({"name": "坏数据", "song_query": "不是对象"}, request)
             invalid_ids = presets_router.api_presets_save({
@@ -1102,10 +1104,10 @@ def test_preset_api_rejects_malformed_query_and_protects_default_flag():
             default = presets_router.api_presets_save({
                 "id": "_default", "name": "默认预设", "is_default": False,
             }, request)
-            saved_ordinary = presets_store.load("ordinary", presets_dir)
-            saved_default = presets_store.load("_default", presets_dir)
+            saved_ordinary = repository.get("ordinary").value
+            saved_default = repository.get("_default").value
         finally:
-            pass
+            repository.close()
     assert malformed.status_code == 400
     assert invalid_ids.status_code == 400
     assert ordinary["ok"] is True and saved_ordinary.is_default is False

@@ -3,7 +3,6 @@ import json
 import logging
 import os
 
-from core.data.presets import init_presets
 from core.data.songs import SongLibrary, build_default_library
 from core.themes.loader import load_themes
 
@@ -48,7 +47,6 @@ def initialize_legacy_state(app, paths):
     app.state.themes = load_themes(str(paths.themes_dir))
     app.state.export_jobs = {}
     app.state.thumb_cache = {}
-    app.state.presets_dir = init_presets(str(paths.data_root))
 
 
 def get_themes(state) -> dict:

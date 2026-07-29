@@ -95,12 +95,13 @@ def test_lifespan_builds_and_releases_context():
                 song_repository = context.song_repository
                 settings_repository = context.settings_repository
                 event_store = context.event_store
+                preset_repository = context.preset_repository
                 assert context.export_job_manager is app.state.export_jobs
                 assert (data_root / "tabs").is_dir()
                 assert (data_root / "presets").is_dir()
             assert not hasattr(app.state, "context")
             for operation in (song_repository.load, settings_repository.load,
-                              event_store.flush):
+                              preset_repository.list, event_store.flush):
                 try:
                     operation()
                     assert False, "lifespan 退出后 Repository 必须关闭"
@@ -197,6 +198,9 @@ def test_nested_lifespans_http_writes_stay_in_request_app():
                 status, songs = await request(reopened, "GET", "/api/songs/list")
                 assert status == 200
                 assert any(song["title"] == "只属于 A" for song in songs["songs"])
+                status, presets = await request(reopened, "GET", "/api/presets")
+                assert status == 200
+                assert any(item["id"] == "only-a" for item in presets)
 
     asyncio.run(scenario())
 
