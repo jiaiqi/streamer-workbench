@@ -81,7 +81,13 @@ test("normalizes network failures", async () => {
 
 test("normalizes timeout but preserves caller cancellation", async () => {
   const waitForAbort: typeof fetch = async (_url, init) => new Promise((_resolve, reject) => {
-    init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    // AbortSignal.timeout() 的内部计时器不会保持 Node 事件循环存活；测试需显式
+    // 保持事件循环，避免 CI 在 timeout signal 触发前把 pending Promise 取消。
+    const keepAlive = setTimeout(() => reject(new Error("abort signal was not received")), 1_000);
+    init?.signal?.addEventListener("abort", () => {
+      clearTimeout(keepAlive);
+      reject(init.signal?.reason);
+    }, { once: true });
   });
   const timeoutRequest = createApiClient({ fetch: waitForAbort, timeoutMs: 1 });
   await assert.rejects(
