@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════
-   歌单海报生成器 · React 前端样式（Tailwind 4 @theme）
+   主播工作台（streamer-workbench）· React 前端样式（Tailwind 4 @theme）
 
    设计令牌源：design-tokens.json v2（2026-07-27）
    品牌：画廊白 Art Gallery（工具界面使用） / 暗色舞台 Cinematic Stage（落地页使用）
@@ -54,7 +54,7 @@
   --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
 }
 
-/* ── 全局基调（晨光纸感）── */
+/* ── 全局基调（画廊白 Art Gallery · 亮态；暗态令牌待 R5b 从 design-tokens.json 同源派生）── */
 body {
   background: var(--color-background);
   color: var(--color-foreground);

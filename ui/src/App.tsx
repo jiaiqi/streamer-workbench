@@ -11,9 +11,7 @@ const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
   { id: "library", label: "歌曲库", icon: Icon.list },
   { id: "learning", label: "学歌管理", icon: Icon.book },
-  { id: "themes", label: "主题管理", icon: Icon.palette, soon: true },
-  { id: "presets", label: "场景预设", icon: Icon.bookmark, soon: true },
-  { id: "history", label: "导出历史", icon: Icon.history, soon: true },
+  // 主题管理/场景预设/导出历史不作占位导航：按路线图改为工作台内资源面板时再上线
 ];
 
 /* ==================== App ==================== */
@@ -179,14 +177,12 @@ export default function App() {
         {navItems.map(item => (
           <button
             key={item.id}
-            title={item.soon ? `${item.label} · 敬请期待` : item.label}
-            onClick={() => !item.soon && setView(item.id)}
-            disabled={!!item.soon}
+            title={item.label}
+            aria-label={item.label}
+            onClick={() => setView(item.id)}
             className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-200 group ${item.id === view
               ? (dark ? "bg-emerald-500/20 text-emerald-400" : "bg-primary-soft text-primary")
-              : item.soon
-                ? (dark ? "text-zinc-700 cursor-not-allowed" : "text-muted-foreground/40 cursor-not-allowed")
-                : (dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
+              : (dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
             }`}
           >
             {item.icon}
@@ -196,7 +192,7 @@ export default function App() {
                 color: dark ? "#e4e4e7" : "var(--color-card-foreground)",
                 border: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "var(--color-border)"}`,
               }}
-            >{item.soon ? `${item.label} · 敬请期待` : item.label}</span>
+            >{item.label}</span>
           </button>
         ))}
 
@@ -214,20 +210,20 @@ export default function App() {
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
         {/* header */}
         <header className={`flex h-11 shrink-0 items-center gap-5 border-b px-5 text-[13px] transition-colors duration-500 ${dark ? "border-zinc-700/50 text-zinc-500" : "border-border text-muted-foreground"}`}>
-          <span className={`font-serif text-[15px] font-semibold tracking-wide ${dark ? "text-zinc-200" : "text-foreground"}`}>歌单海报</span>
-          <span className={`h-4 w-px ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
-          <span>{themes.length} 个主题 · {maxPage} 页</span>
-          <span className={`h-4 w-px ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
-          <span>已会 {songStats?.active ?? "—"} · 未会 {songStats?.draft ?? "—"}</span>
+          <span className={`font-serif text-[15px] font-semibold tracking-wide whitespace-nowrap ${dark ? "text-zinc-200" : "text-foreground"}`}>主播工作台</span>
+          <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
+          <span className="hidden min-[800px]:inline whitespace-nowrap">{themes.length} 个主题 · {maxPage} 页</span>
+          <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
+          <span className="hidden min-[800px]:inline whitespace-nowrap">已会 {songStats?.active ?? "—"} · 未会 {songStats?.draft ?? "—"}</span>
           {lastRenderMs !== null && (
-            <span className="ml-auto tabular-nums">渲染 {Math.round(lastRenderMs)}ms/张</span>
+            <span className="ml-auto tabular-nums hidden min-[800px]:inline">渲染 {Math.round(lastRenderMs)}ms/张</span>
           )}
         </header>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* ===== LEFT: theme list（仅工作台视图显示） ===== */}
+          {/* ===== LEFT: theme list（仅工作台视图显示，<800px 隐藏） ===== */}
           {view === "workspace" && (
-          <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
+          <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
             <div className="px-4 pt-4 pb-2">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">主题 · {themes.length}</p>
             </div>
