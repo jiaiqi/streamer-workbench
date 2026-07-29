@@ -37,7 +37,8 @@ AGENTS 铁律 / 已批准 ADR
 - 不重写技术栈，继续采用 Python + Pillow、FastAPI、React + Vite 和 Electron；
 - 当前唯一活跃阶段是 R0；
 - R0 重点是 `song_id` 全链路、AppContext、Repository 写入可靠性、类型化 API、用户目录和本地服务安全；
-- R1 使用现有 `grid-wrap` 验证“独立海报 → 歌曲集合 → 布局/主题/比例 → 自动分页 → 导出”，不以新布局为退出条件；
+- 导出纵向切片已由 Application Service 接管：Router 只映射 HTTP，ExportSnapshot 冻结文档、绝对目标和来源修订，后台任务不再回读 Repository；
+- R1a 使用 `grid-wrap` 验证独立海报兼容闭环并保持固定两页；R1b 用具体的 `magazine-flow` 验证自动分页，不提前建设通用运行时；
 - 海报由独立 PosterDocument 持有；LiveSession 只管理规则、点歌、队列和演唱结果；
 - Layout 与 Theme 多对多，比例和分页由 Layout 能力声明；旧 `grid-wrap` 仍固定两页兼容；
 - 点歌规则可配置且版本化，点歌人/权益来源可选，高价值礼物默认仅申请插队并由主播确认；

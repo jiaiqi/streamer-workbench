@@ -14,7 +14,12 @@ from core.data.songs import Song, SongLibrary
 from core.spec import get_canvas_spec
 from core.themes.loader import load_themes
 from server.ports.repositories import StoredSnapshot
-from server.services.export import ExportJobInput, ExportTarget, run_export_job
+from server.services.export import (
+    ExportJobInput,
+    ExportTarget,
+    create_export_snapshot,
+    run_export_job,
+)
 from server.services.render_document import build_render_document
 
 
@@ -70,11 +75,20 @@ def test_equivalent_input_has_stable_document_identity_and_revisions():
     assert first.source_revisions.settings == "settings-1"
 
 
-def test_preview_and_export_routers_share_the_same_builder():
-    import server.routers.export as export_router
+def _job_input(job_id, document, target, store, state):
+    snapshot = create_export_snapshot(
+        job_id=job_id,
+        documents=(document,),
+        targets=(ExportTarget(target, "海洋柔光", 1),),
+    )
+    return ExportJobInput(snapshot, store, state)
+
+
+def test_preview_router_and_export_service_share_the_same_builder():
+    import server.services.export as export_service
     import server.routers.render as render_router
 
-    assert render_router.build_render_document is export_router.build_render_document
+    assert render_router.build_render_document is export_service.build_render_document
 
 
 def test_export_job_uses_only_frozen_input_and_reports_after_publish():
@@ -85,14 +99,47 @@ def test_export_job_uses_only_frozen_input_and_reports_after_publish():
         target = Path(raw) / "frozen.png"
         state = {"status": "running", "done": 0, "total": 1, "current": "",
                  "files": [], "output_dir": raw, "total_ms": None, "error": None}
-        job = ExportJobInput("job-frozen", (document,),
-                             (ExportTarget(target, "海洋柔光", 1),), store, state)
+        job = _job_input("job-frozen", document, target, store, state)
         run_export_job(job)
         assert state["status"] == "done"
         assert target.is_file() and target.stat().st_size > 0
         assert store.events[0]["meta"]["document_ids"] == [document.document_id]
+        assert store.events[0]["meta"]["snapshot_id"] == job.snapshot.snapshot_id
+        assert job.snapshot.job_id == "job-frozen"
         assert not hasattr(job, "request") and not hasattr(job, "context")
         assert not hasattr(job, "repository")
+
+
+def test_export_snapshot_rejects_partial_or_relative_targets():
+    document, _, _ = _document()
+    with tempfile.TemporaryDirectory() as raw:
+        absolute = Path(raw) / "valid.png"
+        try:
+            create_export_snapshot(
+                job_id="job-mismatch",
+                documents=(document,),
+                targets=(),
+            )
+            assert False, "快照不得接受不等量输入"
+        except ValueError:
+            pass
+        try:
+            create_export_snapshot(
+                job_id="job-relative",
+                documents=(document,),
+                targets=(ExportTarget(Path("relative.png"), "海洋柔光", 1),),
+            )
+            assert False, "快照不得接受相对导出目标"
+        except ValueError:
+            pass
+        snapshot = create_export_snapshot(
+            job_id="job-valid",
+            documents=(document,),
+            targets=(ExportTarget(absolute, "海洋柔光", 1),),
+            created_at="2026-07-29T12:00:00+08:00",
+        )
+        assert snapshot.snapshot_id.startswith("export_")
+        assert snapshot.targets[0].path == absolute
 
 
 def test_export_failure_does_not_publish_target_or_success_event():
@@ -107,8 +154,8 @@ def test_export_failure_does_not_publish_target_or_success_event():
             target = Path(raw) / "failed.png"
             state = {"status": "running", "done": 0, "total": 1, "current": "",
                      "files": [], "output_dir": raw, "total_ms": None, "error": None}
-            run_export_job(ExportJobInput(
-                "job-failed", (document,), (ExportTarget(target, "主题", 1),), store, state))
+            run_export_job(_job_input(
+                "job-failed", document, target, store, state))
             assert state["status"] == "error"
             assert not target.exists()
             assert store.events == []
@@ -150,9 +197,8 @@ def test_two_apps_run_real_exports_with_isolated_jobs_events_and_files():
                         target = context.paths.data_root / "exports" / f"{label}.png"
                         state = _job_state(target.parent)
                         context.export_job_manager[f"job-{label}"] = state
-                        context.export_job_manager.start(ExportJobInput(
-                            f"job-{label}", (document,),
-                            (ExportTarget(target, "海洋柔光", 1),),
+                        context.export_job_manager.start(_job_input(
+                            f"job-{label}", document, target,
                             context.event_store, state))
                         states.append(state)
                     for state in states:
@@ -196,9 +242,9 @@ def test_queued_export_keeps_frozen_song_preset_settings_and_output_target():
                     preset_revision=preset.revision)
                 target = old_output / "frozen.png"
                 state = _job_state(old_output)
-                job = ExportJobInput("job-snapshot", (document,),
-                                     (ExportTarget(target, "海洋柔光", 1),),
-                                     context.event_store, state)
+                job = _job_input(
+                    "job-snapshot", document, target,
+                    context.event_store, state)
 
                 songs.value.songs[0].title = "入队后改名"
                 context.song_repository.save(songs.value, expected_revision=songs.revision)
