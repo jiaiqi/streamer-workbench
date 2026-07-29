@@ -90,6 +90,11 @@ class PresetDuplicateResponse(BaseModel):
     name: str
 
 
+class PresetDefaultResponse(BaseModel):
+    ok: bool = True
+    id: str
+
+
 class OkResponse(BaseModel):
     ok: bool = True
 

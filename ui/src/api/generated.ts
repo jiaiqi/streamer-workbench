@@ -90,6 +90,12 @@ export interface OkResponse {
   [key: string]: unknown;
 }
 
+export interface PresetDefaultResponse {
+  "id": string;
+  "ok"?: boolean;
+  [key: string]: unknown;
+}
+
 export interface PresetDuplicateRequest {
   "name"?: string;
 }

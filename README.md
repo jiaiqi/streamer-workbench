@@ -2,7 +2,7 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-07-29）**：旧 `grid-wrap` 金标准保持 16/16 diff=0；S1–S3.5、R0.1–R0.6 已完成。R0.7 已完成四类文件 Repository、Preset 崩溃恢复、EventStore 索引、跨 app 组合可靠性，以及导出、歌曲核心写入和曲谱附件三条 Application Service 纵向切片。曲谱附件现在以 journal 协调文件、`Song.tab_files`、Repository CAS 和幂等事件，支持失败回滚与启动恢复；Preset 和设置用例仍待迁移，因此 R0.7 继续标为进行中。R0.8 仅完成错误/API 合约基础，用户数据目录和本地服务安全仍待后续阶段。R1a 将用 `grid-wrap` 跑通独立海报固定两页兼容闭环；R1b 再用具体的 `magazine-flow` 验证自动分页，避免破坏旧金标准或提前建设通用运行时。海报不依赖直播场次；直播点歌使用独立的规则、权益、队列和结果台账。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
+> **进度快照（2026-07-29）**：旧 `grid-wrap` 金标准保持 16/16 diff=0；S1–S3.5、R0.1–R0.6 已完成。R0.7 已完成四类文件 Repository、Preset 崩溃恢复、EventStore 索引、跨 app 组合可靠性，以及导出、歌曲核心写入、曲谱附件和 Preset 四条 Application Service 纵向切片。Preset 的创建、完整更新、复制、软删除和默认切换现在统一经过服务端身份/时间/CAS 规则；设置用例仍待迁移，因此 R0.7 继续标为进行中。R0.11 Preset/API 欠账已关闭。R0.8 仅完成错误/API 合约基础，用户数据目录和本地服务安全仍待后续阶段。R1a 将用 `grid-wrap` 跑通独立海报固定两页兼容闭环；R1b 再用具体的 `magazine-flow` 验证自动分页，避免破坏旧金标准或提前建设通用运行时。海报不依赖直播场次；直播点歌使用独立的规则、权益、队列和结果台账。文档入口见 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >
 > **单仓库说明（2026-07-27 合并）**：原 `playlist-poster-design` 设计仓库已并入本仓库 `.archive/design-docs/`（原 `design-docs/`，点号开头表示已归档；完整历史保留，GitHub 旧仓库已归档只读）。金标准预言机位于 `.archive/design-docs/歌单-排版一/`，随仓库检出，无需软链。
 
@@ -56,7 +56,7 @@ $env:PYTHONUTF8='1'
 cd ui; npx tsc --noEmit
 ```
 
-当前 CI 质量基线为 Python 测试 168 项、前端测试 12 项、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
+当前 CI 质量基线为 Python 测试 174 项、前端测试 12 项、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
 
 ## 后端 API
 
@@ -65,7 +65,7 @@ cd ui; npx tsc --noEmit
 - 健康与资源：`GET /api/health`、`/api/themes`、`/api/layouts`、`/api/layouts/{id}/params`；
 - 歌曲与曲谱：`/api/songs*`、`/api/songs/{identity}/tabs`（`song_id` 优先，title 仅为迁移期兼容）；
 - 渲染与导出：`GET /api/render`、`POST /api/export`、`POST /api/export/batch`；
-- 事件、设置、预设：`/api/events*`、`/api/settings`、`/api/presets*`。
+- 事件、设置、预设：`/api/events*`、`/api/settings`、`/api/presets*`；预设支持复制、软删除与 `POST /api/presets/{id}/default` 默认切换。
 
 目标 API 契约和迁移阶段见主规格 §10.3 与路线图 R0；README 不重复维护完整参数表。
 

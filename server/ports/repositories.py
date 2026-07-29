@@ -14,6 +14,7 @@ T = TypeVar("T")
 SettingsDocument: TypeAlias = dict[str, Any]
 EventRecord: TypeAlias = dict[str, Any]
 EventV2: TypeAlias = dict[str, Any]
+MISSING_REVISION = "missing"
 
 
 @dataclass(frozen=True)
