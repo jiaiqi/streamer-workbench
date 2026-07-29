@@ -13,6 +13,7 @@ export interface Layout {
   supports_avoidance: boolean;
 }
 export interface Song {
+  id: string;
   title: string;
   status: string;
   section: number | null;
