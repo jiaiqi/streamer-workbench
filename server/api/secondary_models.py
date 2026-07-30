@@ -145,6 +145,90 @@ class PresetDefaultResponse(BaseModel):
     id: str
 
 
+# ── R1a.1 Poster ──
+# 严格模型：每个字段都给出；未知字段前端会被 Pydantic 拒收，
+# 防御未来 schema 漂移。Poster 的范围保护（仅 grid-wrap + legacy-fixed-2）
+# 由 service.validate() 完成；这里只做传输形校验。
+
+class PosterSongSource(BaseModel):
+    type: str  # all_active | manual | artist
+    artists: list[str] = Field(default_factory=list)
+
+
+class PosterPagePolicy(BaseModel):
+    mode: str = "legacy-fixed-2"
+    min_pages: int | None = None
+    max_pages: int | None = None
+    manual_pages: list[dict] = Field(default_factory=list)
+
+
+class PosterExportSettings(BaseModel):
+    format: str = "png"          # png | jpeg
+    jpeg_quality: int = 92
+    single_page: bool = False
+    dpi: int = 144
+
+
+class PosterRequest(StrictRequest):
+    """创建或完整更新海报载荷。
+
+    所有字段必填；省略会触发 Pydantic 校验，可保证 service 收不到
+    不完整数据。范围保护由 service 强制。
+    """
+    id: str = ""                # 创建：可空，service 自动生成；更新：必填已存在 id
+    name: str
+    song_source: PosterSongSource
+    selected_song_ids: list[str] = Field(default_factory=list)
+    grouping: str = "none"
+    sorting: str = "manual"
+    layout_id: str = "grid-wrap"
+    theme_id: str = "海洋柔光"
+    canvas_id: str = "9:20"
+    page_policy: PosterPagePolicy = Field(default_factory=PosterPagePolicy)
+    parameters: dict = Field(default_factory=dict)
+    export_settings: PosterExportSettings = Field(default_factory=PosterExportSettings)
+    # 可选引用关系；不影响持久化生命周期
+    optional_session_ref: str | None = None
+
+
+class PosterResponse(PosterRequest):
+    schema_version: int = 1
+    id: str
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class PosterSummaryResponse(BaseModel):
+    id: str
+    name: str
+    layout_id: str
+    theme_id: str
+    canvas_id: str
+    created_at: str
+    updated_at: str
+    song_count: int
+
+
+class PosterSaveResponse(BaseModel):
+    ok: bool = True
+    id: str
+    revision: str
+    updated_at: str
+
+
+class PosterResolveSong(BaseModel):
+    id: str
+    title: str
+    artists: list[str]
+    section: int
+
+
+class PosterResolveResponse(BaseModel):
+    poster_id: str
+    songs: list[PosterResolveSong]
+    missing_song_ids: list[str]
+
+
 class OkResponse(BaseModel):
     ok: bool = True
 

@@ -19,11 +19,13 @@ from server.context import AppContext
 from server.dependencies import get_app_context
 from server.ports.repositories import BackupPolicy, RepositoryRecoveryRequired
 from server.repositories.events import FileEventStore
+from server.repositories.posters import FilePosterRepository
 from server.repositories.presets import FilePresetRepository
 from server.repositories.settings import FileSettingsRepository
 from server.repositories.songs import FileSongRepository
 from server.services.data_dir import DataDirectoryService
 from server.services.export import ExportApplicationService
+from server.services.posters import PosterApplicationService
 from server.services.presets import PresetApplicationService
 from server.services.songs import SongApplicationService
 from server.services.settings import SettingsApplicationService
@@ -53,10 +55,14 @@ def _lifespan(config: AppConfig, paths):
             preset_repository = FilePresetRepository(
                 paths.presets_dir, BackupPolicy(paths.backups_dir / "presets"))
             resources.append(preset_repository)
+            poster_repository = FilePosterRepository(
+                paths.posters_dir, BackupPolicy(paths.backups_dir / "posters"))
+            resources.append(poster_repository)
             # 启动时完成 Schema 校验，损坏数据阻止 context 发布。
             song_repository.load()
             settings_repository.load()
             preset_repository.recover()
+            poster_repository.recover()
             if preset_repository.get("_default") is None:
                 from core.data.presets import Preset
                 preset_repository.save(Preset.default(), expected_revision=None)
@@ -74,6 +80,10 @@ def _lifespan(config: AppConfig, paths):
             )
             preset_service = PresetApplicationService(
                 preset_repository=preset_repository,
+            )
+            poster_service = PosterApplicationService(
+                poster_repository=poster_repository,
+                song_repository=song_repository,
             )
             settings_service = SettingsApplicationService(
                 settings_repository=settings_repository,
@@ -95,6 +105,7 @@ def _lifespan(config: AppConfig, paths):
                 song_repository=song_repository, event_store=event_store,
                 preset_repository=preset_repository,
                 settings_repository=settings_repository,
+                poster_repository=poster_repository,
                 render_service=render_page,
                 song_service=song_service,
                 preset_service=preset_service,
@@ -103,6 +114,7 @@ def _lifespan(config: AppConfig, paths):
                 tab_service=tab_service,
                 export_service=export_service,
                 export_job_manager=app.state.export_jobs, themes=app.state.themes,
+                poster_service=poster_service,
             )
             app.state.context = context
             try:
@@ -148,13 +160,14 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.mount("/tabs", StaticFiles(directory=str(paths.tabs_dir), check_dir=False),
               name="song_tabs")
 
-    from server.routers import songs, render, export, events, settings, presets
+    from server.routers import songs, render, export, events, settings, presets, posters
     app.include_router(songs.router)
     app.include_router(render.router)
     app.include_router(export.router)
     app.include_router(events.router)
     app.include_router(settings.router)
     app.include_router(presets.router)
+    app.include_router(posters.router)
 
     @app.get("/api/health")
     def health(request: Request):

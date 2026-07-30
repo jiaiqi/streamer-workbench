@@ -17,6 +17,7 @@ class AppContext:
     event_store: Any
     preset_repository: Any
     settings_repository: Any
+    poster_repository: Any
     render_service: Any
     song_service: Any
     preset_service: Any
@@ -25,4 +26,5 @@ class AppContext:
     tab_service: Any
     export_service: Any
     export_job_manager: Any
-    themes: Mapping[str, Any]
+    poster_service: Any                  # R1a.1 增量
+    themes: Mapping[str, Any]  

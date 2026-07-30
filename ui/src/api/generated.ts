@@ -133,6 +133,98 @@ export interface OkResponse {
   [key: string]: unknown;
 }
 
+export interface PosterExportSettings {
+  "dpi"?: number;
+  "format"?: string;
+  "jpeg_quality"?: number;
+  "single_page"?: boolean;
+  [key: string]: unknown;
+}
+
+export interface PosterPagePolicy {
+  "manual_pages"?: Array<Record<string, unknown>>;
+  "max_pages"?: number | null;
+  "min_pages"?: number | null;
+  "mode"?: string;
+  [key: string]: unknown;
+}
+
+export interface PosterRequest {
+  "canvas_id"?: string;
+  "export_settings"?: PosterExportSettings;
+  "grouping"?: string;
+  "id"?: string;
+  "layout_id"?: string;
+  "name": string;
+  "optional_session_ref"?: string | null;
+  "page_policy"?: PosterPagePolicy;
+  "parameters"?: Record<string, unknown>;
+  "selected_song_ids"?: Array<string>;
+  "song_source": PosterSongSource;
+  "sorting"?: string;
+  "theme_id"?: string;
+}
+
+export interface PosterResolveResponse {
+  "missing_song_ids": Array<string>;
+  "poster_id": string;
+  "songs": Array<PosterResolveSong>;
+  [key: string]: unknown;
+}
+
+export interface PosterResolveSong {
+  "artists": Array<string>;
+  "id": string;
+  "section": number;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface PosterResponse {
+  "canvas_id"?: string;
+  "created_at"?: string;
+  "export_settings"?: PosterExportSettings;
+  "grouping"?: string;
+  "id": string;
+  "layout_id"?: string;
+  "name": string;
+  "optional_session_ref"?: string | null;
+  "page_policy"?: PosterPagePolicy;
+  "parameters"?: Record<string, unknown>;
+  "schema_version"?: number;
+  "selected_song_ids"?: Array<string>;
+  "song_source": PosterSongSource;
+  "sorting"?: string;
+  "theme_id"?: string;
+  "updated_at"?: string;
+}
+
+export interface PosterSaveResponse {
+  "id": string;
+  "ok"?: boolean;
+  "revision": string;
+  "updated_at": string;
+  [key: string]: unknown;
+}
+
+export interface PosterSongSource {
+  "artists"?: Array<string>;
+  "type": string;
+  [key: string]: unknown;
+}
+
+export interface PosterSummaryResponse {
+  "canvas_id": string;
+  "created_at": string;
+  "id": string;
+  "layout_id": string;
+  "name": string;
+  "song_count": number;
+  "theme_id": string;
+  "updated_at": string;
+  [key: string]: unknown;
+}
+
 export interface PresetDefaultResponse {
   "id": string;
   "ok"?: boolean;
