@@ -8,6 +8,8 @@ from .repositories import (
     EventStore,
     EventV2,
     MISSING_REVISION,
+    PosterRepository,
+    PosterSummary,
     PresetRepository,
     PresetSummary,
     RepositoryClosed,
@@ -32,6 +34,8 @@ __all__ = [
     "EventStore",
     "EventV2",
     "MISSING_REVISION",
+    "PosterRepository",
+    "PosterSummary",
     "PresetRepository",
     "PresetSummary",
     "RepositoryClosed",
@@ -46,4 +50,4 @@ __all__ = [
     "SettingsRepository",
     "SongRepository",
     "StoredSnapshot",
-]
+]  
