@@ -5,6 +5,7 @@
 import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import type { PosterStore } from "./usePosterStore";
+import LayoutPicker from "./LayoutPicker";
 
 interface PostersSidebarProps {
   store: PosterStore;
@@ -69,6 +70,8 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
       <h2 className="panel-title truncate" title={store.current.name}>
         {store.current.name || "未命名海报"}
       </h2>
+
+      <LayoutPicker store={store} />
 
       <div className="flex items-center gap-2 mt-1">
         <span
