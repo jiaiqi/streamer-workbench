@@ -326,6 +326,60 @@ export interface PosterSummaryResponse {
   [key: string]: unknown;
 }
 
+export interface PracticeLogRequest {
+  "event_id"?: string;
+  "minutes"?: number;
+  "note"?: string;
+  "occurred_at"?: string;
+  "self_rating"?: number;
+  "song_id"?: string;
+  "title_snapshot"?: string;
+}
+
+export interface PracticeLogResponse {
+  "already_processed"?: boolean;
+  "event_id": string;
+  "minutes": number;
+  "note"?: string;
+  "ok"?: boolean;
+  "self_rating": number;
+  "title_snapshot"?: string;
+  [key: string]: unknown;
+}
+
+export interface PracticeMonthSummaryResponse {
+  "month": string;
+  "rated_count": number;
+  "rating_avg"?: number;
+  "total_minutes": number;
+  "total_sessions": number;
+  "unique_songs": number;
+  [key: string]: unknown;
+}
+
+export interface PracticeStatsResponse {
+  "current_streak_days": number;
+  "last_30_days": number;
+  "longest_streak_days": number;
+  "month_current_minutes"?: number;
+  "month_current_sessions"?: number;
+  "months"?: Array<Record<string, unknown>>;
+  "songs_practiced": number;
+  "top_practiced"?: Array<Record<string, unknown>>;
+  "total_minutes": number;
+  "total_sessions": number;
+  [key: string]: unknown;
+}
+
+export interface PracticeStreakResponse {
+  "current_streak": number;
+  "first_date"?: string;
+  "last_date"?: string;
+  "longest_streak": number;
+  "total_days": number;
+  [key: string]: unknown;
+}
+
 export interface PresetDefaultResponse {
   "id": string;
   "ok"?: boolean;

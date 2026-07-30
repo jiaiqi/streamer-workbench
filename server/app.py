@@ -106,6 +106,11 @@ def _lifespan(config: AppConfig, paths):
                     live_persistence_service.load_session(sid)
                 except RepositoryUnavailable:
                     logger.exception("live session 恢复失败: %s", sid)
+            # P4 R2: PracticeApplicationService 打卡 + 统计
+            from server.services.practice import PracticeApplicationService
+            practice_service = PracticeApplicationService(
+                event_store=event_store, song_repository=song_repository,
+            )
             settings_service = SettingsApplicationService(
                 settings_repository=settings_repository,
             )
@@ -128,6 +133,7 @@ def _lifespan(config: AppConfig, paths):
                 settings_repository=settings_repository,
                 poster_repository=poster_repository,
                 live_persistence_service=live_persistence_service,
+                practice_service=practice_service,
                 render_service=render_page,
                 song_service=song_service,
                 preset_service=preset_service,
@@ -183,7 +189,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
               name="song_tabs")
 
     from server.routers import songs, render, export, events, settings, presets, posters
-    from server.routers import live
+    from server.routers import live, practice
     app.include_router(songs.router)
     app.include_router(render.router)
     app.include_router(export.router)
@@ -192,6 +198,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(presets.router)
     app.include_router(posters.router)
     app.include_router(live.router)
+    app.include_router(practice.router)
 
     @app.get("/api/health")
     def health(request: Request):

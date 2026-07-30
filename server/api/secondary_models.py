@@ -414,3 +414,56 @@ class LiveSessionEntitlementResponse(BaseModel):
     remaining: int
     granted_at: str
     expires_at: str | None = None
+
+
+# ── P4 R2 学歌练习 HTTP 模型 ───────────────────────────────────
+
+class PracticeLogRequest(StrictRequest):
+    """POST /api/practice/log — 打卡。"""
+    song_id: str = ""
+    title_snapshot: str = ""
+    minutes: int = 1
+    self_rating: int = 0
+    note: str = ""
+    occurred_at: str = ""
+    event_id: str = ""
+
+
+class PracticeLogResponse(BaseModel):
+    ok: bool = True
+    event_id: str
+    already_processed: bool = False
+    minutes: int
+    self_rating: int
+    note: str = ""
+    title_snapshot: str = ""
+
+
+class PracticeStatsResponse(BaseModel):
+    total_minutes: int
+    total_sessions: int
+    current_streak_days: int
+    longest_streak_days: int
+    last_30_days: int
+    songs_practiced: int
+    top_practiced: list[dict] = Field(default_factory=list)
+    month_current_minutes: int = 0
+    month_current_sessions: int = 0
+    months: list[dict] = Field(default_factory=list)
+
+
+class PracticeStreakResponse(BaseModel):
+    current_streak: int
+    longest_streak: int
+    total_days: int
+    first_date: str = ""
+    last_date: str = ""
+
+
+class PracticeMonthSummaryResponse(BaseModel):
+    month: str
+    total_minutes: int
+    total_sessions: int
+    unique_songs: int
+    rated_count: int
+    rating_avg: float = 0.0
