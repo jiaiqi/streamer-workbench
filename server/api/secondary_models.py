@@ -45,6 +45,46 @@ class SettingsUpdateResponse(BaseModel):
     settings: SettingsResponse
 
 
+class DataDirStatusResponse(BaseModel):
+    current: str
+    source: str
+    source_label: str
+    startup_config: str
+    platform_default: str | None = None
+    pinned: bool = False
+
+
+class DataDirInspectRequest(StrictRequest):
+    path: str
+
+
+class DataDirInspectResponse(BaseModel):
+    path: str
+    valid: bool
+    message: str = ""
+    exists: bool = False
+    is_current: bool = False
+    parent_writable: bool = False
+    has_existing_data: bool = False
+    existing_items: list[str] = Field(default_factory=list)
+    will_initialize: bool = False
+
+
+class DataDirSwitchRequest(StrictRequest):
+    path: str
+    migrate: bool = False
+    use_existing: bool = False
+
+
+class DataDirSwitchResponse(BaseModel):
+    ok: bool = True
+    data_root: str
+    startup_config: str
+    requires_restart: bool = True
+    migrated: list[str] = Field(default_factory=list)
+    used_existing: bool = False
+
+
 class SongQueryRequest(StrictRequest):
     status: str = "active"
     classify: str = "chars"

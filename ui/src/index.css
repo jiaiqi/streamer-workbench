@@ -168,6 +168,9 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 .field-control:focus { border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-primary-soft); }
 .field-control:disabled { opacity:.5; }.short-field { width:120px; }.field-pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .warning-note { color:var(--color-warning); }
+.settings-inline-actions { display:flex; align-items:center; gap:10px; margin-top:12px; }
+.field-checkbox { display:flex; align-items:center; gap:8px; }
+.field-checkbox input { width:14px; height:14px; accent-color:var(--color-primary); }
 .settings-actions { position:fixed; z-index:20; right:24px; bottom:20px; display:flex; align-items:center; gap:14px; padding:8px; border:1px solid var(--color-border); border-radius:16px; background:color-mix(in srgb,var(--color-card) 92%,transparent); box-shadow:var(--shadow-lg); backdrop-filter:blur(18px); }
 .save-status { max-width:360px; color:var(--color-muted-foreground); font-size:11px; }
 .state-error { flex-direction:column; color:var(--color-danger); }

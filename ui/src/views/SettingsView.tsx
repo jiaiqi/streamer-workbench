@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ACCENT_OPTIONS, APPEARANCE_OPTIONS, normalizeAppearance } from "../appearance";
 import { apiRequest } from "../api/client";
 import type { SettingsUpdateResponse } from "../api/generated";
+import DataDirPanel from "../components/DataDirPanel";
 import type { AppearanceSettings, Settings, Theme } from "../types";
 import { CANVAS_OPTIONS } from "../types";
 
@@ -127,9 +128,10 @@ export default function SettingsView({
           <p className="field-note">默认值仅在没有上次工作区记录时生效。</p>
         </section>
 
+        <DataDirPanel />
+
         <section className="settings-card">
-          <div className="section-heading"><span>数据与安全</span></div>
-          <label className="field-label">自动备份保留份数<input className={`${fieldClass} short-field`} type="number" min={0} max={100} value={form.backup_count} onChange={event => setForm({ ...form, backup_count: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
+          <div className="section-heading"><span>数据与安全</span></div>          <label className="field-label">自动备份保留份数<input className={`${fieldClass} short-field`} type="number" min={0} max={100} value={form.backup_count} onChange={event => setForm({ ...form, backup_count: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
           <p className="field-note">每次变更歌曲数据前自动备份，超出数量后滚动清理；设为 0 可停用新备份。</p>
         </section>
 

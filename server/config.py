@@ -181,25 +181,42 @@ def _startup_data_root(path: Path) -> Path | None:
     return _absolute(Path(raw)) if raw else None
 
 
+DataRootSource = Literal[
+    "explicit", "environment", "startup", "development", "platform",
+]
+
+
+def resolve_data_root_source(
+    config: AppConfig, *,
+    environ: Mapping[str, str] | None = None,
+    platform: str | None = None,
+    home: Path | None = None,
+) -> tuple[Path, Path, DataRootSource]:
+    """解析数据目录并报告来源；优先级与 resolve_data_root 完全一致。"""
+    environ = environ if environ is not None else os.environ
+    startup_path = config.startup_config_path or platform_startup_config(
+        platform, environ, home)
+    if config.data_root is not None:
+        return config.data_root, startup_path, "explicit"
+    env_value = str(environ.get(DATA_DIR_ENV) or "").strip()
+    if env_value:
+        return _absolute(Path(env_value)), startup_path, "environment"
+    from_startup = _startup_data_root(startup_path)
+    if from_startup is not None:
+        return from_startup, startup_path, "startup"
+    if config.mode == "development":
+        return config.project_root / "data", startup_path, "development"
+    return platform_data_root(platform, environ, home), startup_path, "platform"
+
+
 def resolve_data_root(config: AppConfig, *,
                       environ: Mapping[str, str] | None = None,
                       platform: str | None = None,
                       home: Path | None = None) -> tuple[Path, Path]:
     """按显式配置、环境、启动配置、开发目录、平台默认值依次解析。"""
-    environ = environ if environ is not None else os.environ
-    startup_path = config.startup_config_path or platform_startup_config(
-        platform, environ, home)
-    if config.data_root is not None:
-        return config.data_root, startup_path
-    env_value = str(environ.get(DATA_DIR_ENV) or "").strip()
-    if env_value:
-        return _absolute(Path(env_value)), startup_path
-    from_startup = _startup_data_root(startup_path)
-    if from_startup is not None:
-        return from_startup, startup_path
-    if config.mode == "development":
-        return config.project_root / "data", startup_path
-    return platform_data_root(platform, environ, home), startup_path
+    data_root, startup_path, _source = resolve_data_root_source(
+        config, environ=environ, platform=platform, home=home)
+    return data_root, startup_path
 
 
 def build_app_paths(config: AppConfig, *,
