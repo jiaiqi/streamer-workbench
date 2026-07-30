@@ -1,11 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Song } from "../types";
 import { apiRequest } from "../api/client";
 import { toRequestFailure } from "../async/requestState";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
-/* ---- 歌曲编辑对话框（增删改全字段，弹唱信息独立分组） ---- */
-export default function SongEditDialog({ dark, target, onClose, onSaved }: {
-  dark: boolean;
+/* ---- 歌曲编辑对话框（增删改全字段，弹唱信息独立分组）----
+   基于 shadcn/ui Dialog：自带焦点锁定、Escape、遮罩关闭与 aria 属性。
+   保存中禁止关闭；语义令牌驱动亮暗，不再接收 dark prop。 */
+export default function SongEditDialog({ target, onClose, onSaved }: {
   target: Song | "new";
   onClose: () => void;
   onSaved: () => Promise<void>;
@@ -25,15 +44,6 @@ export default function SongEditDialog({ dark, target, onClose, onSaved }: {
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-
-  // Esc 关闭（保存中不响应）——输入框聚焦时也要生效
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !saving) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [saving, onClose]);
 
   const save = async () => {
     if (saving) return;
@@ -62,107 +72,112 @@ export default function SongEditDialog({ dark, target, onClose, onSaved }: {
     } finally { setSaving(false); }
   };
 
-  const inputCls = `mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-muted border border-border text-foreground"}`;
-  const innerCls = `mt-1 w-full rounded-lg px-3 py-2 text-sm outline-none ${dark ? "bg-zinc-700 text-zinc-200" : "bg-card border border-border text-foreground"}`;
+  const field = (id: string, label: React.ReactNode, node: React.ReactNode) => (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id} className="text-muted-foreground text-xs font-normal">{label}</Label>
+      {node}
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
-      onClick={() => !saving && onClose()}>
-      <div className={`w-[460px] max-h-[85vh] overflow-y-auto rounded-2xl p-6 shadow-2xl transition-colors ${dark ? "bg-zinc-800 border border-zinc-700 text-zinc-200" : "bg-card border border-border text-card-foreground"}`}
-        onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-semibold mb-4">
-          {target === "new" ? "新增歌曲" : `编辑「${target.title}」`}
-        </h3>
+    <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}>
+      <DialogContent className="sm:max-w-[460px] max-h-[85vh] overflow-y-auto"
+        onInteractOutside={e => { if (saving) e.preventDefault(); }}
+        onEscapeKeyDown={e => { if (saving) e.preventDefault(); }}>
+        <DialogHeader>
+          <DialogTitle>{target === "new" ? "新增歌曲" : `编辑「${target.title}」`}</DialogTitle>
+        </DialogHeader>
 
         <div className="space-y-3">
-          <label className="block text-xs text-muted-foreground">
-            歌名 <span className="text-red-400">*</span>
-            <input type="text" value={form.title ?? ""} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className={inputCls} />
-          </label>
+          {field("song-title", <>歌名 <span className="text-destructive">*</span></>,
+            <Input id="song-title" value={form.title ?? ""}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />)}
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs text-muted-foreground">
-              歌手（逗号分隔）
-              <input type="text" value={form.artists ?? ""} onChange={e => setForm(f => ({ ...f, artists: e.target.value }))} className={inputCls} />
-            </label>
-            <label className="block text-xs text-muted-foreground">
-              分类
-              <select value={form.section ?? ""} onChange={e => setForm(f => ({ ...f, section: e.target.value }))} className={inputCls}>
-                <option value="">自动（按字数）</option>
-                {[1, 2, 3, 4, 5, 6, 7].map(n => <option key={n} value={n}>{n === 7 ? "7+（长歌名/英文）" : `${n} 字`}</option>)}
-              </select>
-            </label>
+            {field("song-artists", "歌手（逗号分隔）",
+              <Input id="song-artists" value={form.artists ?? ""}
+                onChange={e => setForm(f => ({ ...f, artists: e.target.value }))} />)}
+            <div className="grid gap-1.5">
+              <Label className="text-muted-foreground text-xs font-normal">分类</Label>
+              <Select value={form.section || "auto"}
+                onValueChange={value => setForm(f => ({ ...f, section: value === "auto" ? "" : value }))}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">自动（按字数）</SelectItem>
+                  {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n === 7 ? "7+（长歌名/英文）" : `${n} 字`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className={`rounded-xl p-3 space-y-3 ${dark ? "bg-zinc-700/40" : "bg-muted/60"}`}>
+          <div className="rounded-xl bg-muted/60 p-3 space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">弹唱信息</p>
             <div className="grid grid-cols-3 gap-3">
-              <label className="block text-xs text-muted-foreground">
-                选调
-                <input type="text" placeholder="如 G" value={form.key ?? ""} onChange={e => setForm(f => ({ ...f, key: e.target.value }))} className={innerCls} />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                变调夹（品）
-                <input type="number" min={0} max={12} placeholder="空=未填" value={form.capo ?? ""} onChange={e => setForm(f => ({ ...f, capo: e.target.value }))} className={innerCls} />
-              </label>
-              <label className="block text-xs text-muted-foreground">
-                难度
-                <select value={form.difficulty ?? ""} onChange={e => setForm(f => ({ ...f, difficulty: e.target.value }))} className={innerCls}>
-                  <option value="">未标</option>
-                  <option value="简单">简单</option>
-                  <option value="中等">中等</option>
-                  <option value="困难">困难</option>
-                </select>
-              </label>
+              {field("song-key", "选调",
+                <Input id="song-key" placeholder="如 G" value={form.key ?? ""}
+                  onChange={e => setForm(f => ({ ...f, key: e.target.value }))} />)}
+              {field("song-capo", "变调夹（品）",
+                <Input id="song-capo" type="number" min={0} max={12} placeholder="空=未填"
+                  value={form.capo ?? ""}
+                  onChange={e => setForm(f => ({ ...f, capo: e.target.value }))} />)}
+              <div className="grid gap-1.5">
+                <Label className="text-muted-foreground text-xs font-normal">难度</Label>
+                <Select value={form.difficulty || "unset"}
+                  onValueChange={value => setForm(f => ({ ...f, difficulty: value === "unset" ? "" : value }))}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unset">未标</SelectItem>
+                    <SelectItem value="简单">简单</SelectItem>
+                    <SelectItem value="中等">中等</SelectItem>
+                    <SelectItem value="困难">困难</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <label className="block text-xs text-muted-foreground">
-              谱子（链接或来源）
-              <input type="text" value={form.tabs ?? ""} onChange={e => setForm(f => ({ ...f, tabs: e.target.value }))} className={innerCls} />
-            </label>
+            {field("song-tabs", "谱子（链接或来源）",
+              <Input id="song-tabs" value={form.tabs ?? ""}
+                onChange={e => setForm(f => ({ ...f, tabs: e.target.value }))} />)}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs text-muted-foreground">
-              作词
-              <input type="text" value={form.lyricist ?? ""} onChange={e => setForm(f => ({ ...f, lyricist: e.target.value }))} className={inputCls} />
-            </label>
-            <label className="block text-xs text-muted-foreground">
-              作曲
-              <input type="text" value={form.composer ?? ""} onChange={e => setForm(f => ({ ...f, composer: e.target.value }))} className={inputCls} />
-            </label>
+            {field("song-lyricist", "作词",
+              <Input id="song-lyricist" value={form.lyricist ?? ""}
+                onChange={e => setForm(f => ({ ...f, lyricist: e.target.value }))} />)}
+            {field("song-composer", "作曲",
+              <Input id="song-composer" value={form.composer ?? ""}
+                onChange={e => setForm(f => ({ ...f, composer: e.target.value }))} />)}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs text-muted-foreground">
-              标签（逗号分隔）
-              <input type="text" placeholder="如：小甜歌，苦情" value={form.tags ?? ""} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} className={inputCls} />
-            </label>
-            <label className="block text-xs text-muted-foreground">
-              拼音首字母
-              <input type="text" placeholder="空=自动生成" value={form.pinyin ?? ""} onChange={e => setForm(f => ({ ...f, pinyin: e.target.value }))} className={inputCls} />
-            </label>
+            {field("song-tags", "标签（逗号分隔）",
+              <Input id="song-tags" placeholder="如：小甜歌，苦情" value={form.tags ?? ""}
+                onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />)}
+            {field("song-pinyin", "拼音首字母",
+              <Input id="song-pinyin" placeholder="空=自动生成" value={form.pinyin ?? ""}
+                onChange={e => setForm(f => ({ ...f, pinyin: e.target.value }))} />)}
           </div>
 
-          <label className="block text-xs text-muted-foreground">
-            备注
-            <textarea rows={2} placeholder="如：副歌高音要降 key" value={form.notes ?? ""} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              className={`${inputCls} resize-none`} />
-          </label>
+          {field("song-notes", "备注",
+            <Textarea id="song-notes" rows={2} placeholder="如：副歌高音要降 key"
+              value={form.notes ?? ""} className="resize-none"
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />)}
         </div>
 
-        {error && <p className="mt-3 text-sm text-red-500" role="alert" aria-live="polite">{error}</p>}
+        {error && <p className="mt-3 text-sm text-destructive" role="alert" aria-live="polite">{error}</p>}
 
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={() => !saving && onClose()} disabled={saving}
-            className={`rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer disabled:opacity-50 ${dark ? "text-zinc-400 hover:text-zinc-200" : "text-muted-foreground hover:text-foreground"}`}>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => !saving && onClose()} disabled={saving}>
             取消
-          </button>
-          <button onClick={save} disabled={saving}
-            className="primary-action rounded-xl px-5 py-2 text-sm cursor-pointer disabled:opacity-50">
+          </Button>
+          <Button type="button" onClick={save} disabled={saving}>
             {saving ? "保存中…" : "保存"}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

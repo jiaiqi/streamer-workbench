@@ -440,7 +440,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
       </div>
 
       {editTarget !== null && (
-        <SongEditDialog dark={dark} target={editTarget}
+        <SongEditDialog target={editTarget}
           onClose={() => setEditTarget(null)} onSaved={refresh} />
       )}
     </main>

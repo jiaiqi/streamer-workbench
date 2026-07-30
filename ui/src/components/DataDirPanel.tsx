@@ -5,10 +5,15 @@ import type {
   DataDirStatusResponse,
   DataDirSwitchResponse,
 } from "../api/generated";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 /* ---- 数据目录面板（R0.9 / 主规格 §11.5.3）----
    契约：验证失败不切换、不丢数据；切换只写启动配置，重启后端后生效。
-   Web 开发模式手动输入绝对路径；Electron 原生目录选择器随 R2.6 接入。 */
+   Web 开发模式手动输入绝对路径；Electron 原生目录选择器随 R2.6 接入。
+   UI 组件优先使用 shadcn/ui（见 AGENTS.md 技术栈）。 */
 
 type Phase =
   | { kind: "loading" }
@@ -106,12 +111,14 @@ export default function DataDirPanel() {
 
       {status && (
         <div className="field-pair">
-          <label className="field-label">当前目录
-            <input className="field-control" type="text" value={status.current} readOnly />
-          </label>
-          <label className="field-label">来源
-            <input className="field-control" type="text" value={status.source_label} readOnly />
-          </label>
+          <div className="mt-3 grid gap-1.5">
+            <Label htmlFor="data-dir-current">当前目录</Label>
+            <Input id="data-dir-current" className="min-h-11" value={status.current} readOnly />
+          </div>
+          <div className="mt-3 grid gap-1.5">
+            <Label htmlFor="data-dir-source">来源</Label>
+            <Input id="data-dir-source" className="min-h-11" value={status.source_label} readOnly />
+          </div>
         </div>
       )}
       {status?.pinned && (
@@ -120,8 +127,9 @@ export default function DataDirPanel() {
         </p>
       )}
 
-      <label className="field-label">新目录（绝对路径）
-        <input className="field-control" type="text" value={path}
+      <div className="mt-3 grid gap-1.5">
+        <Label htmlFor="data-dir-target">新目录（绝对路径）</Label>
+        <Input id="data-dir-target" className="min-h-11" value={path}
           placeholder={status?.platform_default ?? "/绝对/路径/streamer-workbench"}
           onChange={event => {
             setPath(event.target.value);
@@ -129,18 +137,18 @@ export default function DataDirPanel() {
             setConflictItems([]);
             setDone(null);
           }} />
-      </label>
+      </div>
 
       <div className="settings-inline-actions">
-        <button type="button" className="secondary-action" disabled={busy || !path.trim()}
-          onClick={inspect}>
+        <Button type="button" variant="outline" className="min-h-11"
+          disabled={busy || !path.trim()} onClick={inspect}>
           {phase.kind === "inspecting" ? "验证中…" : "验证目录"}
-        </button>
+        </Button>
         {inspection?.valid && inspection.will_initialize && (
-          <button type="button" className="primary-action" disabled={busy}
+          <Button type="button" className="min-h-11" disabled={busy}
             onClick={() => switchDir(false)}>
             {phase.kind === "switching" ? "切换中…" : "切换到该目录"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -152,11 +160,13 @@ export default function DataDirPanel() {
           <p className="field-note">
             空目录：切换时自动创建 songs/events/tabs/presets/backups/output 标准结构。
           </p>
-          <label className="field-label field-checkbox">
-            <input type="checkbox" checked={migrate}
-              onChange={event => setMigrate(event.target.checked)} />
-            把当前数据复制到新目录（原目录保留不动）
-          </label>
+          <div className="mt-3 flex items-center gap-2">
+            <Checkbox id="data-dir-migrate" checked={migrate}
+              onCheckedChange={checked => setMigrate(checked === true)} />
+            <Label htmlFor="data-dir-migrate" className="text-muted-foreground font-normal">
+              把当前数据复制到新目录（原目录保留不动）
+            </Label>
+          </div>
         </>
       )}
       {(inspection?.valid && inspection.has_existing_data) || conflictItems.length > 0 ? (
@@ -166,17 +176,17 @@ export default function DataDirPanel() {
             发现：{(conflictItems.length > 0 ? conflictItems : inspection?.existing_items ?? []).join("、")}
           </span>
           <span>直接使用该目录的数据，或换一个空目录迁移当前数据。</span>
-          <button type="button" className="secondary-action" disabled={busy}
+          <Button type="button" variant="outline" className="min-h-11" disabled={busy}
             onClick={() => { setMigrate(false); void switchDir(true); }}>
             我已确认，使用已有数据切换
-          </button>
+          </Button>
         </div>
       ) : null}
 
       {done && (
         <p className="field-note" role="status">
           已写入启动配置（{done.startup_config}），重启后端后使用新目录：{done.data_root}
-          {done.migrated.length > 0 && `；已复制：${done.migrated.join("、")}`}
+          {(done.migrated ?? []).length > 0 && `；已复制：${(done.migrated ?? []).join("、")}`}
           {done.used_existing && "；将使用该目录已有数据"}。
         </p>
       )}

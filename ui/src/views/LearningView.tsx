@@ -303,7 +303,7 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
 
       {/* ===== 编辑对话框（共享组件） ===== */}
       {editTarget !== null && (
-        <SongEditDialog dark={dark} target={editTarget}
+        <SongEditDialog target={editTarget}
           onClose={() => setEditTarget(null)} onSaved={refresh} />
       )}
 
