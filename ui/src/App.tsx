@@ -378,7 +378,11 @@ export default function App() {
                 <div className="relative rounded-2xl overflow-hidden transition-all duration-300"
                   style={{
                     width: `${(1080 * zoom) / 100}px`,
-                    maxHeight: "calc(100vh - 120px)",
+                    // max-width 由 max-height 和画布比例反推：让容器按比例缩小，不破坏避让线对齐
+                    // (2026-07-30 修复: 旧 maxHeight+aspectRatio 组合在高 zoom 时容器被压扁)
+                    maxWidth: canvas === "标准 9:16"
+                      ? "calc((100vh - 120px) * 9 / 16)"
+                      : "calc((100vh - 120px) * 9 / 20)",
                     aspectRatio: canvas === "标准 9:16" ? "9 / 16" : "9 / 20",
                     boxShadow: "0 4px 12px rgba(35,55,48,0.06), 0 24px 56px rgba(35,55,48,0.13)",
                   }}>
