@@ -10,6 +10,7 @@ import PreviewCrossfade from "./components/PreviewCrossfade";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
 import type { AppearanceSettings } from "./types";
+import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -284,6 +285,13 @@ export default function App() {
           {/* ===== LEFT: theme list（仅工作台视图显示，<800px 隐藏） ===== */}
           {view === "workspace" && (
           <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
+            {/* P1 R1a.5 海报文档区 + 歌曲来源（独立 hook 状态机） */}
+            <WorkspacePosterBridge
+              dark={dark}
+              availableThemeNames={themes.map(t => t.name)}
+              onThemeSelect={(name) => { setSelTheme(name); setPage(1); }}
+              onCanvasSelect={(id) => setCanvas(id)}
+            />
             <div className="px-4 pt-5 pb-3">
               <p className="eyebrow">策展资源</p>
               <h2 className="panel-title">海报主题</h2>

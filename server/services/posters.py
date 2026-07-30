@@ -90,6 +90,13 @@ class PosterApplicationService:
             raise PosterNotFound(f"海报不存在：{poster_id}")
         return snapshot.value
 
+    def get_with_revision(self, poster_id: str) -> tuple[PosterDocument, str]:
+        """读文档并返回 (poster, revision)；用于前端 CAS 自动保存。"""
+        snapshot = self._posters.get(poster_id)
+        if snapshot is None:
+            raise PosterNotFound(f"海报不存在：{poster_id}")
+        return snapshot.value, snapshot.revision
+
     def get_revision(self, poster_id: str) -> str:
         snapshot = self._posters.get(poster_id)
         if snapshot is None:

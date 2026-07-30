@@ -59,11 +59,14 @@ def api_posters_list(req: Request):
 
 @router.get("/api/posters/{poster_id}", response_model=PosterResponse)
 def api_posters_get(poster_id: str, req: Request):
+    """完整 PosterDocument + revision。revision 用于客户端 CAS 自动保存。"""
     try:
-        poster = get_app_context(req).poster_service.get(poster_id)
+        poster, revision = get_app_context(req).poster_service.get_with_revision(poster_id)
     except PosterServiceError as error:
         return _service_error(req, error)
-    return poster.to_dict()
+    payload = poster.to_dict()
+    payload["revision"] = revision
+    return payload
 
 
 @router.post("/api/posters", response_model=PosterSaveResponse)
