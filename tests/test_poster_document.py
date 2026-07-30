@@ -99,21 +99,36 @@ class PosterDocumentSchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             doc.validate()
 
-    def test_rejects_non_grid_wrap_layout(self):
-        """P1 R1a 严格保护：只允许 grid-wrap，避免金标准 16/16 漂移。"""
+    def test_rejects_unknown_layout(self):
+        """R1b 支持 grid-wrap 与 magazine-flow；其它布局仍拒绝。"""
         doc = PosterDocument.default()
-        doc.layout_id = "magazine-flow"
-        with self.assertRaises(ValueError) as cm:
+        doc.layout_id = "unknown"
+        with self.assertRaises(ValueError):
             doc.validate()
-        self.assertIn("grid-wrap", str(cm.exception))
 
-    def test_rejects_non_legacy_fixed_2_page_policy(self):
-        """P1 R1a 严格保护：只允许 legacy-fixed-2 分页。"""
+    def test_grid_wrap_rejects_non_legacy_fixed_2_page_policy(self):
+        """grid-wrap 仍只允许 legacy-fixed-2 分页（保护金标准 16/16）。"""
         doc = PosterDocument.default()
         doc.page_policy = PagePolicy(mode="auto")
         with self.assertRaises(ValueError) as cm:
             doc.validate()
         self.assertIn("legacy-fixed-2", str(cm.exception))
+
+    def test_magazine_flow_accepts_auto_page_policy(self):
+        """R1b: magazine-flow 支持 pages=auto 分页。"""
+        doc = PosterDocument.default()
+        doc.layout_id = "magazine-flow"
+        doc.page_policy = PagePolicy(mode="auto", min_pages=1, max_pages=4)
+        doc.validate()  # 不抛异常
+
+    def test_magazine_flow_rejects_legacy_fixed_2(self):
+        """magazine-flow 的本质是 pages=auto；不接受 legacy-fixed-2。"""
+        doc = PosterDocument.default()
+        doc.layout_id = "magazine-flow"
+        doc.page_policy = PagePolicy(mode="legacy-fixed-2")
+        with self.assertRaises(ValueError) as cm:
+            doc.validate()
+        self.assertIn("magazine-flow", str(cm.exception))
 
     def test_rejects_invalid_export_format(self):
         doc = PosterDocument.default()
