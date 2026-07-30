@@ -55,6 +55,9 @@ class SongApplicationService:
         title = fields.pop("title", "")
         if not title:
             raise SongValidationFailed("歌名不能为空")
+        # section=None 自动按字数计算 (对应前端「自动(按字数)」选项)
+        if fields.get("section") is None:
+            fields["section"] = _auto_section_from_title(title)
         status = payload.get("status")
         song = Song(
             title=title,
@@ -158,7 +161,15 @@ class SongApplicationService:
             if "改名失败" in str(error):
                 raise SongConflict(str(error)) from error
             raise SongValidationFailed(str(error)) from error
+        # section=None → 自动按字数计算 (对应前端「自动」选项)
         current = library.get_by_id(song.id)
+        if current is not None and current.section is None:
+            current.section = _auto_section_from_title(current.title)
+        # 如果用户显式改了 title, 且 section 是「自动」标记 (fields 不含 section),
+        # 不应该触发重复计算。只有 section 在 fields 里且为 None 时触发。
+        # 由于 _update 不删除 field 中 section, 我们上面的逻辑是:
+        # 在 update_by_id 之后、save 之前, 如果 song.section 仍为 None,
+        # 则按标题自动归类。
         current_view = song_values(current)
         changes = [
             {"field": key, "old": old_view.get(key), "new": current_view.get(key)}
@@ -237,6 +248,19 @@ class SongApplicationService:
         )
 
 
+def _auto_section_from_title(title: str) -> int:
+    """当 section=None 时，按标题字数自动计算 section (1..7)。
+
+    规则与 grid-wrap _group 一致 (2026-07-30): 
+    - 含英文字母的归 7 (长歌名/英文)
+    - 中文按 len()， >6 归 7
+    """
+    if any(c.isascii() and c.isalpha() for c in title):
+        return 7
+    n = len(title.strip())
+    return n if 1 <= n <= 6 else 7
+
+
 def clean_song_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
     try:
         return _clean_song_fields(payload)
@@ -262,9 +286,11 @@ def _clean_song_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
                 None if value in (None, "")
                 else max(0, min(12, int(value))))
         elif key == "section":
-            fields[key] = (
-                None if value in (None, "")
-                else max(1, min(7, int(value))))
+            if value in (None, ""):
+                # 用户选了「自动(按字数)」— 存 None, 等 title 到位后延迟计算
+                fields[key] = None
+            else:
+                fields[key] = max(1, min(7, int(value)))
         else:
             fields[key] = str(value).strip() if value is not None else ""
     if "title" in fields and not fields["title"]:
