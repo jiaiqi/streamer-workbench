@@ -4,6 +4,8 @@ import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
+import PracticeStatsCard from "../practice/PracticeStatsCard";
+import PracticeLogDialog from "../practice/PracticeLogDialog";
 import { apiRequest } from "../api/client";
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
 
@@ -57,6 +59,7 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
   const [tabsOpen, setTabsOpen] = useState<string | null>(null);
   const [learningSong, setLearningSong] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [logDialogOpen, setLogDialogOpen] = useState(false);
   const listRequest = useLatestRequest<{ draft: SongsData; all: SongsData }>({ isEmpty: result => result.draft.total === 0 });
 
   const refresh = async () => {
@@ -147,6 +150,10 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
       {/* ===== 内容区 ===== */}
       <div className="flex-1 overflow-y-auto px-8 pb-10">
         {actionError && <div className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500" role="alert">{actionError}</div>}
+
+        {/* P4 R4: 练习打卡统计卡片区 */}
+        <PracticeStatsCard dark={dark} onLogClick={() => setLogDialogOpen(true)} />
+
         {listRequest.status === "loading" && songs.length === 0 ? (
           <div className="grid grid-cols-2 gap-4">
             {[1, 2, 3, 4].map(i => (
@@ -306,6 +313,13 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
         <SongEditDialog target={editTarget}
           onClose={() => setEditTarget(null)} onSaved={refresh} />
       )}
+
+      {/* P4 R4: 练习打卡对话框 */}
+      <PracticeLogDialog
+        open={logDialogOpen}
+        onClose={() => setLogDialogOpen(false)}
+        onSaved={refresh}
+      />
 
       {/* 卡片入场动画 keyframes */}
       <style>{`
