@@ -102,3 +102,39 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
     if not skip_text:
         layout.render_page(ctx, page, library)
     return img.convert("RGB")
+
+
+def render_pages(theme: Theme, layout: LayoutPlugin, library,
+                 spec: CanvasSpec, font_path: str, *,
+                 page_count: int | None = None) -> list[Image.Image]:
+    """R1b: 渲染多页并按序号返回 Image 列表。
+
+    page_count: 可显式指定；不指定则按 layout.pages（None = 自动）或 1 取。
+    主要给 magazine-flow 自动分页使用——调用方需先用 layout.analyze()
+    拿到真实 pages，再调用 render_pages()。
+
+    旧 layout（grid-wrap）固定 2 页，按 plugin.pages 渲染。
+    新 layout（magazine-flow）以 page_count 覆盖。
+
+    上限：当 page_count > theme.styles 提供的样式数时，截断到样式数；
+    主流 7 套主题仅支持 2 个 style（兼容 grid-wrap），Magazine-flow
+    自动截断防止 KeyError——调用方应据此裁剪 page_count。
+    """
+    fixed = layout.pages
+    if page_count is None:
+        if fixed:
+            page_count = fixed
+        else:
+            # 兜底：自动分页由 layout.analyze 决定；若 layout 没实现则用 1
+            from .layouts.magazine_flow import analyze as _mf_analyze
+            try:
+                page_count = _mf_analyze(library, axis="none", canvas=spec)["page_count"]
+            except Exception:
+                page_count = 1
+    # 上限=theme.styles 支持的页数
+    max_style_pages = max(theme.styles.keys()) if theme.styles else 2
+    page_count = max(1, min(page_count, max_style_pages))
+    images = []
+    for page in range(1, page_count + 1):
+        images.append(render_page(theme, layout, library, spec, page, font_path))
+    return images
