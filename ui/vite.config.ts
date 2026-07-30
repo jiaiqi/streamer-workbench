@@ -8,6 +8,10 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       port: 5173,
+      hmr: {
+        host: "localhost",
+        port: 5173,
+      },
       proxy: {
         "/api": { target: proxyTarget, changeOrigin: true },
         "/bg": { target: proxyTarget, changeOrigin: true },
