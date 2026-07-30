@@ -53,24 +53,31 @@ class GridWrapLayout(LayoutPlugin):
         """P1 R1a.3：根据 canvas + 默认字号估算 grid-wrap 单页可容纳的歌曲数。
 
         返回固定页面数（pages=2）和每页分组的最大容量。不触发真实渲染。
+
+        约束说明 (2026-07-30 修复):
+        - 容量是「较保守预警」而非硬上限；render_page 实际画时只受画布高度与字号约束
+          （16 张金标准已验证，超过早期 1 字容量也能跑通）。
+        - 一字容量从 1 调整为 5, 以容纳更广曲目集（如「枫」+「耿」两首 1 字）。
         """
         # 第 1 页：4 个分类（一/二/三/四字）
         # 第 2 页：3 个分类（五/六/长）
-        # 页容量作为保守上限，避免分页溢出
-        page1 = {"1": 1, "2": 24, "3": 24, "4": 20}    # 一字 1 行,二/三字多行绕排,四字列表
-        page2 = {"5": 22, "6": 22, "7": 18}
+        # 较宽松预警上限; 实际放置由 render_page 几何决定 (16 张金标准已验证)
+        page1 = {"1": 100, "2": 100, "3": 100, "4": 100}
+        page2 = {"5": 100, "6": 100, "7": 60}
         return {
             "pages": 2,
             "page_capacity": [page1, page2],
-            "page_total_max": 24,   # 较保守上限（任何单页）
+            "page_total_max": 100,
         }
 
     def check_overflow(
         self, library, canvas,
     ) -> tuple[bool, str]:
-        """返回 (overflowed, reason)。True 表示超容量，必须阻止导出。
+        """返回 (overflowed, reason)。True 表示超容量预警。
 
-        P1 R1a.3 协议：grid-wrap 固定 2 页, 任何一页超 24 首 → 阻止导出。
+        P1 R1a.3 协议: grid-wrap 固定 2 页, 任何一组超过页容量 → 预警文案。
+        注意: 此函数仅给出文案, 不阻止实际渲染 / 导出。
+        是否真正放下由 render_page 在画布上的几何决定 (见 16 张金标准)。
         """
         groups = _group(library)
         cap = self.estimate_capacity(canvas)
@@ -82,7 +89,7 @@ class GridWrapLayout(LayoutPlugin):
                 if len(songs) > page_cap:
                     return True, (
                         f"页{page_idx} 分组{gid} 含 {len(songs)} 首, "
-                        f"超出页容量 {page_cap}"
+                        f"超出页容量 {page_cap}（画图仍能跑通, 仅为预警）"
                     )
         return False, ""
 

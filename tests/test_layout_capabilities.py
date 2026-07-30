@@ -78,22 +78,25 @@ class LayoutCapabilitiesTests(unittest.TestCase):
 class GridWrapOverflowTests(unittest.TestCase):
     """P1 R1a.3 协议：grid-wrap 固定 2 页，超容量明确阻止导出而非静默丢歌。"""
 
-    def test_check_overflow_returns_false_for_normal_library(self):
+    def test_check_overflow_returns_true_when_section_above_capacity(self):
+        """estimate_capacity 限额上面提到的组容量之上 → 报 overflow。
+
+        (2026-07-30 调整: estimate_capacity 调宽 (一字 1→100) 后, 50 首"一字"不再超量;
+        改为 150 首以覆盖真实扩容后仍能检测明显超出。)
+        """
         from core.layouts.grid_wrap import GridWrapLayout
         from core.layouts.base import LayoutPlugin
         from core.data.songs import SongLibrary, Song, legacy_song_id
 
-        # 构造一个 group 1 (一字) 超量的库 → 应 overflow
+        # 构造一个 group 1 (一字) 大幅超量的库 → 应 overflow
         lib = SongLibrary()
-        # 注入 50 首 "一字" 歌（理论上不可能但模拟)
-        for i in range(50):
+        # 注入 150 首 "一字" 歌 (estimate 单一字容量 100)
+        for i in range(150):
             lib.songs.append(
                 Song(title=f"字{i}", id=legacy_song_id(f"字{i}"), status="active",
                      section=1),
             )
-        # 用 GridWrapLayout 实例检查
         layout = GridWrapLayout()
-        # 简单构造一个 spec 对象
         class FakeSpec:
             height = 2400
             margin = 58

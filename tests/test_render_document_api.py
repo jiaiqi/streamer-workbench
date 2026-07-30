@@ -118,11 +118,11 @@ class RenderDocumentApiTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as raw:
                 app = _boot_app(Path(raw))
                 async with app.router.lifespan_context(app):
-                    # 直接写库注入 60 首 section=1（一字）
+                    # 直接写库注入 130 首 section=1 (一字), 超过 estimate_capacity 的 100 上限
                     from core.data.songs import Song, SongLibrary, legacy_song_id
                     songs_json = Path(raw) / "songs.json"
                     lib = SongLibrary()
-                    for i in range(60):
+                    for i in range(130):
                         lib.songs.append(
                             Song(title=f"字{i}", id=legacy_song_id(f"字{i}"),
                                  status="active", section=1),
