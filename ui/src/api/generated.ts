@@ -1,6 +1,15 @@
 // 此文件由 tools/generate_api_types.py 生成，请勿手工修改。
 // OpenAPI JSON 是临时中间产物；本文件随源码提交。
 
+export interface AnalyzeQuery {
+  "canvas_id"?: string;
+  "grouping"?: string;
+  "parameters"?: Record<string, unknown>;
+  "poster_id"?: string | null;
+  "song_ids"?: Array<string> | null;
+  "theme_id"?: string;
+}
+
 export interface Body_api_tab_upload_api_songs__identity__tabs_post {
   "file": string;
   [key: string]: unknown;
