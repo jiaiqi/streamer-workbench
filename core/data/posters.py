@@ -219,17 +219,20 @@ class PosterDocument:
             if item in seen:
                 raise ValueError(f"selected_song_ids 存在重复 ID：{item}")
             seen.add(item)
-        if self.layout_id != "grid-wrap":
-            # P1 范围严格保护 grid-wrap；R1b 接入新布局后这里放宽。
-            # 暂拒绝以保证 16/16 金标准不被动摇。
+        if self.layout_id not in ("grid-wrap", "magazine-flow"):
+            # R1b 支持 grid-wrap (legacy-fixed-2) 与 magazine-flow (auto/manual)
             raise ValueError(
-                f"P1 仅支持 grid-wrap 布局；当前 layout_id={self.layout_id!r}，"
-                "请等待 R1b magazine-flow。"
+                f"R1b 支持 grid-wrap 与 magazine-flow 两种布局；当前 layout_id={self.layout_id!r}。"
             )
-        if self.page_policy.mode != "legacy-fixed-2":
+        if self.layout_id == "grid-wrap" and self.page_policy.mode != "legacy-fixed-2":
             raise ValueError(
-                f"P1 仅支持 legacy-fixed-2 分页；当前 page_policy.mode={self.page_policy.mode!r}，"
-                "请等待 R1b。"
+                "grid-wrap 仅支持 legacy-fixed-2 分页（保护金标准 16/16）；"
+                "如需自动分页请切换到 magazine-flow。"
+            )
+        if self.layout_id == "magazine-flow" and self.page_policy.mode == "legacy-fixed-2":
+            # magazine-flow 的意义就是 pages=auto；该 mode 仅给 grid-wrap 保留。
+            raise ValueError(
+                "magazine-flow 不使用 legacy-fixed-2；请选择 mode='auto' 或 'manual'。"
             )
         # optional_session_ref 仅引用关系，必须存在但不用作级联
         if self.optional_session_ref is not None and not isinstance(self.optional_session_ref, str):

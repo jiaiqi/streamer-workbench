@@ -147,18 +147,33 @@ class PosterApiValidationTests(unittest.TestCase):
                     assert body["error"]["code"] == "invalid_poster"
         asyncio.run(scenario())
 
-    def test_non_grid_wrap_layout_rejected(self):
+    def test_unknown_layout_rejected(self):
         async def scenario():
             with tempfile.TemporaryDirectory() as raw:
                 app = _boot_app(Path(raw))
                 async with app.router.lifespan_context(app):
                     p = _payload("bad")
-                    p["layout_id"] = "magazine-flow"
+                    p["layout_id"] = "unknown-layout"
                     status, body, _ = await _request(
                         app, "POST", "/api/posters", p,
                     )
                     assert status == 400
                     assert "grid-wrap" in body["error"]["message"]
+        asyncio.run(scenario())
+
+    def test_magazine_flow_with_auto_accepted(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as raw:
+                app = _boot_app(Path(raw))
+                async with app.router.lifespan_context(app):
+                    p = _payload("r1b")
+                    p["layout_id"] = "magazine-flow"
+                    p["page_policy"] = {"mode": "auto", "min_pages": 1, "max_pages": 4}
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters", p,
+                    )
+                    # R1b: magazine-flow + auto 是合法的
+                    assert status == 200, body
         asyncio.run(scenario())
 
     def test_non_legacy_fixed_2_rejected(self):

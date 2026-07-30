@@ -130,7 +130,7 @@ class PosterServiceCRUDTests(unittest.TestCase):
             poster_repo, _ = _bootstrap(td)
             svc = PosterApplicationService(poster_repository=poster_repo)
             with self.assertRaises(PosterValidationFailed) as cm:
-                svc.save(_payload(layout_id="magazine-flow"))
+                svc.save(_payload(layout_id="unknown-layout"))
             self.assertIn("grid-wrap", str(cm.exception))
 
     def test_save_rejects_non_legacy_fixed_2(self):
