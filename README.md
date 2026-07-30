@@ -49,22 +49,22 @@ cd ui && npm install && npm run dev                  # http://localhost:5173，/
 
 ## 金标准测试
 ```bash
-# 金标准参照图（tests/golden/）随 git 提交；独立预言机（旧脚本）已并入本仓库
-# `.archive/design-docs/歌单-排版一/`，重建方式见 tools/regenerate_golden.py
-PYTHONPATH=. python tests/test_golden.py             # 目标：16/16 逐像素 diff=0
+# 统一入口（推荐）：自动注入 PYTHONUTF8/PYTHONPATH，Windows 控制台无需手工设环境变量
+python tools/run_tests.py                        # 全部 13 个测试文件
+python tools/run_tests.py test_golden test_unit  # 只跑指定文件
+# 单跑金标准：目标 16/16 逐像素 diff=0（tests/golden/ 随 git 提交；独立预言机在
+# `.archive/design-docs/歌单-排版一/`，重建方式见 tools/regenerate_golden.py）
+PYTHONPATH=. python tests/test_golden.py
 ```
 
 Windows PowerShell：
 
 ```powershell
-$env:PYTHONPATH='.'
-$env:PYTHONUTF8='1'
-& '.venv\Scripts\python.exe' tests/test_golden.py
-& '.venv\Scripts\python.exe' tests/test_unit.py
+& '.venv\Scripts\python.exe' tools\run_tests.py   # 统一入口，已内化 UTF-8
 cd ui; npx tsc --noEmit
 ```
 
-当前 CI 质量基线为 Python 测试 189 项、前端测试 22 项（含 6 项 React 交互测试）、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。前端已接入画廊白/暗色舞台、跟随系统及 8 种应用主色；这些应用令牌不影响海报 Palette。Windows 控制台 UTF-8 和统一测试入口仍属于 R0.12。
+当前 CI 质量基线为 Python 测试 202 项（13 个测试文件）、前端测试 22 项（含 6 项 React 交互测试）、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。前端已接入画廊白/暗色舞台、跟随系统及 8 种应用主色；这些应用令牌不影响海报 Palette。
 
 ## 后端 API
 
