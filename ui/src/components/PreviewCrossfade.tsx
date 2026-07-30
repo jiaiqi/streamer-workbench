@@ -11,9 +11,13 @@ interface Frame {
   src: string;
 }
 
-export default function PreviewCrossfade({ src, alt, onLoaded, onFailed }: {
+export default function PreviewCrossfade({ src, alt, reloadKey, onLoaded, onFailed }: {
   src: string;
   alt: string;
+  /** 父级「强制重新加载」计数器；从 0 起，每次递增触发一次重渲染，
+   *  即使 src 没变。P1 R1a.8 预览缓存治理协议：URL 不再携带 &t=；
+   *  通过显式 key 替代浏览器缓存破坏。 */
+  reloadKey?: number;
   onLoaded: () => void;
   onFailed: () => void;
 }) {
@@ -37,7 +41,7 @@ export default function PreviewCrossfade({ src, alt, onLoaded, onFailed }: {
       });
       return current;
     });
-  }, [src]);
+  }, [src, reloadKey]);
 
   const promote = (frame: Frame) => {
     setDisplayed(frame);

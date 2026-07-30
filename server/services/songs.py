@@ -32,6 +32,7 @@ class SongMutation:
     song: Song
     active: int
     draft: int
+    added: tuple = ()  # 仅 seed-sample 路径使用；普通 create 留空
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,54 @@ class SongApplicationService:
 
     def delete_by_title(self, title: str) -> SongDeletion:
         return self._delete("title", title.strip())
+
+    def seed_sample_songs(self) -> SongMutation:
+        """仅当曲库为空时载入内置样例曲库；非空返回当前 mutation 不写盘。"""
+        snapshot = self._songs.load()
+        library = snapshot.value
+        if library.songs:
+            # 非空库 → 拒绝导入以避免重复
+            return SongMutation(
+                song=library.songs[0],
+                active=library.count_active(),
+                draft=library.count_draft(),
+                added=(),
+            )
+        from core.data.sample_songs import seed_to_library
+        added = seed_to_library(library)
+        if not added:
+            return SongMutation(
+                song=library.songs[0] if library.songs else None,
+                active=library.count_active(),
+                draft=library.count_draft(),
+                added=(),
+            )
+        # 一次提交：批量导入 → song_added 事件（带 source_kind="sample_seed" 标记）
+        self._songs.save(library, expected_revision=snapshot.revision)
+        for song in added:
+            self._append_seed_event(song)
+        return SongMutation(
+            song=added[-1],
+            active=library.count_active(),
+            draft=library.count_draft(),
+            added=tuple(added),
+        )
+
+    def _append_seed_event(self, song) -> None:
+        import uuid
+        from core.data.events import _normalize_timestamp
+        event = {
+            "schema_version": 2,
+            "event_id": f"evt_{uuid.uuid4().hex}",
+            "occurred_at": _normalize_timestamp(None),
+            "recorded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "type": "song_added",
+            "source": "sample-seed",
+            "song_id": song.id,
+            "title_snapshot": song.title,
+            "meta": {"status": song.status, "source_kind": "sample_seed"},
+        }
+        self._events.append(event)
 
     def _update(
         self, identity_kind: str, identity: str, payload: Mapping[str, Any]
@@ -183,7 +232,9 @@ class SongApplicationService:
     @staticmethod
     def _mutation(song: Song, library: SongLibrary) -> SongMutation:
         return SongMutation(
-            song, library.count_active(), library.count_draft())
+            song, library.count_active(), library.count_draft(),
+            added=(),
+        )
 
 
 def clean_song_fields(payload: Mapping[str, Any]) -> dict[str, Any]:

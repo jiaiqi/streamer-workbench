@@ -166,6 +166,7 @@ class AppPaths:
     settings_json: Path
     tabs_dir: Path
     presets_dir: Path
+    posters_dir: Path
     layouts_dir: Path
     backups_dir: Path
     output_dir: Path
@@ -239,6 +240,7 @@ def build_app_paths(config: AppConfig, *,
         settings_json=data_root / "settings.json",
         tabs_dir=data_root / "tabs",
         presets_dir=data_root / "presets",
+        posters_dir=data_root / "posters",
         layouts_dir=data_root / "layouts",
         backups_dir=data_root / "backups",
         output_dir=data_root / "output",

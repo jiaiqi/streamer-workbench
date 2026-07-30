@@ -58,3 +58,22 @@ class LayoutPlugin(ABC):
     # 未提供则回退到内置默认色。
     def extra_colors(self) -> dict:
         return {}
+
+    # ---- 能力声明 (P1 R1a.3) ----
+    # 每个 Layout 自报支持的画布比例、主题能力、分页策略与分类轴；
+    # 这是 P1 R1a.3 grid-wrap 能力声明契约的入口。
+    def capabilities(self) -> dict:
+        """返回该布局的能力元数据。
+
+        默认实现是「grid-wrap」P1 兼容路径。
+        新布局（magazine-flow / live-set / learning-report）应重写本方法。
+        """
+        return {
+            "supported_canvas_ids": ["9:16", "9:20"],
+            "required_theme_capabilities": [],
+            "supports_auto_pagination": False,
+            "supports_manual_pages": False,
+            "supports_grouping": ["none", "chars"],
+            "page_policy_mode": "legacy-fixed-2",
+            "max_density": {},     # {"section": N} 等
+        }

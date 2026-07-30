@@ -88,7 +88,8 @@ class SongUpdateResponse(BaseModel):
 
 
 class SongMutationResponse(SongUpdateResponse, SongCounts):
-    pass
+    # 仅 P1 R1a.2 sample-seed 路径填充 added；其它路径为空列表。
+    added: list[str] = Field(default_factory=list)
 
 
 class SongLegacyStatusResponse(SongCounts):

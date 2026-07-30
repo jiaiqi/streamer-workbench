@@ -8,6 +8,7 @@ from typing import Any, Generic, Iterator, Literal, Protocol, TypeAlias, TypeVar
 
 from core.data.songs import SongLibrary
 from core.data.presets import Preset
+from core.data.posters import PosterDocument
 
 
 T = TypeVar("T")
@@ -68,6 +69,19 @@ class PresetSummary:
     is_default: bool
     created_at: str
     updated_at: str
+
+
+@dataclass(frozen=True)
+class PosterSummary:
+    """Poster 列表摘要，UI 用。"""
+    id: str
+    name: str
+    layout_id: str
+    theme_id: str
+    canvas_id: str
+    created_at: str
+    updated_at: str
+    song_count: int
 
 
 class RepositoryError(Exception):
@@ -154,6 +168,30 @@ class PresetRepository(Protocol):
         *,
         expected_revision: str | None,
     ) -> StoredSnapshot[tuple[PresetSummary, ...]]: ...
+
+    def recover(self) -> RecoveryReport: ...
+
+    def close(self) -> None: ...
+
+
+class PosterRepository(Protocol):
+    """R1a.1 Poster 仓储端口。
+
+    精简至 P1 必要接口；set_default/rename 留待 P2 验证后引入。
+    """
+
+    def list(self) -> StoredSnapshot[tuple[PosterSummary, ...]]: ...
+
+    def get(self, poster_id: str) -> StoredSnapshot[PosterDocument] | None: ...
+
+    def save(
+        self,
+        poster: PosterDocument,
+        *,
+        expected_revision: str | None,
+    ) -> StoredSnapshot[PosterDocument]: ...
+
+    def delete(self, poster_id: str, *, expected_revision: str | None) -> bool: ...
 
     def recover(self) -> RecoveryReport: ...
 
