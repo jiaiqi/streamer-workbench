@@ -49,6 +49,43 @@ class GridWrapLayout(LayoutPlugin):
             ParamSpec("sec_gap", "分类间距", "int", 26, 0, 80),
         ]
 
+    def estimate_capacity(self, canvas) -> dict:
+        """P1 R1a.3：根据 canvas + 默认字号估算 grid-wrap 单页可容纳的歌曲数。
+
+        返回固定页面数（pages=2）和每页分组的最大容量。不触发真实渲染。
+        """
+        # 第 1 页：4 个分类（一/二/三/四字）
+        # 第 2 页：3 个分类（五/六/长）
+        # 页容量作为保守上限，避免分页溢出
+        page1 = {"1": 1, "2": 24, "3": 24, "4": 20}    # 一字 1 行,二/三字多行绕排,四字列表
+        page2 = {"5": 22, "6": 22, "7": 18}
+        return {
+            "pages": 2,
+            "page_capacity": [page1, page2],
+            "page_total_max": 24,   # 较保守上限（任何单页）
+        }
+
+    def check_overflow(
+        self, library, canvas,
+    ) -> tuple[bool, str]:
+        """返回 (overflowed, reason)。True 表示超容量，必须阻止导出。
+
+        P1 R1a.3 协议：grid-wrap 固定 2 页, 任何一页超 24 首 → 阻止导出。
+        """
+        groups = _group(library)
+        cap = self.estimate_capacity(canvas)
+        for page_idx, page_caps in enumerate(cap["page_capacity"], start=1):
+            for gid, songs in groups.items():
+                page_cap = page_caps.get(str(gid))
+                if page_cap is None:
+                    continue
+                if len(songs) > page_cap:
+                    return True, (
+                        f"页{page_idx} 分组{gid} 含 {len(songs)} 首, "
+                        f"超出页容量 {page_cap}"
+                    )
+        return False, ""
+
     def categorize(self, library) -> list[PageSections]:
         g = _group(library)
         return [

@@ -63,6 +63,25 @@ def api_layout_params(layout_id: str):
         return Response(str(e), status_code=404)
 
 
+@router.get("/api/layouts/{layout_id}/capabilities")
+def api_layout_capabilities(layout_id: str, req: Request):
+    """P1 R1a.3：单布局能力声明，UI 据此过滤主题/比例/分类组合。
+
+    仅 P1 范围：grid-wrap。
+    """
+    try:
+        plugin = get_layout(layout_id)
+    except KeyError as e:
+        return api_error_response(
+            req, 404, ApiError("layout_not_found", str(e)),
+        )
+    caps = plugin.capabilities()
+    if hasattr(plugin, "estimate_capacity"):
+        caps["capacity"] = plugin.estimate_capacity("9:20")
+    caps["id"] = layout_id
+    return caps
+
+
 @router.get("/api/render", response_class=Response,
             responses={200: {"content": {"image/png": {}}}})
 def api_render(req: Request, query: Annotated[RenderRequest, Query()]):
@@ -89,6 +108,15 @@ def api_render(req: Request, query: Annotated[RenderRequest, Query()]):
                  if v is not None}
     if overrides:
         spec = replace(spec, **overrides)
+    # P1 R1a.3 超容量检查：grid-wrap 固定 2 页，超容量明确返回错误而非静默丢歌
+    if hasattr(layout_plugin, "check_overflow"):
+        overflow, reason = layout_plugin.check_overflow(songs.value, spec)
+        if overflow:
+            return api_error_response(
+                req, 400,
+                ApiError("layout_overflow",
+                         f"歌曲超出 grid-wrap 容量：{reason}"),
+            )
     document = build_render_document(
         song_snapshot=songs, theme=themes[theme], layout_id=layout_plugin.id,
         canvas=spec, page=page, font_path=font, parameters=overrides)
