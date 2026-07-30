@@ -50,7 +50,7 @@
 ```
 引擎兼容  ✅          avoid/cache 正确性已修复，金标准 16/16 diff=0；环境复现待 R0 收口
 数据层    S1-S3.5 ✅ Song v5/Event v2、Tabs/Queue/Preset song_id 关系迁移完成；S4/S5 按 R3 启动
-产品主线  R0 🟡      R0.1-R0.9 ✅；R0.10 后端安全地基完成；下一步 R0.12
+产品主线  R0 ✅      R0.1-R0.12 全部收口；下一条用户可见主线 R1 首用和日常出图
 桌面壳    spike 已过  正式壳 ⬜
 UI        ~80%       工作台/歌曲库/学歌/速查可用
 ```
@@ -157,8 +157,8 @@ Python 后端是核心用户数据的唯一写入权威（ADR-003）。Electron 
 |---|---|
 | GitHub HTTPS 443 不通 | 走 SSH：`git push git@github.com:...` |
 | `pypinyin` 未安装 | `pip install pypinyin`（迁移测试依赖） |
-| Windows 控制台 GBK 无法输出 ✅/❌ | 运行 Python 测试前设置 `PYTHONUTF8=1`；R0 将修复测试入口 |
-| 本地 `.venv` 与 requirements 版本漂移 | R0 重新锁定并重建环境，文档不得把未锁定版本写成基线 |
+| Windows 控制台 GBK 无法输出 ✅/❌ | 已收口：统一入口 `python tools/run_tests.py` 自动注入 PYTHONUTF8 |
+| 本地 `.venv` 与 requirements 版本漂移 | 已收口：2026-07-30 核对 fastapi 0.115.0 / pillow 12.2.0 / uvicorn 0.30.6 / python-multipart 0.0.32 / pypinyin 0.53.0 全部对齐 |
 | Windows Git Bash `grep` 中文路径 bug | 用 `ls -R` 代替 `find` |
 | 主题背景图命名不统一 | 6 套用 `bg1.png`，海洋柔光独用 `background-1.png`，以各自 `theme.json` 为准 |
 | 缩略图 `object-cover` | 背景装饰集中在底部，必须 `object-cover object-bottom` |
