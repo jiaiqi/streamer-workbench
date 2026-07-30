@@ -9,7 +9,7 @@
 ## 技术栈
 - **渲染引擎**：Python + PIL（纯函数，金标准：与现有成品逐像素一致，当前 16/16 diff=0）
 - **后端**：FastAPI 本地服务（`server/`，开发期 uvicorn 8000 端口）；MVP 后期由 Electron 打包成桌面 App（Python 作 child_process，引擎不重写）
-- **前端**：React 19 + Vite 6 + Tailwind 4（`ui/`）；开发期另有 `web/index.html` 原生验证页
+- **前端**：React 19 + Vite 6 + Tailwind 4 + shadcn/ui（`ui/`）；组件优先使用 shadcn/ui（`ui/src/components/ui/`），shadcn 不满足需求再自写组件；开发期另有 `web/index.html` 原生验证页
 - **视觉系统**：`design/design-tokens.json` v3 是当前单源真值；React 工作台支持画廊白/暗色舞台与独立可选应用主色，应用主色不影响海报 Theme/Palette；`.archive/design-docs/歌单海报生成器-界面设计/` 仅作历史参考
 - **铁律**：`core/` 禁止 import 任何 UI/服务器框架；React 只通过 FastAPI 访问核心业务和渲染能力
 - ~~PySide6 (Qt)~~：已移除（2026-07-23 晚决策，理由见设计结论）

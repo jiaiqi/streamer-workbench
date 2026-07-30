@@ -33,6 +33,13 @@
   --color-input: #e4e1d8;
   --color-ring: #2f8f7a;
 
+  /* ── shadcn/ui 语义别名（单源仍为上表令牌，不手工另维护）── */
+  --color-secondary: var(--color-muted);
+  --color-secondary-foreground: var(--color-foreground);
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: #ffffff;
+  --color-accent-foreground: #ffffff;
+
   /* ── 状态色 ── */
   --color-success: #3d9d63;
   --color-warning: #d9a03f;
