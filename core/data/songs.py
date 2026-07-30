@@ -231,7 +231,12 @@ class SongLibrary:
 
     @staticmethod
     def _validate_v5(data: dict) -> dict:
-        """拒绝空身份、重复身份和重复歌名，避免带病写入 v5。"""
+        """拒绝空身份、重复身份和重复歌名，避免带病写入 v5。
+
+        2026-07-30 加固: section 必须在 1..7 区间 (None/0/>=8 都拒绝)
+        以保护下游分类与分桶 (LibraryView 「未分类」桶/grid-wrap categorize/magazine-flow
+        analyze 都依赖合法 section)。
+        """
         ids = set()
         titles = set()
         for index, item in enumerate(data.get("songs", [])):
@@ -245,6 +250,15 @@ class SongLibrary:
                 raise ValueError(f"歌曲 id 重复：{song_id}")
             if title in titles:
                 raise ValueError(f"歌曲 title 重复：{title}")
+            # section 校验 (2026-07-30 加固):
+            # - None 是合法值, 与 Song.section: Optional[int] = None 默认对齐
+            # - 整数必须 1..7 (与 grid-wrap/magazine-flow _group 索引与金标准一致)
+            sec = item.get("section")
+            if sec is not None and (not isinstance(sec, int) or sec < 1 or sec > 7):
+                raise ValueError(
+                    f"第 {index + 1} 首歌曲 section 非法 ({sec!r}); "
+                    "必须是 None 或 1..7 的整数"
+                )
             ids.add(song_id)
             titles.add(title)
         return data
@@ -275,6 +289,16 @@ class SongLibrary:
             data = json.load(f)
         # 版本迁移
         data = cls._migrate(data)
+        # Section 补全 (2026-07-30): 迁移后仍然 None 的按字数自动分类
+        for item in data.get("songs", []):
+            if item.get("section") is not None:
+                continue
+            title = item.get("title", "")
+            if any(c.isascii() and c.isalpha() for c in title):
+                item["section"] = 7
+            else:
+                n = len(title.strip())
+                item["section"] = n if 1 <= n <= 6 else 7
         songs = [Song(**{k: v for k, v in item.items() if k in Song.__dataclass_fields__})
                  for item in data.get("songs", [])]
         return cls(songs=songs)
