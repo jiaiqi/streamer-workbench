@@ -6,6 +6,7 @@ import LibraryView from "./views/LibraryView";
 import LearningView from "./views/LearningView";
 import SettingsView from "./views/SettingsView";
 import ExportDialog from "./components/ExportDialog";
+import PreviewCrossfade from "./components/PreviewCrossfade";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
 import type { AppearanceSettings } from "./types";
@@ -159,6 +160,8 @@ export default function App() {
   // P0-1: 预览加载反馈——src 任何变化（切主题/翻页/调参/刷新）都进入 loading；
   // 失败进入错误态给出重试入口，不再静默白屏
   const [previewError, setPreviewError] = useState(false);
+  // crossfade POC：是否已有可保持的旧帧（有旧帧时加载新图不再盖 spinner）
+  const [hasFrame, setHasFrame] = useState(false);
   useEffect(() => {
     if (previewSrc) { setLoading(true); setPreviewError(false); }
   }, [previewSrc]);
@@ -375,13 +378,13 @@ export default function App() {
                       </button>
                     </div>
                   ) : (
-                    <img key={`${selTheme}-${page}-${avoid}-${canvas}-${renderKey}`}
-                      src={previewSrc} alt={selTheme}
-                      className="w-full object-contain"
-                      onLoad={() => setLoading(false)}
-                      onError={() => { setLoading(false); setPreviewError(true); }} />
+                    /* §4.6 POC：旧图保持至新图完成再 crossfade，reduced-motion 直换 */
+                    <PreviewCrossfade src={previewSrc}
+                      alt={`${selTheme} 主题，第 ${page} 页预览`}
+                      onLoaded={() => { setHasFrame(true); setLoading(false); }}
+                      onFailed={() => { setLoading(false); setPreviewError(true); }} />
                   )}
-                  {loading && !previewError && (
+                  {loading && !previewError && !hasFrame && (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2.5 ${dark ? "bg-zinc-800/60" : "bg-background/60"}`}>
                       <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                       <p className="text-xs text-muted-foreground">渲染中…</p>
