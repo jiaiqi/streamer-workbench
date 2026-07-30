@@ -152,9 +152,15 @@ export default function App() {
   const paramsQuery = Object.entries(debouncedParams)
     .map(([k, v]) => `&${k}=${v}`)
     .join("");
+  // P1 R1a.8 预览缓存治理：URL 仅含结构化输入；浏览器可对相同输入缓存。
+  // 「强制重新渲染」的契约改为「改变结构化输入」或调用 reload()；
+  // renderKey + 1 触发刷新时，通过 settings.themeIndex 之外的 useState 副作用让
+  // <img> 直接重新挂载（key）实现 —— 这里我们手动用 React key 解决。
   const previewSrc = selTheme
-    ? `/api/render?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}&t=${renderKey}`
+    ? `/api/render?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`
     : "";
+  // previewKey 在结构化输入变化时 = 0；renderKey 增加时 = renderKey（强制重挂载）。
+  const previewKey = renderKey > 0 ? `k${renderKey}` : "stable";
   const activeTheme = themes.find(t => t.name === selTheme);
 
   // P0-1: 预览加载反馈——src 任何变化（切主题/翻页/调参/刷新）都进入 loading；
@@ -381,6 +387,7 @@ export default function App() {
                     /* §4.6 POC：旧图保持至新图完成再 crossfade，reduced-motion 直换 */
                     <PreviewCrossfade src={previewSrc}
                       alt={`${selTheme} 主题，第 ${page} 页预览`}
+                      reloadKey={renderKey}
                       onLoaded={() => { setHasFrame(true); setLoading(false); }}
                       onFailed={() => { setLoading(false); setPreviewError(true); }} />
                   )}
@@ -449,7 +456,8 @@ export default function App() {
                     <button type="button" className="secondary-action" onClick={() => { setPreviewError(false); setLoading(true); setRenderKey(key => key + 1); }}>重试</button>
                   </div>
                 ) : (
-                  <img src={previewSrc} alt={`${selTheme}主题，第 ${page} 页预览`}
+                  // key={previewKey}：renderKey 触发整图重挂载，模拟「强制刷新」同时不污染 URL
+                  <img key={previewKey} src={previewSrc} alt={`${selTheme}主题，第 ${page} 页预览`}
                     onLoad={() => setLoading(false)}
                     onError={() => { setLoading(false); setPreviewError(true); }} />
                 )}
