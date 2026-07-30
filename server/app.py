@@ -22,6 +22,7 @@ from server.repositories.events import FileEventStore
 from server.repositories.presets import FilePresetRepository
 from server.repositories.settings import FileSettingsRepository
 from server.repositories.songs import FileSongRepository
+from server.services.data_dir import DataDirectoryService
 from server.services.export import ExportApplicationService
 from server.services.presets import PresetApplicationService
 from server.services.songs import SongApplicationService
@@ -77,6 +78,7 @@ def _lifespan(config: AppConfig, paths):
             settings_service = SettingsApplicationService(
                 settings_repository=settings_repository,
             )
+            data_dir_service = DataDirectoryService(config=config, paths=paths)
             tab_service = TabApplicationService(
                 song_repository=song_repository,
                 event_store=event_store,
@@ -97,6 +99,7 @@ def _lifespan(config: AppConfig, paths):
                 song_service=song_service,
                 preset_service=preset_service,
                 settings_service=settings_service,
+                data_dir_service=data_dir_service,
                 tab_service=tab_service,
                 export_service=export_service,
                 export_job_manager=app.state.export_jobs, themes=app.state.themes,

@@ -21,6 +21,7 @@ class AppContext:
     song_service: Any
     preset_service: Any
     settings_service: Any
+    data_dir_service: Any
     tab_service: Any
     export_service: Any
     export_job_manager: Any

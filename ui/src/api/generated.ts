@@ -6,6 +6,49 @@ export interface Body_api_tab_upload_api_songs__identity__tabs_post {
   [key: string]: unknown;
 }
 
+export interface DataDirInspectRequest {
+  "path": string;
+}
+
+export interface DataDirInspectResponse {
+  "existing_items"?: Array<string>;
+  "exists"?: boolean;
+  "has_existing_data"?: boolean;
+  "is_current"?: boolean;
+  "message"?: string;
+  "parent_writable"?: boolean;
+  "path": string;
+  "valid": boolean;
+  "will_initialize"?: boolean;
+  [key: string]: unknown;
+}
+
+export interface DataDirStatusResponse {
+  "current": string;
+  "pinned"?: boolean;
+  "platform_default"?: string | null;
+  "source": string;
+  "source_label": string;
+  "startup_config": string;
+  [key: string]: unknown;
+}
+
+export interface DataDirSwitchRequest {
+  "migrate"?: boolean;
+  "path": string;
+  "use_existing"?: boolean;
+}
+
+export interface DataDirSwitchResponse {
+  "data_root": string;
+  "migrated"?: Array<string>;
+  "ok"?: boolean;
+  "requires_restart"?: boolean;
+  "startup_config": string;
+  "used_existing"?: boolean;
+  [key: string]: unknown;
+}
+
 export interface EventRecord {
   "event_id"?: string | null;
   "occurred_at"?: string | null;
