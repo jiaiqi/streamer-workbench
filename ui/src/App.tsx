@@ -410,8 +410,13 @@ export default function App() {
                     </div>
                   )}
                   {avoid && canvas === "抖音全屏 9:20" && (
-                    <div className="absolute right-0 border-l border-dashed border-red-400/30 pointer-events-none"
-                      style={{ top: `${(1080 / 2400) * 100}%`, bottom: 0, width: `${((1080 - 940) / 1080) * 100}%` }} />
+                    <div className="absolute right-0 border-l-2 border-dashed border-red-400/60 pointer-events-none"
+                      style={{
+                        top: `${(1080 / 2400) * 100}%`,
+                        bottom: 0,
+                        width: `${((1080 - 940) / 1080) * 100}%`,
+                        background: "linear-gradient(90deg, transparent, rgba(239,68,68,0.06))",
+                      }} />
                   )}
                 </div>
               ) : (
