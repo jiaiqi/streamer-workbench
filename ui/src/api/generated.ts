@@ -191,6 +191,7 @@ export interface PosterResponse {
   "optional_session_ref"?: string | null;
   "page_policy"?: PosterPagePolicy;
   "parameters"?: Record<string, unknown>;
+  "revision"?: string;
   "schema_version"?: number;
   "selected_song_ids"?: Array<string>;
   "song_source": PosterSongSource;

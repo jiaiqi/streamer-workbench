@@ -196,6 +196,8 @@ class PosterResponse(PosterRequest):
     id: str
     created_at: str = ""
     updated_at: str = ""
+    # R1a.5：前端 CAS 自动保存所需的 revision（与服务端 sha256 hash 一致）
+    revision: str = ""
 
 
 class PosterSummaryResponse(BaseModel):
