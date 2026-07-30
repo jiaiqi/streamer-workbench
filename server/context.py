@@ -29,3 +29,4 @@ class AppContext:
     poster_service: Any                  # R1a.1 增量
     themes: Mapping[str, Any]
     live_persistence_service: Any = None  # R2 P3 增量
+    practice_service: Any = None        # P4 R2 增量
