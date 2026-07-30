@@ -9,6 +9,7 @@ output/
 data/backups/
 data/events.jsonl
 data/tabs/
+data/posters/
 *.tmp
 
 # 编辑器
