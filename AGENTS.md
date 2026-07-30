@@ -61,7 +61,7 @@ UI        ~80%       工作台/歌曲库/学歌/速查可用
 |---|---|---|
 | 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；本地 venv 版本漂移需 R0 收口 |
 | 后端 | FastAPI 0.115.0（requirements）+ uvicorn | AppContext + Repository adapters + services + routers；边界见 ADR-005 |
-| 前端 | React 19 + Vite 6 + Tailwind 4 | `ui/` |
+| 前端 | React 19 + Vite 6 + Tailwind 4 + shadcn/ui | `ui/`；组件优先用 shadcn/ui（`ui/src/components/ui/`），shadcn 不满足需求再自写组件 |
 | 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json |
 | 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
