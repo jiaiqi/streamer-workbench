@@ -37,3 +37,4 @@ site/landing/node_modules/
 site/landing/.astro/
 site/landing/public/posters/
 site/landing/public/og-image.png
+data/live-sessions/

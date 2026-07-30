@@ -320,3 +320,97 @@ class ExportJobResponse(BaseModel):
 class ExportOpenResponse(BaseModel):
     ok: bool = True
     output_dir: str
+
+
+# ── R2 P3 直播会话 HTTP 模型 ────────────────────────────────────────
+
+class LiveSessionCreateRequest(StrictRequest):
+    """POST /api/live-sessions - 创建会话。"""
+    rule_version: str = "rv1"
+    title: str = ""
+    poster_id: str | None = None
+
+
+class LiveSessionSummary(BaseModel):
+    """GET /api/live-sessions - 摘要。"""
+    id: str
+    state: str
+    title: str
+    rule_version: str
+    started_at: str
+    closed_at: str | None = None
+    queue_size: int = 0
+
+
+class LiveSessionDetail(BaseModel):
+    """GET /api/live-sessions/{id} - 详情。"""
+    id: str
+    state: str
+    title: str
+    rule_version: str
+    started_at: str
+    closed_at: str | None = None
+    poster_id: str | None = None
+    notes: str = ""
+    queue: list[dict] = Field(default_factory=list)
+    performances: list[dict] = Field(default_factory=list)
+
+
+class LiveSessionQueueRequest(StrictRequest):
+    """POST /api/live-sessions/{id}/queue - 入队。"""
+    requester_name: str
+    requester_id: str | None = None
+    song_id: str
+    entitlement_id: str | None = None
+    entitlement_kind: str = ""
+    note: str = ""
+    command_id: str | None = None
+
+
+class LiveSessionQueueResponse(BaseModel):
+    ok: bool = True
+    request_id: str
+    song_id: str
+    position: int
+    decision: dict
+    duplicate_merged: bool = False
+
+
+class LiveSessionRecordRequest(StrictRequest):
+    """POST /api/live-sessions/{id}/record - 记录演唱结果。"""
+    request_id: str
+    result: str
+    operator: str = "broadcaster"
+    reason: str = ""
+
+
+class LiveSessionRecordResponse(BaseModel):
+    ok: bool = True
+    request_id: str
+    result: str
+    refunded: bool = False
+    refund_reason: str = ""
+
+
+class LiveSessionEntitlementGrantRequest(StrictRequest):
+    """POST /api/live-sessions/{id}/entitlements - 授予权益。"""
+    kind: str
+    rule_version: str = "rv1"
+    quota: int = 1
+    requester_id: str | None = None
+    expires_at: str | None = None
+    evidence_label: str = ""
+    evidence_value: float | None = None
+    platform_ref: str = ""
+
+
+class LiveSessionEntitlementResponse(BaseModel):
+    id: str
+    kind: str
+    rule_version: str
+    requester_id: str | None
+    quota: int
+    consumed: int
+    remaining: int
+    granted_at: str
+    expires_at: str | None = None
