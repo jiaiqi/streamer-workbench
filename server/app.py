@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.engine import render_page
+from core.data.live import RequestPolicy
 from server.api.handlers import (
     REQUEST_ID_HEADER,
     SESSION_TOKEN_HEADER,
@@ -19,14 +20,17 @@ from server.context import AppContext
 from server.dependencies import get_app_context
 from server.ports.repositories import BackupPolicy, RepositoryRecoveryRequired
 from server.repositories.events import FileEventStore
+from server.repositories.live import FileLiveRepository
 from server.repositories.posters import FilePosterRepository
 from server.repositories.presets import FilePresetRepository
 from server.repositories.settings import FileSettingsRepository
 from server.repositories.songs import FileSongRepository
 from server.services.data_dir import DataDirectoryService
 from server.services.export import ExportApplicationService
+from server.services.live_persistence import LiveSessionPersistenceService
 from server.services.posters import PosterApplicationService
 from server.services.presets import PresetApplicationService
+from server.services.request_policy import RequestPolicyService
 from server.services.songs import SongApplicationService
 from server.services.settings import SettingsApplicationService
 from server.services.tabs import TabApplicationService
@@ -58,11 +62,16 @@ def _lifespan(config: AppConfig, paths):
             poster_repository = FilePosterRepository(
                 paths.posters_dir, BackupPolicy(paths.backups_dir / "posters"))
             resources.append(poster_repository)
+            live_repository = FileLiveRepository(
+                paths.live_sessions_dir,
+                BackupPolicy(paths.backups_dir / "live-sessions"))
+            resources.append(live_repository)
             # 启动时完成 Schema 校验，损坏数据阻止 context 发布。
             song_repository.load()
             settings_repository.load()
             preset_repository.recover()
             poster_repository.recover()
+            live_repository.recover()
             if preset_repository.get("_default") is None:
                 from core.data.presets import Preset
                 preset_repository.save(Preset.default(), expected_revision=None)
@@ -85,6 +94,18 @@ def _lifespan(config: AppConfig, paths):
                 poster_repository=poster_repository,
                 song_repository=song_repository,
             )
+            # R2 P3 直播持久化桥: 启动期自动 load 所有已存 session
+            live_persistence_service = LiveSessionPersistenceService(
+                live_repository=live_repository,
+                policy_factory=lambda rv: RequestPolicyService(
+                    policy=RequestPolicy(rule_version=rv)),
+                event_store=event_store,
+            )
+            for sid in live_persistence_service.list_sessions():
+                try:
+                    live_persistence_service.load_session(sid)
+                except RepositoryUnavailable:
+                    logger.exception("live session 恢复失败: %s", sid)
             settings_service = SettingsApplicationService(
                 settings_repository=settings_repository,
             )
@@ -106,6 +127,7 @@ def _lifespan(config: AppConfig, paths):
                 preset_repository=preset_repository,
                 settings_repository=settings_repository,
                 poster_repository=poster_repository,
+                live_persistence_service=live_persistence_service,
                 render_service=render_page,
                 song_service=song_service,
                 preset_service=preset_service,
@@ -161,6 +183,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
               name="song_tabs")
 
     from server.routers import songs, render, export, events, settings, presets, posters
+    from server.routers import live
     app.include_router(songs.router)
     app.include_router(render.router)
     app.include_router(export.router)
@@ -168,6 +191,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(settings.router)
     app.include_router(presets.router)
     app.include_router(posters.router)
+    app.include_router(live.router)
 
     @app.get("/api/health")
     def health(request: Request):

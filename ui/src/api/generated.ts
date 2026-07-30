@@ -137,6 +137,97 @@ export interface HTTPValidationError {
   [key: string]: unknown;
 }
 
+export interface LiveSessionCreateRequest {
+  "poster_id"?: string | null;
+  "rule_version"?: string;
+  "title"?: string;
+}
+
+export interface LiveSessionDetail {
+  "closed_at"?: string | null;
+  "id": string;
+  "notes"?: string;
+  "performances"?: Array<Record<string, unknown>>;
+  "poster_id"?: string | null;
+  "queue"?: Array<Record<string, unknown>>;
+  "rule_version": string;
+  "started_at": string;
+  "state": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionEntitlementGrantRequest {
+  "evidence_label"?: string;
+  "evidence_value"?: number | null;
+  "expires_at"?: string | null;
+  "kind": string;
+  "platform_ref"?: string;
+  "quota"?: number;
+  "requester_id"?: string | null;
+  "rule_version"?: string;
+}
+
+export interface LiveSessionEntitlementResponse {
+  "consumed": number;
+  "expires_at"?: string | null;
+  "granted_at": string;
+  "id": string;
+  "kind": string;
+  "quota": number;
+  "remaining": number;
+  "requester_id": string | null;
+  "rule_version": string;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionQueueRequest {
+  "command_id"?: string | null;
+  "entitlement_id"?: string | null;
+  "entitlement_kind"?: string;
+  "note"?: string;
+  "requester_id"?: string | null;
+  "requester_name": string;
+  "song_id": string;
+}
+
+export interface LiveSessionQueueResponse {
+  "decision": Record<string, unknown>;
+  "duplicate_merged"?: boolean;
+  "ok"?: boolean;
+  "position": number;
+  "request_id": string;
+  "song_id": string;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionRecordRequest {
+  "operator"?: string;
+  "reason"?: string;
+  "request_id": string;
+  "result": string;
+}
+
+export interface LiveSessionRecordResponse {
+  "ok"?: boolean;
+  "refund_reason"?: string;
+  "refunded"?: boolean;
+  "request_id": string;
+  "result": string;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionSummary {
+  "closed_at"?: string | null;
+  "id": string;
+  "queue_size"?: number;
+  "rule_version": string;
+  "started_at": string;
+  "state": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
 export interface OkResponse {
   "ok"?: boolean;
   [key: string]: unknown;

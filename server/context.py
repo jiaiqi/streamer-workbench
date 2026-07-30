@@ -27,4 +27,5 @@ class AppContext:
     export_service: Any
     export_job_manager: Any
     poster_service: Any                  # R1a.1 增量
-    themes: Mapping[str, Any]  
+    themes: Mapping[str, Any]
+    live_persistence_service: Any = None  # R2 P3 增量
