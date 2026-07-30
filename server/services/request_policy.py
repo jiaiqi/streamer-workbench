@@ -23,7 +23,7 @@ from core.data.live import (
 
 
 # 哪些权益「解锁插队申请」而非自动插队——可配置列表的简化表达
-BUMP_UNLOCK_KINDS = frozenset({"high_value_gift", "manual"})
+BUMP_UNLOCK_KINDS = frozenset({"high_value_gift", "manual_bump"})
 
 
 class RequestPolicyServiceError(Exception):
@@ -69,33 +69,40 @@ class RequestPolicyService:
         """为一次入队请求做决策。
 
         Args:
-            entitlement_kind: 权益类型 (fan_join/member_daily/gift_exchange/campaign/manual)
+            entitlement_kind: 权益类型
+              - "fan_join" / "member_daily" / "gift_exchange" / "campaign": 普通权益入队尾
+              - "manual_add": 主播直接加歌（不核销）
+              - "manual_bump" / "high_value_gift": 申请插队（主播确认）
             snapshot: 当前队尾/正在演唱/连续插队计数
 
         Returns:
             PolicyDecision (allowed, requires_broadcaster_confirmation, degraded, reason)
         """
-        if entitlement_kind == "":
-            return PolicyDecision(
-                allowed=False,
-                reason="缺少 entitlement kind",
-                rule_version=self._policy.rule_version,
-            )
+        # 空 kind 视为主播手动加歌 — 不消耗额度
+        kind = entitlement_kind or "manual_add"
 
-        # 普通权益 (队尾入队)
-        if entitlement_kind in {"fan_join", "member_daily", "gift_exchange", "campaign"}:
+        # 普通手动加：不需要确认
+        if kind in {"manual_add"}:
             return PolicyDecision(
                 allowed=True,
                 requires_broadcaster_confirmation=False,
                 rule_version=self._policy.rule_version,
             )
 
-        # 插队权益 (申请资格，非自动)
-        if entitlement_kind in BUMP_UNLOCK_KINDS:
-            # 公平保护：连续插队达到上限 → degraded
+        # 普通权益（队尾入队）
+        if kind in {"fan_join", "member_daily", "gift_exchange", "campaign"}:
+            return PolicyDecision(
+                allowed=True,
+                requires_broadcaster_confirmation=False,
+                rule_version=self._policy.rule_version,
+            )
+
+        # 插队权益（需主播确认）
+        if kind in BUMP_UNLOCK_KINDS:
+            # 公平保护触发
             if snapshot.recent_bumps_in_a_row >= self._policy.fairness_max_consecutive_bumps:
                 return PolicyDecision(
-                    allowed=True,     # 仍允许，但需要原因
+                    allowed=True,
                     requires_broadcaster_confirmation=True,
                     rule_version=self._policy.rule_version,
                     degraded=True,

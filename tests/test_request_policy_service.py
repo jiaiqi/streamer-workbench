@@ -34,26 +34,35 @@ class RequestPolicyDecideTests(unittest.TestCase):
         svc = RequestPolicyService(policy=RequestPolicy(rule_version="rv1"))
         snap = QueueSnapshot(queue_size=5, current_song_position=1,
                              recent_bumps_in_a_row=0)
-        d = svc.decide_queue(entitlement_kind="manual", snapshot=snap)
+        d = svc.decide_queue(entitlement_kind="manual_bump", snapshot=snap)
         self.assertTrue(d.allowed)
         self.assertTrue(d.requires_broadcaster_confirmation)
+
+    def test_manual_add_does_not_require_confirmation(self):
+        svc = RequestPolicyService(policy=RequestPolicy(rule_version="rv1"))
+        d = svc.decide_queue(entitlement_kind="", snapshot=QueueSnapshot())
+        # 主播手动加歌 = 不需要确认
+        self.assertTrue(d.allowed)
+        self.assertFalse(d.requires_broadcaster_confirmation)
 
     def test_high_value_gift_unlocks_bump(self):
         svc = RequestPolicyService(policy=RequestPolicy(rule_version="rv1"))
         snap = QueueSnapshot(queue_size=8, current_song_position=1)
-        d = svc.decide_queue(entitlement_kind="manual", snapshot=snap)
+        d = svc.decide_queue(entitlement_kind="high_value_gift", snapshot=snap)
         self.assertTrue(d.allowed)
         self.assertTrue(d.requires_broadcaster_confirmation)
-        # 与 high_value_gift 等价（两者均在 BUMP_UNLOCK_KINDS）
-        d2 = svc.decide_queue(entitlement_kind="manual", snapshot=snap)
+        # 等价于 manual_bump
+        d2 = svc.decide_queue(entitlement_kind="manual_bump", snapshot=snap)
         self.assertEqual(d2.requires_broadcaster_confirmation,
                          d.requires_broadcaster_confirmation)
 
-    def test_missing_kind_rejected(self):
+    def test_missing_kind_defaults_to_manual_add(self):
+        """entitlement_kind="" 视为主播直接加歌 (manual)，允许不入队。"""
         svc = RequestPolicyService(policy=RequestPolicy(rule_version="rv1"))
         d = svc.decide_queue(entitlement_kind="", snapshot=QueueSnapshot())
-        self.assertFalse(d.allowed)
-        self.assertIn("缺少", d.reason)
+        self.assertTrue(d.allowed)
+        # 不需要主播确认（主插自己加）
+        self.assertFalse(d.requires_broadcaster_confirmation)
 
     def test_unknown_kind_raises(self):
         svc = RequestPolicyService(policy=RequestPolicy(rule_version="rv1"))
@@ -68,7 +77,7 @@ class RequestPolicyDecideTests(unittest.TestCase):
         # 连续 3 次后立即触发
         snap = QueueSnapshot(queue_size=15, current_song_position=1,
                              recent_bumps_in_a_row=3)
-        d = svc.decide_queue(entitlement_kind="manual", snapshot=snap)
+        d = svc.decide_queue(entitlement_kind="manual_bump", snapshot=snap)
         self.assertTrue(d.allowed)
         self.assertTrue(d.requires_broadcaster_confirmation)
         self.assertTrue(d.degraded)
@@ -79,7 +88,7 @@ class RequestPolicyDecideTests(unittest.TestCase):
                                 fairness_max_consecutive_bumps=3)
         svc = RequestPolicyService(policy=policy)
         snap = QueueSnapshot(recent_bumps_in_a_row=2)
-        d = svc.decide_queue(entitlement_kind="manual", snapshot=snap)
+        d = svc.decide_queue(entitlement_kind="manual_bump", snapshot=snap)
         self.assertFalse(d.degraded)
 
 
