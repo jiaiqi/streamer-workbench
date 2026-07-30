@@ -20,7 +20,8 @@ const OPTIONS = [
 
 export default function SongSourcePicker({ store, dark }: SongSourcePickerProps) {
   const src = store.current.song_source;
-  const [artistDraft, setArtistDraft] = useState(src.artists.join(" / "));
+  const artists = src.artists ?? [];
+  const [artistDraft, setArtistDraft] = useState(artists.join(" / "));
 
   return (
     <section
@@ -71,9 +72,9 @@ export default function SongSourcePicker({ store, dark }: SongSourcePickerProps)
             }}
             className="h-8 text-xs"
           />
-          {src.artists.length > 0 && (
+          {artists.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {src.artists.map((a, i) => (
+              {artists.map((a, i) => (
                 <span
                   key={`${a}-${i}`}
                   className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-primary-soft text-primary"
