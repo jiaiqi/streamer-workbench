@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-30T14:45:09+08:00",
+  "engine": "streamer-workbench/render_pages + magazine-flow v1",
+  "note": "新布局金标准（magazine-flow）；content fingerprint 对比",
+  "entries": [
+    {
+      "path": "tests/golden_magazine/海洋柔光-抖音全屏 9:20-p1.png",
+      "theme": "海洋柔光",
+      "canvas": "抖音全屏 9:20",
+      "page": 1,
+      "sha256": "9e618154d67e9e239bceb81868bfa52ba980706b37c4e1c3d9472ef5f10fd8f1",
+      "size_bytes": 1704167
+    },
+    {
+      "path": "tests/golden_magazine/海洋柔光-抖音全屏 9:20-p2.png",
+      "theme": "海洋柔光",
+      "canvas": "抖音全屏 9:20",
+      "page": 2,
+      "sha256": "4651bb24b2ce958fb98db30f715f8204b87a85c8a576886a7b67fee38608ae54",
+      "size_bytes": 2180771
+    },
+    {
+      "path": "tests/golden_magazine/海洋柔光-标准 9:16-p1.png",
+      "theme": "海洋柔光",
+      "canvas": "标准 9:16",
+      "page": 1,
+      "sha256": "a61a13e146466a5ff76414a67cfe12458be162eefb5fd0fbc89405f1443c3066",
+      "size_bytes": 1589159
+    },
+    {
+      "path": "tests/golden_magazine/海洋柔光-标准 9:16-p2.png",
+      "theme": "海洋柔光",
+      "canvas": "标准 9:16",
+      "page": 2,
+      "sha256": "d1efb05aa9f047d87fb3ac5cac4674a40ca790b623b71630681d876ac367884f",
+      "size_bytes": 2070641
+    },
+    {
+      "path": "tests/golden_magazine/梦幻海洋-抖音全屏 9:20-p1.png",
+      "theme": "梦幻海洋",
+      "canvas": "抖音全屏 9:20",
+      "page": 1,
+      "sha256": "af2d9d96b64f2ba963d9792fc8da2c78bbabb1d21bac4d29128a6d32157a96d4",
+      "size_bytes": 1620436
+    },
+    {
+      "path": "tests/golden_magazine/梦幻海洋-抖音全屏 9:20-p2.png",
+      "theme": "梦幻海洋",
+      "canvas": "抖音全屏 9:20",
+      "page": 2,
+      "sha256": "81d02cc880024df910ae010c7045b92bdb9325812b1efbd7146eef921260258c",
+      "size_bytes": 1235609
+    }
+  ]
+}

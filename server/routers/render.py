@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 from PIL import Image
+from pydantic import BaseModel, ConfigDict, Field
 
 from server.dependencies import get_app_context
 from server.api.errors import ApiError
@@ -73,7 +74,7 @@ def api_layout_params(layout_id: str):
 def api_layout_capabilities(layout_id: str, req: Request):
     """P1 R1a.3：单布局能力声明，UI 据此过滤主题/比例/分类组合。
 
-    仅 P1 范围：grid-wrap。
+    支持 grid-wrap 与 magazine-flow。
     """
     try:
         plugin = get_layout(layout_id)
@@ -86,6 +87,90 @@ def api_layout_capabilities(layout_id: str, req: Request):
         caps["capacity"] = plugin.estimate_capacity("9:20")
     caps["id"] = layout_id
     return caps
+
+
+class AnalyzeQuery(BaseModel):
+    """magazine-flow 自动分页分析请求：传入可选 poster_id / 直接的 song_ids."""
+    model_config = ConfigDict(extra="forbid")
+    poster_id: str | None = None
+    """如果提供，则解析 Poster 的 SongSource；否则直接由 song_ids 传入。"""
+    song_ids: list[str] | None = None
+    canvas_id: str = "9:20"
+    theme_id: str = "海洋柔光"
+    grouping: str = "none"
+    parameters: dict = Field(default_factory=dict)
+
+
+@router.post("/api/layouts/magazine-flow/analyze")
+def api_magazine_flow_analyze(req: Request, payload: AnalyzeQuery):
+    """R1b: 触发 magazine-flow layout 的 analyze，返回 pages/per_page/overflow。
+
+    给前端工作台「预估 N 页」「分组 X 桶将溢出」的可见反馈；
+    与 /api/render/document 解耦——纯读取不影响状态。
+    """
+    from core.layouts.magazine_flow import (
+        MagazineFlowLayout, VALID_AXES, analyze as mf_analyze,
+    )
+    from core.spec import get_canvas_spec
+
+    context = get_app_context(req)
+    library_snapshot = context.song_repository.load()
+    if library_snapshot.value is None or len(library_snapshot.value.mastered()) == 0:
+        return api_error_response(
+            req, 400, ApiError("empty_library",
+                                "曲库为空；先 seed-sample 才能分析"),
+        )
+    if payload.grouping not in VALID_AXES:
+        return api_error_response(
+            req, 400, ApiError("invalid_grouping",
+                                f"非法 grouping={payload.grouping!r}"),
+        )
+    try:
+        canvas = get_canvas_spec(payload.canvas_id, avoid=True)
+    except (ValueError, KeyError) as exc:
+        return api_error_response(
+            req, 404, ApiError("canvas_not_found", f"未知画布：{payload.canvas_id}"),
+        )
+    # 解析 song 列表：poster 优先 → 直接 song_ids → 全库
+    songs = []
+    if payload.poster_id and context.poster_service is not None:
+        try:
+            result = context.poster_service.resolve(payload.poster_id)
+            songs = [s for s in result.songs]
+        except PosterNotFound as exc:
+            return api_error_response(req, 404, ApiError("poster_not_found", str(exc)))
+        except PosterServiceError as exc:
+            return api_error_response(req, 400, ApiError("invalid_poster", str(exc)))
+    elif payload.song_ids:
+        # song_id → Song 映射
+        active_by_id = {s.id: s for s in library_snapshot.value.active()}
+        for sid in payload.song_ids:
+            song = active_by_id.get(sid)
+            if song is not None:
+                songs.append(song)
+    else:
+        songs = library_snapshot.value.active()
+
+    # 构造一个最小 SongLibrary 包装以适配 categorize_by_axis 接受的 .mastered()
+    class _Library:
+        def __init__(self, lib_snapshot, override):
+            self._mastered_fn = lib_snapshot.value.mastered
+            self._active_fn = lib_snapshot.value.active
+            self._override = override
+            self.songs = lib_snapshot.value.songs
+        def mastered(self):
+            return self._override if self._override else self._mastered_fn()
+        def active(self):
+            return self._override if self._override else self._active_fn()
+
+    sub_lib = _Library(library_snapshot, songs if (payload.poster_id or payload.song_ids) else None)
+
+    plugin = MagazineFlowLayout()
+    report = mf_analyze(sub_lib, axis=payload.grouping, canvas=canvas)
+    report["canvas_id"] = payload.canvas_id
+    report["grouping"] = payload.grouping
+    report["layout_id"] = "magazine-flow"
+    return report
 
 
 @router.get("/api/render", response_class=Response,
