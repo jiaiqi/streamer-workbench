@@ -139,3 +139,93 @@ cd ui && npm run dev                   # 前端（5173，代理 /api 到 8000）
 - vitest 单独用 `vitest.config.ts`，别名要两边都配。
 - grid-wrap 固定 2 页是 ADR-002 兼容模式，不是 bug；新分页逻辑只属于新布局。
 - 预览 URL 的 `&t=` 是缓存破坏者，P1 第 8 项治理，不要提前删（歌曲库变化目前靠它刷新）。
+
+## 8. 会后增量（2026-07-30 末追加）
+
+R1a 完成会后又闭环了 R1b 与 R3 整段核心纵切，向 origin/master push 6 个 commit。本节交代增量，避免读旧 handoff 时漏掉。
+
+### 8.1 R1b magazine-flow（已完成）
+
+- `core/layouts/magazine_flow.py` — 刊头流式分页布局，6 种分类轴（chars/artist/genre/language/initial/status），`pages=auto` 时调用 `analyze(library, axis, canvas)` 返回 `total_songs / page_count / per_page_max / categories / overflow / degrade_reason`。
+- `core/engine.py:render_pages(theme, layout, library, spec, font_path, *, page_count=None)` 适配 `layout.pages=None` 自动分页；截断到 `max(theme.styles)` 兜底。
+- `server/routers/render.py:POST /api/layouts/magazine-flow/analyze` — UI 预估页数/分桶前端反馈。
+- `tests/golden_magazine/` — 6 张 PNG + `manifest.json`（sha256/size_bytes）独立目录，**不动 grid-wrap 16 张金标准**。测试用 `test_magazine_golden.py` 验证指纹 + 画布尺寸差异（防御过夜回归）。
+- `tools/generate_magazine_golden.py --confirm-baseline` — 重建工具，**必须 `--confirm-baseline` 标志**才生成（防误操作）。
+- UI：`ui/src/posters/LayoutPicker.tsx` radiogroup，切换联动 `page_policy`（grid-wrap → legacy-fixed-2；magazine-flow → auto）。
+
+### 8.2 R2 P3 直播核心（已完成 6/7 子项；剩余 Electron 壳）
+
+后续读 HANDOFF 时务必注意：**R1a 是 100%，R3 直播核心纵切也是 100%**。两者都没做完的是「Electron 桌面壳 + 置顶速查窗口 + 离线去重补报」，这部分挂在 P3-Electron 而不是 R3。
+
+#### R3 落地模块
+
+| 模块 | 文件 | 用途 |
+|---|---|---|
+| 领域 6 个 dataclass | `core/data/live.py` | LiveSession / SongRequest / QueueEntry / PerformanceRecord / RequestPolicy / EntitlementGrant |
+| EntitlementService | `server/services/entitlements.py` | 幂等核销（command_id）+ 返还；InMemoryEntitlementLedger 持久化在 R3-Persistence |
+| RequestPolicyService | `server/services/request_policy.py` | 决策（普通权益队尾入/插队权益申请）+ 公平保护 + 规则 diff |
+| LiveService | `server/services/live.py` | 状态机：start/queue/record/close；duplicate_merged 自动合并；skipped/unknown/cancelled 触发 entitlement 退还 |
+| LiveRepository | `server/repositories/live.py` | 原子写 + revision CAS + 备份 + 软删除 + 恢复；manifest 跟踪 |
+| LiveSessionPersistenceService | `server/services/live_persistence.py` | 写穿：每次 LiveService 命令立即 save_to_repo；启动期 `load_session()` 重建 |
+
+#### HTTP 路由 7 端点
+
+| Method | Path | 用途 |
+|---|---|---|
+| `GET` | `/api/live-sessions` | 列表（摘要 + queue_size）|
+| `POST` | `/api/live-sessions` | 创建（rule_version + title + poster_id 可选）|
+| `GET` | `/api/live-sessions/{id}` | 详情（queue + performances）|
+| `POST` | `/api/live-sessions/{id}/queue` | 入队（duplicate_merged 标记）|
+| `POST` | `/api/live-sessions/{id}/record` | 记录结果（sung / skipped / unknown / cancelled / postponed）|
+| `POST` | `/api/live-sessions/{id}/close` | 关闭（仅 SESSION_ACTIVE 可关闭）|
+| `POST` | `/api/live-sessions/{id}/entitlements` | 授予权益 |
+
+`LiveServiceError` 统一翻译 `400 live_service_error`；`SESSION_CLOSED` 后入队返回 400。
+
+#### 重启恢复
+
+lifespan 启动期自动 `list_sessions()` + `load_session()` → 新 LiveService 实例与已存数据完整对齐。
+`tests/test_live_api.py:test_restart_app_recovers_sessions` 是端到端验证。
+
+#### 测试基线（handoff 增量参考）
+
+| 类型 | 数量 |
+|---|---|
+| Python | 31/31（其中 P3 新增 88+ 用例：领域 31 + Entitlement 16 + Policy 14 + Live 14 + LiveRepo 12 + Persistence 8 + Live API 13）|
+| 单元 | P3 子模块可单独 `python tests/test_live_service.py` 等 |
+| 端到端 | `tests/test_live_api.py` 13 个 ASGI 用例 |
+
+#### 设计契约（接手必读）
+
+- **核销幂等**：`command_id` 在账目里唯一；重复 `consume(ent_id, cmd)` 不重复扣。`refund(ent_id, cmd)` 必须用 `refund:<原cmd>` 前缀，命名空间隔离。
+- **rule_version 不回写**：每次 grant / 创建 LiveSession 都绑定 `rule_version`。修改规则版本=生成新 RequestPolicy 快照。`RequestPolicyService.rule_differs(new)` 用于升级检测。
+- **BUMP_UNLOCK_KINDS**=`{high_value_gift, manual_bump}`：插队申请资格。主播空 kind 视为 `manual_add`：主播直接加歌，不消耗额度，不需主播确认。
+- **duplicate_merged**：同 `(session, song_id, requester_id_or_name)` 二次入队合并，账目只一次扣，事件区分。
+- **公平保护 trigger**：`recent_bumps_in_a_row >= policy.fairness_max_consecutive_bumps` → decision `degraded=True + reason=已达插队上限`；仍允许但需主播说明。
+
+#### 接手常踩坑（HANDOFF §7 已有部分 + R3 新增）
+
+- 改 Live 端点忘了 `LiveServiceError` 翻译 → FastAPI 返 500 而非 400；router 必须同时捕获 `LiveServiceError` + `EntitlementServiceError` + `ValueError`。
+- 在 R3-Electron 加入 **之前**不要把 LiveService 当 QuickView sole source — QuickView 离线队列 + `event_id` 幂等补报是后续会话领域，目前端到端只在 FastAPI 上工作。
+
+### 8.3 R4-R6 后续路径
+
+- P4 R3 学歌闭环：S4 打卡（`practice_logged`）+ 统计口径（最近动态/本月新学/TOP）+ 乐理辅助（转调 / 和弦 / 音域）— 下一会话起点
+- P5 统计页：纯前端 + 复用 P4 stats API；导航第六入口
+- P6 R5 工作台系统化：令牌收敛（消灭 dark 三元）+ 动效系统化 + 无障碍 + 响应式 + WorkspaceDocument 状态可靠性
+
+### 8.4 测试运行入口
+
+```bash
+# 全栈（推荐）
+.venv/bin/python tools/run_tests.py                     # 31 个测试文件全部
+cd ui && npm test                                        # 16 单测 + 6 React 交互
+cd ui && npx tsc --noEmit && npm run build               # 前端质量门
+
+# 单 P 模块（精细诊断）
+.venv/bin/python tests/test_live_api.py                 # R3 端到端
+.venv/bin/python tests/test_render_document.py          # R1 渲染
+.venv/bin/python tests/test_golden.py                     # 金标准
+```
+
+实际边界仍然由 `tools/run_tests.py` 守门（自动 glob `tests/test_*.py`）。

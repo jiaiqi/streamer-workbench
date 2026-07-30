@@ -49,23 +49,29 @@
 
 ```
 引擎兼容  ✅          avoid/cache 正确性已修复，金标准 16/16 diff=0；环境复现待 R0 收口
-数据层    S1-S3.5 ✅ Song v5/Event v2、Tabs/Queue/Preset song_id 关系迁移完成；S4/S5 按 R3 启动
-产品主线  R0 ✅      R0.1-R0.12 全部收口；下一条用户可见主线 R1 首用和日常出图
+数据层    S1-S3.5 ✅ Song v5/Event v2、Tabs/Queue/Preset song_id 关系迁移完成
+              S4     ⬜ 打卡 + 统计 + 乐理辅助（R4 启动时按 roadmap 接入）
+产品主线  R0 ✅      R0.1-R0.12 全部收口
+              R1a ✅ 海报闭环（领域/仓储/服务/API/样例/能力/RenderDocument/UI 接入 + 自动保存）
+              R1b ✅ magazine-flow 自动分页（6 分类轴 + analyze HTTP + 新金标准 6 PNG + LayoutPicker）
+              R2     ✅ 直播核心纵切（领域 + 核销 + 决策 + LiveService + 持久化 + 7 端点）
+                          Electron 壳与置顶速查窗口 ⬜（P3-Electron 冲刺）
+              R3-R7  ⬜ 学歌/统计/编辑器（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
 桌面壳    spike 已过  正式壳 ⬜
-UI        ~80%       工作台/歌曲库/学歌/速查可用
+UI        ~85%       工作台/歌曲库/学歌/速查/海报/直播会话均可用
 ```
 
 ### 技术栈
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；本地 venv 版本漂移需 R0 收口 |
-| 后端 | FastAPI 0.115.0（requirements）+ uvicorn | AppContext + Repository adapters + services + routers；边界见 ADR-005 |
-| 前端 | React 19 + Vite 6 + Tailwind 4 + shadcn/ui | `ui/`；组件优先用 shadcn/ui（`ui/src/components/ui/`），shadcn 不满足需求再自写组件 |
-| 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json |
-| 桌面壳 | Electron（spike） | Python 作 child_process，正式壳未完成 |
+| 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；grid-wrap 16/16 + magazine-flow 6 PNG |
+| 后端 | FastAPI 0.115.0（requirements）+ uvicorn | AppContext + Repository adapters + services + routers；边界见 ADR-005；含 `/api/live-sessions*` 7 端点 |
+| 前端 | React 19 + Vite 6 + Tailwind 4 + shadcn/ui | `ui/`；组件优先用 shadcn/ui（`ui/src/components/ui/`），shadcn 不满足需求再自写组件；`usePosterStore` 状态机 + `WorkspacePosterBridge` 接入工作台左栏 |
+| 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量） |
+| 桌面壳 | Electron（spike） | Python 作 child_process；正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 189 项 Python 测试 + 22 项前端测试（含 6 项 React 交互测试）+ 16 张金标准逐像素 + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定仍待 R0 收口 |
+| 测试 | 31 项 Python 测试文件 + 34 项 vitest + 16 项 node:test + 16/16 grid 金标准 + 6/6 magazine PNG + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
 
 ---
 
