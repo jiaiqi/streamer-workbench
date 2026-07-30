@@ -172,39 +172,73 @@ class PosterApplicationService:
         这是 RenderDocument（预览/导出）共享的同一解析路径。
         selected_song_ids 中含有不在 active 库里的 song_id → 列入 missing_song_ids，
         由调用方决定降级策略（前端显示警告 / 渲染前移除）。
+
+        注意：本方法不返回完整 Song 对象；构建 RenderDocument 时请用 resolve_for_render
+        拿到完整 Song 列表（直接从 SongRepository 读，避免再二次构造）。
         """
         poster = self.get(poster_id)
         if self._songs is None:
             raise PosterServiceError("SongRepository 未注入，无法解析 SongSource")
         active_songs = self._songs.load().value.active()
-        resolved_ids = self._resolve_source(poster.song_source, active_songs)
-        # 与持久化的 selected_song_ids 求并集去重保序：
-        # - 当 SongSource 解析为空（如 SOURCE_ARTIST 暂时没匹配），
-        #   仍返回 selected_song_ids（手动兜底，便于渐进入口）
-        resolved_set = set(resolved_ids)
-        merged = list(resolved_ids)
-        for sid in poster.selected_song_ids:
-            if sid not in resolved_set:
-                merged.append(sid)
-                resolved_set.add(sid)
-        # 转成快照；同时收集 missing
-        snapshots: List[SongSnapshot] = []
+        merged = self._resolve_merged_ids(poster, active_songs)
         active_by_id = {s.id: s for s in active_songs}
+        snapshots: List[SongSnapshot] = []
         missing: List[str] = []
         for sid in merged:
             song = active_by_id.get(sid)
             if song is None:
                 missing.append(sid)
                 continue
-            snapshots.append(
-                SongSnapshot(
-                    id=song.id,
-                    title=str(getattr(song, "title", "")),
-                    artists=tuple(getattr(song, "artists", []) or []),
-                    section=int(getattr(song, "section", 0) or 0),
-                )
-            )
+            snapshots.append(self._to_song_snapshot(song))
         return PosterResolveResult(tuple(snapshots), tuple(missing))
+
+    def resolve_for_render(self, poster_id: str):
+        """返回构建 RenderDocument 所需的全部输入。
+
+        返回 (PosterDocument, SongLibrary-like, list[str])
+        其中 SongLibrary-like 有 .songs 列表 / .mastered() / .active()，可直接传给
+        build_render_document。
+        """
+        poster = self.get(poster_id)
+        if self._songs is None:
+            raise PosterServiceError("SongRepository 未注入")
+        snapshot = self._songs.load()
+        active_songs = snapshot.value.active()
+        merged = self._resolve_merged_ids(poster, active_songs)
+        active_by_id = {s.id: s for s in active_songs}
+        # 按 merged 顺序构造 SongLibrary，缺失的 song_id 自动降级（不渲染）
+        from core.data.songs import SongLibrary
+        lib = SongLibrary([s for s in [active_by_id.get(sid) for sid in merged] if s is not None])
+        missing = [sid for sid in merged if sid not in active_by_id]
+        return poster, snapshot.value, lib, missing
+
+    @staticmethod
+    def _to_song_snapshot(song):
+        return SongSnapshot(
+            id=song.id,
+            title=str(getattr(song, "title", "")),
+            artists=tuple(getattr(song, "artists", []) or []),
+            section=int(getattr(song, "section", 0) or 0),
+        )
+
+    @staticmethod
+    def _resolve_merged_ids(poster, active_songs) -> List[str]:
+        """解析 SongSource 与 selected_song_ids 的并集（去重保序）。"""
+        if poster.song_source.type == SOURCE_ALL_ACTIVE:
+            source_ids = resolve_all_active(active_songs)
+        elif poster.song_source.type == SOURCE_ARTIST:
+            source_ids = resolve_artist_source(list(poster.song_source.artists), active_songs)
+        elif poster.song_source.type == "manual":
+            source_ids = []
+        else:
+            raise PosterValidationFailed(f"未知 SongSource.type：{poster.song_source.type!r}")
+        seen = set(source_ids)
+        merged = list(source_ids)
+        for sid in poster.selected_song_ids:
+            if sid not in seen:
+                merged.append(sid)
+                seen.add(sid)
+        return merged
 
     def _resolve_source(self, source: SongSource, active_songs) -> List[str]:
         """按 SongSource.type 解析为 song_id 列表（保序）。"""
@@ -215,3 +249,18 @@ class PosterApplicationService:
         if source.type == "manual":
             return []  # manual 模式下解析不由 source 提供；走 selected_song_ids
         raise PosterValidationFailed(f"未知 SongSource.type：{source.type!r}")
+
+    # ── RenderDocument 集成 (P1 R1a.4) ──
+
+    def resolve_with_library(self, poster_id: str):
+        """resolve 但额外返回 active 全曲库（capability check 用）。
+
+        返回 (PosterDocument, list[Song], list[str])（缺失 ID 列表）。
+        caller 用 active_songs 做 check_overflow；用 snapshots 做 build_render_document。
+        """
+        if self._songs is None:
+            raise PosterServiceError("SongRepository 未注入")
+        poster = self.get(poster_id)
+        active_songs = self._songs.load().value.active()
+        snap = self.resolve(poster_id)
+        return poster, active_songs, list(snap.missing_song_ids)

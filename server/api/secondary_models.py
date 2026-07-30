@@ -233,6 +233,34 @@ class OkResponse(BaseModel):
     ok: bool = True
 
 
+# ── R1a.4 RenderDocument：POST /api/render/document 与 /api/export/document ──
+# 预览与导出共享同一份 RenderDocument；接收 poster_id + 渲染参数，
+# 由服务端解析 SongSource → SongSnapshot 列表 → 构造 RenderDocument。
+
+class RenderDocumentRequest(StrictRequest):
+    poster_id: str
+    layout_id: str = "grid-wrap"          # P1 仅允许 grid-wrap
+    theme_id: str = "海洋柔光"
+    canvas_id: str = "9:20"
+    page: int = 1
+    parameters: dict = Field(default_factory=dict)
+
+
+class RenderDocumentResponse(BaseModel):
+    document_id: str
+    poster_id: str
+    layout_id: str
+    theme_id: str
+    canvas_id: str
+    page: int
+    pages_total: int
+    song_count: int
+    missing_song_ids: list[str] = Field(default_factory=list)
+    page_policy_mode: str = "legacy-fixed-2"
+    # 完整 RenderDocument JSON 用于客户端缓存/审计；体积可控（仅快照）
+    document: dict = Field(default_factory=dict)
+
+
 class RenderRequest(StrictRequest):
     theme: str
     page: int = 1

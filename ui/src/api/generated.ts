@@ -293,6 +293,30 @@ export interface PresetSummaryResponse {
   [key: string]: unknown;
 }
 
+export interface RenderDocumentRequest {
+  "canvas_id"?: string;
+  "layout_id"?: string;
+  "page"?: number;
+  "parameters"?: Record<string, unknown>;
+  "poster_id": string;
+  "theme_id"?: string;
+}
+
+export interface RenderDocumentResponse {
+  "canvas_id": string;
+  "document"?: Record<string, unknown>;
+  "document_id": string;
+  "layout_id": string;
+  "missing_song_ids"?: Array<string>;
+  "page": number;
+  "page_policy_mode"?: string;
+  "pages_total": number;
+  "poster_id": string;
+  "song_count": number;
+  "theme_id": string;
+  [key: string]: unknown;
+}
+
 export interface SettingsResponse {
   "appearanceMode"?: "system" | "light" | "dark";
   "applicationAccentId"?: "bambooMoon" | "rainSky" | "distantMountain" | "rouge" | "begonia" | "wisteria" | "amber" | "pineFlower";
