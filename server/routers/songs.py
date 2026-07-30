@@ -153,6 +153,47 @@ def api_songs_delete(req: Request, payload: SongLegacyIdentityRequest):
             "active": result.active, "draft": result.draft}
 
 
+@router.post("/api/songs/seed-sample", response_model=SongMutationResponse)
+def api_songs_seed_sample(req: Request):
+    """仅在曲库为空时载入内置样例曲库（核心数据写入路径）。
+
+    注：必须在 /api/songs/{song_id} 之前注册，否则会被路径参数拦截。
+    非空库返回 200 with added=[]；首次空库返回新加入的歌曲列表。
+    """
+    result = get_app_context(req).song_service.seed_sample_songs()
+    if result.song is None:
+        # 边界：不可达；防御兜底
+        return {"ok": True, "song": {"title": "", "artists": [], "lyricist": "",
+                                     "composer": "", "key": "", "capo": None,
+                                     "difficulty": "", "tabs": "", "status": "draft",
+                                     "tags": [], "pinyin": "", "added_at": "",
+                                     "notes": "", "learned_at": "", "tab_files": [],
+                                     "section": None, "id": ""},
+                "active": 0, "draft": 0, "added": []}
+    song_d = {
+        "id": result.song.id,
+        "title": result.song.title,
+        "artists": list(result.song.artists),
+        "lyricist": result.song.lyricist,
+        "composer": result.song.composer,
+        "key": result.song.key,
+        "capo": result.song.capo,
+        "difficulty": result.song.difficulty,
+        "tabs": result.song.tabs,
+        "status": result.song.status,
+        "tags": list(result.song.tags),
+        "pinyin": result.song.pinyin,
+        "added_at": result.song.added_at,
+        "notes": result.song.notes,
+        "learned_at": result.song.learned_at,
+        "tab_files": list(result.song.tab_files),
+        "section": result.song.section,
+    }
+    return {"ok": True, "song": song_d,
+            "active": result.active, "draft": result.draft,
+            "added": [s.title for s in result.added]}
+
+
 # ── Song ID 主接口 ──
 
 @router.get("/api/songs/{song_id}", response_model=SongResponse)

@@ -395,6 +395,7 @@ export interface SongLegacyUpdateRequest {
 
 export interface SongMutationResponse {
   "active": number;
+  "added"?: Array<string>;
   "draft": number;
   "ok"?: boolean;
   "song": SongResponse;
