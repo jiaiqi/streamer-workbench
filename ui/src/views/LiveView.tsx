@@ -1,30 +1,26 @@
-/// R2 直播管理视图。
+/// R2 直播后台管理视图。
 ///
-/// 消费后端 /api/live-sessions* 7 端点：
-/// - GET    /api/live-sessions              列表
-/// - POST   /api/live-sessions              创建
-/// - GET    /api/live-sessions/{id}         详情（队列 + 演唱记录）
-/// - POST   /api/live-sessions/{id}/queue   入队（点歌人/权益/幂等 command_id）
-/// - POST   /api/live-sessions/{id}/record  记录结果（sung/skipped/postponed/unknown/cancelled）
-/// - POST   /api/live-sessions/{id}/close   关闭
-/// - POST   /api/live-sessions/{id}/entitlements 授予权益
+/// 用途：**会前 + 会后** 的会话查看 / 记录 / 修正。
+/// 不用于直播中点歌或记录 — 那是 QuickView (置顶速查窗) 的职责。
 ///
-/// 设计：
-/// - 左侧：会话列表 + 「开始一场」按钮
-/// - 右侧：详情（待唱/已唱/未结）+ 入队/记录表单 + 「直播速查」链接
-/// - 列表/详情独立加载，刷新只刷详情不刷整页
-/// - 失败走 actionError 顶部条 + ApiClientError 还原
-import { useEffect, useMemo, useState, useCallback } from "react";
+/// 范围（v1）：
+/// - 会话列表 + 详情（队列 / 演唱历史）
+/// - 「主播加歌」按钮：从曲库挑歌直接入队，entitlement_kind=manual
+///   （不消耗权益、不需主播确认；v1 简化，其他权益类型在 QuickView 流程里）
+/// - 手动覆盖 record：修正 QuickView 误操作或补录
+/// - 关闭会话
+///
+/// 不在本视图做（避免职责重复）：
+/// - 搜歌入队、权益授予、断网补报 → QuickView
+/// - 整体快捷键（Space/U/P/R）→ QuickView 内做
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { Song, SongsData } from "../types";
 import AsyncStateNotice from "../components/AsyncStateNotice";
 import { Icon } from "../icons";
-import { ApiClientError, apiRequest } from "../api/client";
+import { apiRequest } from "../api/client";
 import type {
-  LiveSessionCreateRequest,
   LiveSessionDetail,
-  LiveSessionQueueRequest,
   LiveSessionQueueResponse,
-  LiveSessionRecordRequest,
   LiveSessionRecordResponse,
   LiveSessionSummary,
 } from "../api/generated";
@@ -144,6 +140,7 @@ export default function LiveView({ dark }: { dark: boolean }) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [actionError, setActionError] = useState("");
   const [actionNotice, setActionNotice] = useState("");
+  const [manualPickerOpen, setManualPickerOpen] = useState(false);
 
   const listRequest = useLatestRequest<LiveSessionSummary[]>({
     isEmpty: data => data.length === 0,
@@ -166,13 +163,13 @@ export default function LiveView({ dark }: { dark: boolean }) {
     }
   }, []);
 
-  // 启动加载：会话列表 + 曲库（用于按 song_id 解析标题）
+  // 启动加载：会话列表 + 曲库（手动加歌需要选歌）
   useEffect(() => {
     refreshList();
     apiRequest<SongsData>("/api/songs/list")
       .then(d => setSongs(d.songs))
       .catch(() => setSongs([]));
-    // 只在 mount 跑一次
+    // 只在 mount 跑一次（listRun 是稳定引用）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -205,10 +202,9 @@ export default function LiveView({ dark }: { dark: boolean }) {
   /* ---- 创建会话 ---- */
   const handleCreate = async () => {
     setActionError("");
-    const payload: LiveSessionCreateRequest = { rule_version: "rv1", title: "" };
     try {
       const created = await apiRequest<LiveSessionSummary>("/api/live-sessions", {
-        method: "POST", body: payload });
+        method: "POST", body: { rule_version: "rv1", title: "" } });
       await refreshList();
       setActiveId(created.id);
     } catch (reason) {
@@ -228,50 +224,47 @@ export default function LiveView({ dark }: { dark: boolean }) {
     }
   };
 
-  /* ---- 入队 ---- */
-  const handleQueue = async (
-    songId: string, requesterName: string, note: string, entitlementKind: string,
-  ) => {
+  /* ---- 主播加歌：曲库选歌 → 入队（manual 模式） ---- */
+  const handleManualQueue = async (songId: string) => {
     if (!activeId) return;
     setActionError("");
     setActionNotice("");
-    const payload: LiveSessionQueueRequest = {
-      requester_name: requesterName,
-      requester_id: null,
-      song_id: songId,
-      entitlement_id: null,
-      entitlement_kind: entitlementKind,
-      note,
-      command_id: `cmd_${uuid().replaceAll("-", "")}`,
-    };
     try {
       const res: LiveSessionQueueResponse = await apiRequest(
-        `/api/live-sessions/${activeId}/queue`, { method: "POST", body: payload },
+        `/api/live-sessions/${activeId}/queue`, {
+          method: "POST",
+          body: {
+            requester_name: "主播",
+            requester_id: null,
+            song_id: songId,
+            entitlement_id: null,
+            entitlement_kind: "manual",
+            note: "主播后台加歌",
+            command_id: `cmd_${uuid().replaceAll("-", "")}`,
+          },
+        },
       );
-      if (res.duplicate_merged) {
-        setActionNotice("同一人点过同一首，合并到已有请求");
-      } else {
-        setActionNotice(`已加入队列，位置 #${res.position}`);
-      }
+      setActionNotice(res.duplicate_merged
+        ? "同一人点过同一首，合并到已有请求"
+        : `已加入队列，位置 #${res.position}`);
+      setManualPickerOpen(false);
       await loadDetail(activeId);
     } catch (reason) {
-      setActionError(toRequestFailure(reason, "入队失败").message);
+      setActionError(toRequestFailure(reason, "加歌失败").message);
     }
   };
 
-  /* ---- 记录结果 ---- */
-  const handleRecord = async (
-    requestId: string, result: string, reason: string,
-  ) => {
+  /* ---- 手动覆盖 record（修正 QuickView 误操作或补录） ---- */
+  const handleRecord = async (requestId: string, result: string) => {
     if (!activeId) return;
     setActionError("");
     setActionNotice("");
-    const payload: LiveSessionRecordRequest = {
-      request_id: requestId, result, operator: "broadcaster", reason,
-    };
     try {
       const res: LiveSessionRecordResponse = await apiRequest(
-        `/api/live-sessions/${activeId}/record`, { method: "POST", body: payload },
+        `/api/live-sessions/${activeId}/record`, {
+          method: "POST",
+          body: { request_id: requestId, result, operator: "broadcaster", reason: "后台手动覆盖" },
+        },
       );
       const refundMsg = res.refunded ? "（已退还权益）" : "";
       setActionNotice(`已记录：${RESULT_LABEL[result] ?? result} ${refundMsg}`.trim());
@@ -295,42 +288,6 @@ export default function LiveView({ dark }: { dark: boolean }) {
       .filter((e): e is QueueEntry => e !== null)
       .sort((a, b) => a.position - b.position);
   }, [detail]);
-
-  // 队列中"下一个待处理"：queued/current 状态里 position 最小的
-  const nextEntry = useMemo<QueueEntry | null>(() => {
-    const candidates = queueEntries.filter(
-      e => e.state === "queued" || e.state === "current",
-    );
-    return candidates[0] ?? null;
-  }, [queueEntries]);
-
-  // 快捷键：Space = sung, U = unknown, P = postponed, R = skipped
-  // 仅在 LiveView 挂载且非输入控件聚焦时生效
-  useEffect(() => {
-    if (!isActive || !nextEntry) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === " " || e.key === "Spacebar") {
-        e.preventDefault();
-        handleRecord(nextEntry.request_id, "sung", "");
-      } else if (e.key === "u" || e.key === "U") {
-        e.preventDefault();
-        handleRecord(nextEntry.request_id, "unknown", "");
-      } else if (e.key === "p" || e.key === "P") {
-        e.preventDefault();
-        handleRecord(nextEntry.request_id, "postponed", "");
-      } else if (e.key === "r" || e.key === "R") {
-        e.preventDefault();
-        handleRecord(nextEntry.request_id, "skipped", "");
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // isActive/nextEntry 变化后重新挂监听
-  }, [isActive, nextEntry]);
 
   const performances = useMemo<PerformanceRecord[]>(() => {
     if (!detail?.performances) return [];
@@ -377,7 +334,6 @@ export default function LiveView({ dark }: { dark: boolean }) {
                       session={s}
                       active={s.id === activeId}
                       onSelect={() => setActiveId(s.id)}
-                      dark={dark}
                     />
                   ))}
         </div>
@@ -408,12 +364,21 @@ export default function LiveView({ dark }: { dark: boolean }) {
               performances={performances}
               isActive={isActive}
               songTitle={songTitle}
+              songs={songs}
               onClose={() => handleClose(activeSession.id)}
-              onQueue={handleQueue}
               onRecord={handleRecord}
               onRefresh={() => loadDetail(activeSession.id)}
+              onOpenManualPicker={() => setManualPickerOpen(true)}
             />
           )}
+
+        {manualPickerOpen && activeId && isActive && (
+          <ManualSongPicker
+            songs={songs}
+            onPick={handleManualQueue}
+            onClose={() => setManualPickerOpen(false)}
+          />
+        )}
       </main>
     </div>
   );
@@ -421,11 +386,10 @@ export default function LiveView({ dark }: { dark: boolean }) {
 
 /* ================== 子组件 ================== */
 
-function SessionCard({ session, active, onSelect, dark }: {
+function SessionCard({ session, active, onSelect }: {
   session: LiveSessionSummary;
   active: boolean;
   onSelect: () => void;
-  dark: boolean;
 }) {
   const stateColor = session.state === "active"
     ? "var(--color-primary)" : "var(--color-muted-foreground)";
@@ -437,7 +401,7 @@ function SessionCard({ session, active, onSelect, dark }: {
       data-testid={`live-session-${session.id}`}
       className={`w-full text-left rounded-xl border px-3 py-2.5 transition-all ${active
         ? "border-primary bg-primary-soft/40"
-        : (dark ? "border-zinc-700 hover:border-zinc-500" : "border-border hover:border-muted-foreground/30")
+        : "border-border hover:border-muted-foreground/30"
       }`}
     >
       <div className="flex items-center gap-2">
@@ -459,7 +423,7 @@ function SessionCard({ session, active, onSelect, dark }: {
 
 function SessionDetail({
   session, detail, queue, performances, isActive, songTitle,
-  onClose, onQueue, onRecord, onRefresh,
+  songs, onClose, onRecord, onRefresh, onOpenManualPicker,
 }: {
   session: LiveSessionSummary;
   detail: LiveSessionDetail | null;
@@ -467,10 +431,11 @@ function SessionDetail({
   performances: PerformanceRecord[];
   isActive: boolean;
   songTitle: (id: string) => string;
+  songs: Song[];
   onClose: () => void;
-  onQueue: (songId: string, requesterName: string, note: string, entitlementKind: string) => void;
-  onRecord: (requestId: string, result: string, reason: string) => void;
+  onRecord: (requestId: string, result: string) => void;
   onRefresh: () => void;
+  onOpenManualPicker: () => void;
 }) {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -490,27 +455,27 @@ function SessionDetail({
             直播速查 ↗
           </a>
           {isActive && (
-            <button type="button" className="secondary-action" onClick={onClose}>
-              结束场次
-            </button>
+            <>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={onOpenManualPicker}
+                data-testid="live-manual-pick"
+              >
+                + 主播加歌
+              </button>
+              <button type="button" className="secondary-action" onClick={onClose}>
+                结束场次
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      <QueueForm
-        isActive={isActive}
-        onQueue={onQueue}
-        songs={detail?.queue ? extractSongOptions(detail.queue) : []}
-      />
-
-      {isActive && (
-        <p className="text-[11px] text-muted-foreground">
-          快捷键（仅队列有「下一个」时生效）：<kbd className="px-1.5 py-0.5 rounded border border-border bg-muted">Space</kbd> 已唱 ·
-          <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted">U</kbd> 不会 ·
-          <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted">P</kbd> 延期 ·
-          <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted">R</kbd> 跳过
-        </p>
-      )}
+      <p className="text-[11px] text-muted-foreground">
+        本视图是后台管理面板。直播中的点歌 / 速查 / 快捷键请打开
+        <a href="/quick" target="_blank" rel="noreferrer" className="underline"> 直播速查 </a>。
+      </p>
 
       <section>
         <h2 className="eyebrow mb-2">待唱 ({queue.length})</h2>
@@ -558,101 +523,12 @@ function SessionDetail({
   );
 }
 
-function extractSongOptions(_queue: unknown[]): never[] {
-  // 占位：当前从 songs 列表构造（由 LiveView 传入更好）。这里返回空。
-  return [];
-}
-
-function QueueForm({
-  isActive, onQueue, songs: _songs,
-}: {
-  isActive: boolean;
-  onQueue: (songId: string, requesterName: string, note: string, entitlementKind: string) => void;
-  songs: never[];
-}) {
-  const [songId, setSongId] = useState("");
-  const [requesterName, setRequesterName] = useState("");
-  const [note, setNote] = useState("");
-  const [kind, setKind] = useState("");
-
-  if (!isActive) {
-    return (
-      <div className="panel-empty">本场已结束；不能新增点歌。</div>
-    );
-  }
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!songId.trim() || !requesterName.trim()) return;
-    onQueue(songId.trim(), requesterName.trim(), note.trim(), kind);
-    setSongId("");
-    setNote("");
-  };
-
-  return (
-    <form onSubmit={submit} className="rounded-xl border border-border p-4 space-y-3">
-      <p className="eyebrow">入队</p>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="space-y-1">
-          <span className="text-xs text-muted-foreground">song_id</span>
-          <input
-            type="text" value={songId} onChange={e => setSongId(e.target.value)}
-            placeholder="例如 song_xxx"
-            required
-            data-testid="live-queue-song"
-            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-muted-foreground">点歌人</span>
-          <input
-            type="text" value={requesterName} onChange={e => setRequesterName(e.target.value)}
-            placeholder="昵称 / 显示名" required
-            data-testid="live-queue-name"
-            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-muted-foreground">权益</span>
-          <select
-            value={kind} onChange={e => setKind(e.target.value)}
-            data-testid="live-queue-kind"
-            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-          >
-            <option value="">普通（队尾）</option>
-            <option value="fan_join">新粉团</option>
-            <option value="member_daily">会员</option>
-            <option value="gift_exchange">礼物</option>
-            <option value="manual">主播加歌</option>
-          </select>
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-muted-foreground">备注（可选）</span>
-          <input
-            type="text" value={note} onChange={e => setNote(e.target.value)}
-            placeholder="如：要降调"
-            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-          />
-        </label>
-      </div>
-      <div className="flex items-center gap-2">
-        <button type="submit" className="primary-action" data-testid="live-queue-submit">
-          {Icon.play} 加入队列
-        </button>
-        <span className="text-[11px] text-muted-foreground">
-          同一 (song, requester) 自动合并，command_id 自动生成。
-        </span>
-      </div>
-    </form>
-  );
-}
-
 function QueueRow({
   entry, songTitle, onRecord,
 }: {
   entry: QueueEntry;
   songTitle: string;
-  onRecord?: (requestId: string, result: string, reason: string) => void;
+  onRecord?: (requestId: string, result: string) => void;
 }) {
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-2.5">
@@ -677,27 +553,108 @@ function QueueRow({
       {onRecord && (
         <div className="flex items-center gap-1">
           <button
-            type="button" title="已唱" aria-label="已唱"
-            onClick={() => onRecord(entry.request_id, "sung", "")}
+            type="button" title="已唱（手动覆盖）" aria-label="已唱"
+            onClick={() => onRecord(entry.request_id, "sung")}
             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border hover:bg-muted"
           >{Icon.check}</button>
           <button
             type="button" title="延期" aria-label="延期"
-            onClick={() => onRecord(entry.request_id, "postponed", "")}
+            onClick={() => onRecord(entry.request_id, "postponed")}
             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border hover:bg-muted text-xs"
           >P</button>
           <button
             type="button" title="不会唱" aria-label="不会唱"
-            onClick={() => onRecord(entry.request_id, "unknown", "")}
+            onClick={() => onRecord(entry.request_id, "unknown")}
             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border hover:bg-muted text-xs"
           >U</button>
           <button
             type="button" title="跳过" aria-label="跳过"
-            onClick={() => onRecord(entry.request_id, "skipped", "")}
+            onClick={() => onRecord(entry.request_id, "skipped")}
             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border hover:bg-muted text-xs"
           >⤳</button>
         </div>
       )}
     </li>
+  );
+}
+
+function ManualSongPicker({
+  songs, onPick, onClose,
+}: {
+  songs: Song[];
+  onPick: (songId: string) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return songs.slice(0, 50);
+    return songs.filter(s =>
+      s.title.toLowerCase().includes(q) ||
+      s.artists.join(" ").toLowerCase().includes(q) ||
+      (s.pinyin ?? "").toLowerCase().includes(q),
+    ).slice(0, 50);
+  }, [songs, query]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="主播加歌"
+      data-testid="live-manual-picker"
+      onClick={onClose}
+    >
+      <div
+        className="bg-background rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-4 border-b border-border">
+          <p className="eyebrow">主播加歌</p>
+          <h3 className="text-base font-semibold">从曲库选歌</h3>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="按歌名 / 歌手 / 拼音首字母搜索"
+            className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+            data-testid="live-manual-search"
+          />
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            走 manual 模式入队，不消耗权益。
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {filtered.length === 0
+            ? <div className="panel-empty">没有匹配</div>
+            : <ul className="space-y-1">
+                {filtered.map(s => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => onPick(s.id)}
+                      className="w-full text-left rounded-lg px-3 py-2 hover:bg-muted"
+                    >
+                      <div className="text-sm font-medium">{s.title}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {s.artists.join(" / ") || "—"} · {s.key || "?"}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>}
+        </div>
+        <div className="p-3 border-t border-border flex justify-end">
+          <button type="button" className="secondary-action" onClick={onClose}>
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
