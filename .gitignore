@@ -8,9 +8,15 @@ __pycache__/
 output/
 data/backups/
 data/events.jsonl
+data/settings.json     # 启动期自动写入, 含项目根绝对路径, 不可 commit
 data/tabs/
 data/posters/
 *.tmp
+
+# PyInstaller 打包产物（可重新生成）
+dist/
+build/
+*.spec
 
 # 编辑器
 .vscode/
@@ -38,3 +44,5 @@ site/landing/.astro/
 site/landing/public/posters/
 site/landing/public/og-image.png
 data/live-sessions/
+palettes/
+skins/
