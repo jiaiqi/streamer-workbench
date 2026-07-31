@@ -1,11 +1,12 @@
 {
-  "name": "poster-electron-spike",
+  "name": "streamer-workbench-electron",
   "private": true,
-  "version": "0.0.1",
-  "description": "Electron 壳 spike：spawn 打包后端 + alwaysOnTop 速查小窗可行性验证",
+  "version": "0.1.0",
+  "description": "主播工作台桌面壳 (dev 模式, 不打包) — spawn Vite + Python, 主窗口 + 置顶速查子窗口",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dev": "electron ."
   },
   "devDependencies": {
     "electron": "^37.0.0"

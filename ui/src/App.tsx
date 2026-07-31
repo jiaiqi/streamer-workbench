@@ -14,6 +14,7 @@ import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./ap
 import { apiRequest } from "./api/client";
 import type { AppearanceSettings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
+import { openQuickView, isElectron } from "./electron-bridge";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -540,7 +541,15 @@ export default function App() {
             <div className="mobile-actions">
               {previewSrc && <a href={previewSrc} download={`${activeTheme?.prefix ?? "poster"}-p${page}.png`} className="secondary-action">下载当前页</a>}
               <button type="button" className="primary-action" onClick={() => setExportDialogOpen(true)}>批量导出</button>
-              <a href="/quick" className="secondary-action">直播速查</a>
+              <a
+                href="/quick"
+                target="_blank"
+                rel="noreferrer"
+                className="secondary-action"
+                onClick={(e) => openQuickView(undefined, e)}
+              >
+                直播速查 {isElectron() ? "▣" : "↗"}
+              </a>
             </div>
           </div>
           )}

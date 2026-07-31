@@ -25,6 +25,7 @@ import type {
   LiveSessionSummary,
 } from "../api/generated";
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
+import { openQuickView, isElectron } from "../electron-bridge";
 
 /* ================== 类型 narrow helpers ================== */
 
@@ -457,8 +458,9 @@ function SessionDetail({
             rel="noreferrer"
             className="secondary-action"
             data-testid="live-quickview-link"
+            onClick={(e) => openQuickView(session.id, e)}
           >
-            直播速查 ↗
+            直播速查 {isElectron() ? "▣" : "↗"}
           </a>
           {isActive && (
             <>
@@ -480,7 +482,13 @@ function SessionDetail({
 
       <p className="text-[11px] text-muted-foreground">
         本视图是后台管理面板。直播中的点歌 / 速查 / 快捷键请打开
-        <a href="/quick" target="_blank" rel="noreferrer" className="underline"> 直播速查 </a>。
+        <a
+          href="/quick"
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+          onClick={(e) => openQuickView(undefined, e)}
+        > 直播速查 </a>。
       </p>
 
       <section>

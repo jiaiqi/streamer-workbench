@@ -11,10 +11,13 @@ export default defineConfig(({ mode }) => {
       alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
     },
     server: {
-      port: 5173,
+      // 固定 5174 + strictPort：与 Electron 壳 (electron/main.js) 探测端口一致；
+      // strictPort=true 时端口被占直接失败，避免静默漂移。
+      port: 5174,
+      strictPort: true,
       hmr: {
         host: "localhost",
-        port: 5173,
+        port: 5174,
       },
       proxy: {
         "/api": { target: proxyTarget, changeOrigin: true },
