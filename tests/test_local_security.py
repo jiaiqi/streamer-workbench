@@ -202,6 +202,54 @@ def test_session_token_protects_writes_but_not_reads():
     asyncio.run(scenario())
 
 
+# ── P3 fix: dev 模式允许 loopback 任意端口 (Vite --port 5174 等) ──
+
+def test_development_mode_allows_any_loopback_port():
+    """Vite/CRA/Next 等 dev server 端口可被项目配置; dev 模式白名单放宽.
+
+    安全边界仍是 host loopback (R0.10), Origin 检查只是 dev UX.
+    """
+    from server.api.handlers import _origin_allowed
+
+    config = _security_config(
+        Path(tempfile.mkdtemp()),
+        mode="development",
+        allowed_origins=DEFAULT_DEVELOPMENT_ORIGINS,
+        session_token=None,
+    )
+    # 默认白名单 ("http://localhost", "http://127.0.0.1") → 任意端口放行
+    for port in (5173, 5174, 5175, 3000, 8080):
+        assert _origin_allowed(config, f"http://localhost:{port}")
+        assert _origin_allowed(config, f"http://127.0.0.1:{port}")
+    # 不带端口也接受
+    assert _origin_allowed(config, "http://localhost")
+    # 非 loopback 仍然拒绝
+    assert not _origin_allowed(config, "http://example.com:5173")
+    assert not _origin_allowed(config, "https://localhost:5173")
+
+
+def test_desktop_mode_requires_exact_origin_match():
+    """desktop (= production) 模式必须精确匹配白名单, 不放行任意端口.
+
+    dev 模式: http://localhost, http://127.0.0.1 任意端口放行
+    desktop 模式: 显式白名单, 精确匹配 (防被恶意页面附带任意端口 Origin 误开)
+    """
+    from server.api.handlers import _origin_allowed
+
+    config = _security_config(
+        Path(tempfile.mkdtemp()),
+        mode="desktop",
+        allowed_origins=("http://localhost:5173",),
+        session_token=None,
+    )
+    assert _origin_allowed(config, "http://localhost:5173")
+    # 其他端口拒绝
+    assert not _origin_allowed(config, "http://localhost:5174")
+    assert not _origin_allowed(config, "http://localhost")
+    # 其他 host 拒绝
+    assert not _origin_allowed(config, "http://127.0.0.1:5173")
+
+
 def test_untrusted_browser_origin_cannot_write():
     async def scenario():
         with tempfile.TemporaryDirectory() as raw:

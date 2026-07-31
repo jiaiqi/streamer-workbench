@@ -18,9 +18,15 @@ AppMode = Literal["development", "desktop", "test"]
 DATA_DIR_ENV = "STREAMER_WORKBENCH_DATA_DIR"
 ALLOWED_ORIGINS_ENV = "STREAMER_WORKBENCH_ALLOWED_ORIGINS"
 SESSION_TOKEN_ENV = "STREAMER_WORKBENCH_SESSION_TOKEN"
+
+# development 模式: 默认白名单覆盖所有 loopback 端口 (any-port wildcard)。
+#   - 安全边界: R0.10 的第一道防线是 host loopback 检查 (is_loopback_host),
+#     dev 模式来源都是 loopback, Origin 检查只是"防 cross-tab 误改"的 UX 保护。
+#   - 实际原因: Vite/CRA/Next 等 dev server 端口可被项目配置 (--port 5174 等),
+#     钉死 5173 拖慢 dev 体验。production 模式不进入此分支, 仍要求显式白名单。
 DEFAULT_DEVELOPMENT_ORIGINS = (
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost",
+    "http://127.0.0.1",
 )
 
 

@@ -44,6 +44,28 @@ def api_error_response(request: Request, status_code: int, error: ApiError) -> J
     return response
 
 
+def _origin_allowed(config, origin: str) -> bool:
+    """dev 模式: 前缀匹配 (允许任意端口), 适配 Vite 等 dev server。
+    production 模式: 精确匹配, 防止误开任意 Origin。
+
+    config.allowed_origins 是开发默认的 ("http://localhost", "http://127.0.0.1"),
+    prefix 匹配后等于允许 loopback 所有端口。
+    显式设置 STREAMER_WORKBENCH_ALLOWED_ORIGINS 时仍是精确匹配 (按条目);
+    想要生产严格匹配也用环境变量覆盖即可。
+    """
+    origin = origin.rstrip("/")
+    for allowed in config.allowed_origins:
+        allowed = allowed.rstrip("/")
+        if config.mode == "development":
+            # 路径部分为空 (例如 "http://localhost") → 接受所有端口
+            if origin == allowed or origin.startswith(allowed + ":"):
+                return True
+        else:
+            if origin == allowed:
+                return True
+    return False
+
+
 def install_api_contract(app: FastAPI) -> None:
     """为 app 安装统一 request-id 与异常响应；可被应用工厂重复使用。"""
 
@@ -68,7 +90,7 @@ def install_api_contract(app: FastAPI) -> None:
             )
         if request.url.path.startswith("/api/") and request.method in _MUTATING_METHODS:
             origin = request.headers.get("origin")
-            if origin and origin.rstrip("/") not in config.allowed_origins:
+            if origin and not _origin_allowed(config, origin):
                 return api_error_response(
                     request,
                     403,
