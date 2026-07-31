@@ -5,10 +5,19 @@
 ///   - revision: 服务端 CAS 字符串
 ///   - status: idle | dirty | saving | saved | error
 ///   - lastSavedAt: 最近一次服务端确认时间戳
+///   - past[]: 撤销栈 (P2 R4)
+///   - future[]: 重做栈 (P2 R4)
 ///
 /// 防抖：750ms 累积后 coalesce 一次 save。
 /// 卸载前 flush（避免最后 1 秒变更丢失）。
 /// 切换文档时先 flush 旧文档再切。
+///
+/// 撤销/重做（P2 R4）：
+///   - 每次 update() 把变更前的快照入 past, 清空 future
+///   - undo() 弹出 past → current, 当前 → future
+///   - redo() 弹出 future → current, 当前 → past
+///   - select() / newDraft() 清空两个栈 (跨文档撤销无意义)
+///   - 栈深度上限 50 (防内存膨胀)
 ///
 /// 竞态：
 ///   - in-flight 请求用 AbortController；切换/卸载时 abort 旧请求。
@@ -31,6 +40,7 @@ import type {
 import { isAbortError, toRequestFailure, type RequestFailure } from "../async/requestState";
 
 const AUTOSAVE_DEBOUNCE_MS = 750;
+const HISTORY_LIMIT = 50;
 
 function makeEmptyPosterRequest(): PosterRequest {
   return {
@@ -61,6 +71,10 @@ export interface PosterStoreState {
   status: PosterStatus;
   lastSavedAt: number | null;
   error: RequestFailure | null;
+  /** 撤销栈深度（UI 显示「撤销 N 次」之类）。 */
+  canUndo: boolean;
+  /** 重做栈深度。 */
+  canRedo: boolean;
 }
 
 export interface PosterStoreActions {
@@ -74,6 +88,10 @@ export interface PosterStoreActions {
   deleteCurrent: () => Promise<void>;
   cancel: () => void;
   resetError: () => void;
+  /** 撤销最近一次用户修改（自动保存防抖队列会被清掉避免覆盖撤销状态）。 */
+  undo: () => void;
+  /** 重做最近一次撤销。 */
+  redo: () => void;
   /** 当前是否处于 dirty/saving/error 任意非稳定状态（用于 UI 守卫）。 */
   isDirty: boolean;
 }
@@ -87,6 +105,9 @@ export function usePosterStore(): PosterStore {
   const [status, setStatus] = useState<PosterStatus>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
+  // P2 R4: 撤销/重做栈
+  const [past, setPast] = useState<PosterRequest[]>([]);
+  const [future, setFuture] = useState<PosterRequest[]>([]);
 
   const abortRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -201,6 +222,16 @@ export function usePosterStore(): PosterStore {
   }, [doSave]);
 
   const update = useCallback((patch: Partial<PosterRequest>) => {
+    // P2 R4: 在变更之前把当前快照入 past 栈, 清空 future
+    // 深度上限 HISTORY_LIMIT, 超长截断最早的条目
+    setPast(prev => {
+      const snapshot = { ...currentRef.current };
+      const next = [...prev, snapshot];
+      if (next.length > HISTORY_LIMIT) next.shift();
+      return next;
+    });
+    setFuture([]);
+
     safeSetCurrent(prev => {
       const next: PosterRequest = {
         ...prev,
@@ -221,6 +252,44 @@ export function usePosterStore(): PosterStore {
     safeSetStatus("dirty");
     scheduleAutosave();
   }, [scheduleAutosave]);
+
+  // P2 R4: 撤销 / 重做
+  const undo = useCallback(() => {
+    if (past.length === 0) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const target = past[past.length - 1];
+    const newPast = past.slice(0, -1);
+    const newFuture = [...future, currentRef.current];
+    currentRef.current = target;
+    setPast(newPast);
+    setFuture(newFuture);
+    if (mountedRef.current) setCurrent(target);
+    safeSetStatus("dirty");
+    pendingDirtyRef.current = true;
+    scheduleAutosave();
+    // 注意: 这里依赖 past/future state, 用 useEffect [past,future,...] 重算 deps
+  }, [past, future, scheduleAutosave]);
+
+  const redo = useCallback(() => {
+    if (future.length === 0) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const target = future[future.length - 1];
+    const newFuture = future.slice(0, -1);
+    const newPast = [...past, currentRef.current];
+    currentRef.current = target;
+    setPast(newPast);
+    setFuture(newFuture);
+    if (mountedRef.current) setCurrent(target);
+    safeSetStatus("dirty");
+    pendingDirtyRef.current = true;
+    scheduleAutosave();
+  }, [past, future, scheduleAutosave]);
 
   const saveNow = useCallback(async () => {
     if (debounceTimerRef.current) {
@@ -244,6 +313,10 @@ export function usePosterStore(): PosterStore {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+
+    // P2 R4: 切换文档清空历史栈
+    setPast([]);
+    setFuture([]);
 
     safeSetStatus("dirty");
     try {
@@ -279,6 +352,9 @@ export function usePosterStore(): PosterStore {
 
   const newDraft = useCallback(() => {
     cancel();
+    // P2 R4: 新草稿清空历史
+    setPast([]);
+    setFuture([]);
     safeSetCurrent(makeEmptyPosterRequest());
     safeSetRevision("");
     pendingDirtyRef.current = false;
@@ -322,15 +398,19 @@ export function usePosterStore(): PosterStore {
   }, [doSave]);
 
   const isDirty = status === "dirty" || status === "saving" || status === "error";
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
 
   return useMemo(() => ({
     current, revision, status, lastSavedAt, error,
+    canUndo, canRedo,
     posters,
     refreshList, select, newDraft, update, saveNow, flush, deleteCurrent,
-    cancel, resetError, isDirty,
+    cancel, resetError, undo, redo, isDirty,
   }), [
     current, revision, status, lastSavedAt, error,
+    canUndo, canRedo,
     posters, refreshList, select, newDraft, update, saveNow, flush,
-    deleteCurrent, cancel, resetError, isDirty,
+    deleteCurrent, cancel, resetError, undo, redo, isDirty,
   ]);
 }

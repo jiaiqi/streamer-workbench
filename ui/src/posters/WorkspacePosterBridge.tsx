@@ -48,6 +48,18 @@ export default function WorkspacePosterBridge({
     }
   }, [store.current.canvas_id, onCanvasSelect]);
 
+  // P2 R4: 监听全局 Cmd+Z / Cmd+Shift+Z 事件
+  useEffect(() => {
+    const onUndo = () => store.undo();
+    const onRedo = () => store.redo();
+    window.addEventListener("poster:undo", onUndo);
+    window.addEventListener("poster:redo", onRedo);
+    return () => {
+      window.removeEventListener("poster:undo", onUndo);
+      window.removeEventListener("poster:redo", onRedo);
+    };
+  }, [store]);
+
   return (
     <>
       <PostersSidebar store={store} dark={dark} />

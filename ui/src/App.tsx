@@ -213,12 +213,28 @@ export default function App() {
   // Phase 2: 快捷键（设计文档 §6.8 的 Web 落地子集）
   // Ctrl/⌘+E 导出 · Ctrl/⌘+R 刷新预览 · ←→ 翻页 · Ctrl/⌘+1~7 切主题 ·
   // Ctrl/⌘+, 设置。输入控件聚焦时不拦截；Esc 由各对话框内部处理。
+  // P2 R4: Cmd+Z / Cmd+Shift+Z 撤销/重做 (海报文档)。
+  //   — 工作台视图 + 非对话框激活时生效
+  //   — 输入控件聚焦时**不**拦截 (浏览器默认文本框内 Cmd+Z 行为优先)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (appearanceSaving || settingsSaving) return;
       const mod = e.ctrlKey || e.metaKey;
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+      // P2 R4: undo/redo 优先级 — 输入控件聚焦让浏览器默认处理
+      if (mod && !typing && view === "workspace" && !exportDialogOpen && !libDialogOpen) {
+        if (e.key === "z" || e.key === "Z") {
+          e.preventDefault();
+          // WorkspacePosterBridge 监听此事件, 调用 store.undo / store.redo
+          window.dispatchEvent(new CustomEvent(
+            e.shiftKey ? "poster:redo" : "poster:undo",
+          ));
+          return;
+        }
+      }
+
       if (e.key === "Escape" || typing) return;
 
       if (mod && e.key === "e") {

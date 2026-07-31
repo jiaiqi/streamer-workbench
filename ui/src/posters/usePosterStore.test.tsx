@@ -148,3 +148,108 @@ describe("usePosterStore", () => {
     expect(r!.current.status).toBe("saved");
   });
 });
+
+describe("usePosterStore 撤销/重做 (P2 R4)", () => {
+  it("初始 canUndo=false / canRedo=false", async () => {
+    let r: ReturnType<typeof RENDER> | null = null;
+    await act(async () => {
+      r = RENDER();
+      await vi.runOnlyPendingTimersAsync();
+    });
+    expect(r!.current.canUndo).toBe(false);
+    expect(r!.current.canRedo).toBe(false);
+  });
+
+  it("update 后 canUndo=true", async () => {
+    let r: ReturnType<typeof RENDER> | null = null;
+    await act(async () => {
+      r = RENDER();
+      await vi.runOnlyPendingTimersAsync();
+    });
+    act(() => { r!.current.update({ name: "v1" }); });
+    expect(r!.current.canUndo).toBe(true);
+    expect(r!.current.canRedo).toBe(false);
+  });
+
+  it("undo 恢复上一次值，redo 再回到当前", async () => {
+    let r: ReturnType<typeof RENDER> | null = null;
+    await act(async () => {
+      r = RENDER();
+      await vi.runOnlyPendingTimersAsync();
+    });
+    act(() => { r!.current.update({ name: "A" }); });
+    act(() => { r!.current.update({ name: "B" }); });
+    expect(r!.current.current.name).toBe("B");
+
+    act(() => { r!.current.undo(); });
+    expect(r!.current.current.name).toBe("A");
+    expect(r!.current.canRedo).toBe(true);
+
+    act(() => { r!.current.undo(); });
+    expect(r!.current.current.name).toBe("未命名海报");
+    expect(r!.current.canUndo).toBe(false);
+
+    act(() => { r!.current.redo(); });
+    expect(r!.current.current.name).toBe("A");
+
+    act(() => { r!.current.redo(); });
+    expect(r!.current.current.name).toBe("B");
+    expect(r!.current.canRedo).toBe(false);
+  });
+
+  it("undo 后再 update → 清空 future (重做栈)", async () => {
+    let r: ReturnType<typeof RENDER> | null = null;
+    await act(async () => {
+      r = RENDER();
+      await vi.runOnlyPendingTimersAsync();
+    });
+    act(() => { r!.current.update({ name: "A" }); });
+    act(() => { r!.current.update({ name: "B" }); });
+    act(() => { r!.current.undo(); });
+    expect(r!.current.canRedo).toBe(true);
+
+    act(() => { r!.current.update({ name: "C" }); });
+    expect(r!.current.canRedo).toBe(false);
+    expect(r!.current.current.name).toBe("C");
+  });
+
+  it("newDraft 清空 past 和 future", async () => {
+    let r: ReturnType<typeof RENDER> | null = null;
+    await act(async () => {
+      r = RENDER();
+      await vi.runOnlyPendingTimersAsync();
+    });
+    act(() => { r!.current.update({ name: "A" }); });
+    act(() => { r!.current.update({ name: "B" }); });
+    expect(r!.current.canUndo).toBe(true);
+
+    act(() => { r!.current.newDraft(); });
+    expect(r!.current.canUndo).toBe(false);
+    expect(r!.current.canRedo).toBe(false);
+    expect(r!.current.current.name).toBe("未命名海报");
+  });
+
+  it("undo 在空栈时是 no-op", async () => {
+    let r: ReturnType<typeof RENDER> | null = null;
+    await act(async () => {
+      r = RENDER();
+      await vi.runOnlyPendingTimersAsync();
+    });
+    expect(r!.current.current.name).toBe("未命名海报");
+    act(() => { r!.current.undo(); });
+    expect(r!.current.current.name).toBe("未命名海报");
+  });
+
+  it("select 清空历史栈", async () => {
+    let r: ReturnType<typeof RENDER> | null = null;
+    await act(async () => {
+      r = RENDER();
+      await vi.runOnlyPendingTimersAsync();
+    });
+    act(() => { r!.current.update({ name: "A" }); });
+    expect(r!.current.canUndo).toBe(true);
+    await act(async () => { await r!.current.select("poster_xyz"); });
+    expect(r!.current.canUndo).toBe(false);
+    expect(r!.current.canRedo).toBe(false);
+  });
+});

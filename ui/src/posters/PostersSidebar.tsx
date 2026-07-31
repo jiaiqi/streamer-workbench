@@ -54,17 +54,50 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
     }`}>
       <div className="flex items-center justify-between mb-2">
         <p className="eyebrow">当前作品</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={handleNew}
-          disabled={store.isDirty && store.status === "saving"}
-          title="新建草稿（自动保存当前编辑）"
-        >
-          + 新建
-        </Button>
+        <div className="flex items-center gap-1">
+          {/* P2 R4: 撤销 / 重做（Cmd+Z / Cmd+Shift+Z） */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={store.undo}
+            disabled={!store.canUndo}
+            title="撤销 (⌘Z)"
+            data-testid="poster-undo"
+            aria-label="撤销"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-15-6.7L3 13" />
+            </svg>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={store.redo}
+            disabled={!store.canRedo}
+            title="重做 (⌘⇧Z)"
+            data-testid="poster-redo"
+            aria-label="重做"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 15-6.7L21 13" />
+            </svg>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={handleNew}
+            disabled={store.isDirty && store.status === "saving"}
+            title="新建草稿（自动保存当前编辑）"
+          >
+            + 新建
+          </Button>
+        </div>
       </div>
 
       <h2 className="panel-title truncate" title={store.current.name}>
