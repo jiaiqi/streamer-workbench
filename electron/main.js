@@ -49,8 +49,8 @@ const PY_PORT = Number(process.env.STREAMER_PY_PORT) || 8765;
 const PY_HOST = process.env.STREAMER_PY_HOST || "127.0.0.1";
 const NO_SPAWN = process.env.STREAMER_NO_SPAWN === "1";
 
-const VITE_URL = `http://${PY_HOST}:${VITE_PORT}`;
-const PY_URL = `http://${PY_HOST}:${PY_PORT}`;
+const VITE_URL = `http://localhost:${VITE_PORT}`;
+const PY_URL = `http://localhost:${PY_PORT}`;
 
 // ----- 子进程管理 -----
 let pyProc = null;
@@ -70,21 +70,31 @@ function logErr(...args) {
 }
 
 // 探测端口是否被占用（TCP 连接尝试）
-function probe(port, host = "127.0.0.1", timeoutMs = 500) {
+// 用 'localhost' 让 OS 同时尝试 IPv4 + IPv6（macOS 上 vite 监听 IPv6 ::1 only）
+function probe(port, host = "localhost", timeoutMs = 800) {
   return new Promise((resolve) => {
-    const sock = new net.Socket();
-    let done = false;
-    const finish = (ok) => {
-      if (done) return;
-      done = true;
-      sock.destroy();
-      resolve(ok);
-    };
-    sock.setTimeout(timeoutMs);
-    sock.once("connect", () => finish(true));
-    sock.once("timeout", () => finish(false));
-    sock.once("error", () => finish(false));
-    sock.connect(port, host);
+    const tryConnect = (target) => new Promise((r) => {
+      const sock = new net.Socket();
+      let done = false;
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        sock.destroy();
+        r(ok);
+      };
+      sock.setTimeout(timeoutMs);
+      sock.once("connect", () => finish(true));
+      sock.once("timeout", () => finish(false));
+      sock.once("error", () => finish(false));
+      sock.connect(port, target);
+    });
+    (async () => {
+      // 优先 IPv4 (uvicorn 默认), 再 IPv6 (vite macOS default)
+      const v4 = await tryConnect("127.0.0.1");
+      if (v4) return resolve(true);
+      const v6 = await tryConnect("::1");
+      resolve(v6);
+    })();
   });
 }
 
@@ -154,10 +164,10 @@ async function ensureVite() {
   if (NO_SPAWN) {
     throw new Error(`Vite dev server 未在 ${VITE_URL} 运行，且 STREAMER_NO_SPAWN=1 不允许自动启动`);
   }
-  log(`vite: spawn ${VITE_BIN} --port ${VITE_PORT} --strictPort --host ${PY_HOST}`);
-  viteProc = spawn(VITE_BIN, ["--port", String(VITE_PORT), "--strictPort", "--host", PY_HOST], {
+  log(`vite: spawn ${VITE_BIN} --port ${VITE_PORT} --strictPort`);
+  viteProc = spawn(VITE_BIN, ["--port", String(VITE_PORT), "--strictPort"], {
     cwd: UI_DIR,
-    env: { ...process.env, VITE_API_PROXY_TARGET: PY_URL },
+    env: { ...process.env, VITE_API_PROXY_TARGET: `http://127.0.0.1:${PY_PORT}` },
   });
   pipeProcess("vite", viteProc);
   await waitHttp(VITE_URL);
@@ -279,6 +289,19 @@ app.whenReady().then(async () => {
     await ensureVite();
     ready = true;
     createMainWindow();
+    // 自检模式: STREAMER_ELECTRON_SELFTEST=N 时, N 秒后自动 quit (CI 烟雾测试用, 不留窗口)
+    // 自检模式 + STREAMER_ELECTRON_SELFTEST_QUICKVIEW=1 时, 主窗口 ready-to-show 后立即开置顶速查
+    if (process.env.STREAMER_ELECTRON_SELFTEST) {
+      const seconds = Number(process.env.STREAMER_ELECTRON_SELFTEST) || 5;
+      log(`selftest: auto-quit in ${seconds}s`);
+      if (process.env.STREAMER_ELECTRON_SELFTEST_QUICKVIEW === "1") {
+        mainWin.once("ready-to-show", () => {
+          log("selftest: openQuickView()");
+          setTimeout(() => openQuickView("live_selftest"), 500);
+        });
+      }
+      setTimeout(() => app.quit(), seconds * 1000);
+    }
   } catch (err) {
     logErr("启动失败:", err.message);
     dialog.showErrorBox(
