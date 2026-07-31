@@ -451,7 +451,13 @@ function SessionDetail({
           <button type="button" className="secondary-action" onClick={onRefresh}>
             刷新
           </button>
-          <a href="/quick" target="_blank" rel="noreferrer" className="secondary-action">
+          <a
+            href={`/quick?session=${session.id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="secondary-action"
+            data-testid="live-quickview-link"
+          >
             直播速查 ↗
           </a>
           {isActive && (

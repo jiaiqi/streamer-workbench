@@ -1,37 +1,32 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+/// R2 P2: QuickView v2 — 直播中置顶速查窗 (/quick?session=xxx)。
+///
+/// 架构 (P2 R4 重写):
+/// - URL 接受 ?session=xxx → 加载 LiveSession 后端数据
+/// - 队列 = LiveSession.queue (后端权威), 不再用 localStorage.queue
+/// - 加歌 = POST /api/live-sessions/{id}/queue (entitlement_kind=manual 简版)
+/// - 记结果 = POST /api/live-sessions/{id}/record
+/// - 离线兜底: 失败的命令进 pending_commands (localStorage), 恢复后按 command_id 幂等补报
+/// - 纯键盘: 搜歌 Enter 加歌, Space 已唱, U 不会, P 延期, R 跳过, T 看谱
+/// - 移除了 v1 的 localStorage 队列 (与 LiveSession 二选一)
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { Song, SongsData } from "./types";
-import {
-  LEGACY_PENDING_KEY, LEGACY_QUEUE_KEY, STORAGE_KEY, createPendingEvent, emptyStorage,
-  enqueue, flushPending, loadStorageV2, migrateStorage, moveQueueItem, resolveQueueItem, toggleSung,
-  type PendingEvent, type QuickEventType, type QuickViewStorageV2, type QueueItem,
-} from "./quick-view/model";
+import { useLiveSession } from "./quick-view/useLiveSession";
 import { apiRequest } from "./api/client";
-import { toRequestFailure, useLatestRequest } from "./async/requestState";
+import { useLatestRequest } from "./async/requestState";
 
-/* ---- 速查小窗 Web 版（/quick）----
-   场景：直播中手机开播、电脑本窗口置顶，纯键盘速查选调。
-   设计语言：近黑舞台底、衬线大字歌名、等宽超大选调、单一墨绿高亮。
-   交互：输入即搜（歌名/歌手/拼音首字母），↑↓ 选择，Enter 加入今晚歌单，
-        Esc 清空，30s 自动刷新；歌单 localStorage 持久化，刷新不丢。
-   今晚歌单：待唱按加入序，✓ 唱完沉底，重复点歌给「已唱过」提醒。
-   数据：点歌/唱完双写后端事件流（/api/events/report），失败本地保序补报。
-   后续 Electron 壳把本页装进 alwaysOnTop 小窗 + 全局热键。 */
+/* ================== 模式解析 ================== */
+const SESSION_ID = (() => {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("session");
+})();
 
-const REFRESH_MS = 30_000;
-
-/* ---- 事件上报（S2：localStorage 缓存 + 后端事件流 双写）----
-   localStorage 是现场离线缓存（后端挂了直播照常进行），稳定身份仍是 Song.id；
-   点歌/唱完同时上报 /api/events/report 沉淀统计数据。
-   上报失败进待补队列（localStorage），下次上报成功或定时刷新时保序补报，
-   occurred_at 为事件发生时刻，重试始终复用原 event_id。 */
-async function postEvent(e: PendingEvent): Promise<{ ok: boolean; diagnostic?: string }> {
-  try {
-    await apiRequest("/api/events/report", { method: "POST", body: e });
-    return { ok: true };
-  } catch (error) {
-    const failure = toRequestFailure(error, "事件补报失败");
-    return { ok: false, diagnostic: [failure.message, failure.requestId && `请求 ${failure.requestId}`].filter(Boolean).join(" · ") };
-  }
+/* ================== 工具 ================== */
+function uuid(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 function DifficultyDots({ value }: { value: string }) {
@@ -44,101 +39,44 @@ function DifficultyDots({ value }: { value: string }) {
   );
 }
 
+/* ================== 主组件 ================== */
 export default function QuickView() {
-  const [initialStorage] = useState(() => loadStorageV2(localStorage.getItem(STORAGE_KEY)));
+  const live = useLiveSession(SESSION_ID);
   const [songs, setSongs] = useState<Song[]>([]);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [storage, setStorage] = useState<QuickViewStorageV2>(initialStorage.storage ?? emptyStorage);
-  const [storageReady, setStorageReady] = useState(initialStorage.storage !== null);
-  const [storageError, setStorageError] = useState<string | null>(initialStorage.error);
-  const [pendingDiagnostic, setPendingDiagnostic] = useState<string | null>(null);
+  const [tabsOpen, setTabsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [tabsOpen, setTabsOpen] = useState(false);   // T 键看谱弹层（S3）
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<number>(0);
-  const storageRef = useRef(storage); storageRef.current = storage;
-  const storageReadyRef = useRef(storageReady); storageReadyRef.current = storageReady;
-  const flushRunningRef = useRef(false);
-  const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
+  const selRef = useRef<Song | null>(null);
+  const tabsOpenRef = useRef(false);
+  const queryRef = useRef("");
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const listRequest = useLatestRequest<SongsData>({ isEmpty: d => d.total === 0 });
 
-  const commitStorage = (next: QuickViewStorageV2) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    storageRef.current = next;
-    setStorage(next);
-  };
-
-  const flushPendingEvents = async (events = storageRef.current.pending_events) => {
-    if (flushRunningRef.current || events.length === 0) return;
-    flushRunningRef.current = true;
-    try {
-      const result = await flushPending(events, postEvent);
-      if (result.completedIds.length > 0) {
-        const completed = new Set(result.completedIds);
-        commitStorage({
-          ...storageRef.current,
-          pending_events: storageRef.current.pending_events.filter(event => !completed.has(event.event_id)),
-        });
-      }
-      setPendingDiagnostic(result.diagnostic);
-    } finally {
-      flushRunningRef.current = false;
-    }
-  };
-
-  const reportEvent = (type: QuickEventType, song: Song) => {
-    const event = createPendingEvent(type, song);
-    const next = {
-      ...storageRef.current,
-      pending_events: [...storageRef.current.pending_events, event],
-    };
-    // 先持久化再上报，刷新或网络失败都不会丢失事件。
-    commitStorage(next);
-    void flushPendingEvents(next.pending_events);
-  };
-
-  const refresh = async () => {
-    const d = await listRequest.run(signal => apiRequest<SongsData>("/api/songs/list", { signal }));
-    if (d) {
-      setSongs(d.songs);
-      if (!storageReadyRef.current) {
-        const migrated = migrateStorage(
-          localStorage.getItem(STORAGE_KEY),
-          localStorage.getItem(LEGACY_QUEUE_KEY),
-          localStorage.getItem(LEGACY_PENDING_KEY),
-          d.songs,
-          (type, song, occurredAt) => createPendingEvent(type, song, undefined, undefined, occurredAt),
-        );
-        if (migrated.storage) {
-          commitStorage(migrated.storage);
-          storageReadyRef.current = true;
-          setStorageReady(true);
-          setStorageError(null);
-          void flushPendingEvents(migrated.storage.pending_events);
-        } else {
-          setStorageError(migrated.error);
-        }
-      } else {
-        void flushPendingEvents();
-      }
-    }
-  };
+  /* 加载曲库 */
   useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, REFRESH_MS);
-    return () => clearInterval(t);
+    let active = true;
+    const load = async () => {
+      const d = await listRequest.run(signal => apiRequest<SongsData>("/api/songs/list", { signal }));
+      if (d && active) setSongs(d.songs);
+    };
+    void load();
+    const t = setInterval(load, 60_000);  // 1 分钟
+    return () => { active = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const queue = storage.queue;
-  const setQueue = (updater: (queue: QueueItem[]) => QueueItem[]) => {
-    commitStorage({ ...storageRef.current, queue: updater(storageRef.current.queue) });
-    setConfirmClear(false);
-  };
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 1600);
+  }, []);
 
-  /* 过滤 + 排序：前缀命中排前，其余按歌名 */
+  /* 过滤 + 排序 */
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     const match = (s: Song) => !q
@@ -153,36 +91,43 @@ export default function QuickView() {
 
   useEffect(() => { setCursor(0); }, [query]);
   const sel = results[Math.min(cursor, results.length - 1)] ?? null;
+  selRef.current = sel;
+  tabsOpenRef.current = tabsOpen;
+  queryRef.current = query;
 
   const songsById = useMemo(() => new Map(songs.map(s => [s.id, s])), [songs]);
-  const sungSet = useMemo(() => new Set(queue.filter(i => i.sung).map(i => i.song_id)), [queue]);
-  const queuedSet = useMemo(() => new Set(queue.filter(i => !i.sung).map(i => i.song_id)), [queue]);
 
-  /* 供键盘闭包读取的最新值 */
-  const selRef = useRef(sel); selRef.current = sel;
-  const sungRef = useRef(sungSet); sungRef.current = sungSet;
-  const queuedRef = useRef(queuedSet); queuedRef.current = queuedSet;
-  const tabsOpenRef = useRef(tabsOpen); tabsOpenRef.current = tabsOpen;
-  const queryRef = useRef(query); queryRef.current = query;
+  // 把 LiveSession.queue 投影为本地"队列视图"
+  const queueView = useMemo(() => {
+    if (!live.session?.queue) return [];
+    return live.session.queue
+      .map((q) => {
+        const raw = q as Record<string, unknown>;
+        const songId = typeof raw.song_id === "string" ? raw.song_id : "";
+        const requestId = typeof raw.request_id === "string" ? raw.request_id : "";
+        const state = typeof raw.state === "string" ? raw.state : "queued";
+        const position = typeof raw.position === "number" ? raw.position : 0;
+        return { songId, requestId, state, position, raw };
+      })
+      .filter(v => v.songId);
+  }, [live.session]);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 1600);
-  };
+  const pendingItems = queueView.filter(v => v.state === "queued" || v.state === "current");
+  const sungItems = queueView.filter(v => v.state === "sung");
+  const pendingSongIds = new Set(pendingItems.map(v => v.songId));
+  const sungSongIds = new Set(sungItems.map(v => v.songId));
 
-  const addToQueue = (song: Song) => {
-    if (queuedRef.current.has(song.id)) { showToast(`「${song.title}」已在队列里`); return; }
-    if (sungRef.current.has(song.id)) { showToast(`注意：「${song.title}」今晚已唱过`); return; }
-    showToast(`已加入今晚歌单：${song.title}`);
-    setQueue(queue => enqueue(queue, song, Date.now()));
-    reportEvent("queue_added", song);
-  };
+  /* 队列里 "下一个待唱" = position 最小的 queued */
+  const nextEntry = useMemo(() => {
+    return pendingItems
+      .slice()
+      .sort((a, b) => a.position - b.position)[0] ?? null;
+  }, [pendingItems]);
 
-  /* 键盘：↑↓ 选择 · Enter 加入歌单 · T 看谱 · Esc 清空 · 其他按键回流到搜索框 */
+  /* 键盘：搜歌 + 标记结果 */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      /* 看谱弹层打开时：只吃 Esc / T 关闭，其余键不穿透 */
+      // 看谱弹层: 只吃 Esc/T 关闭
       if (tabsOpenRef.current) {
         if (e.key === "Escape" || e.key === "t" || e.key === "T") {
           e.preventDefault();
@@ -190,24 +135,67 @@ export default function QuickView() {
         }
         return;
       }
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA";
+      const mod = e.ctrlKey || e.metaKey;
+
+      // Space / U / P / R: 在所有视图, 都不在输入控件里时, 对"下一个待唱"操作
+      if (!typing) {
+        if (e.key === " " || e.key === "Spacebar") {
+          if (nextEntry) {
+            e.preventDefault();
+            void handleRecord(nextEntry.requestId, "sung");
+          }
+          return;
+        }
+        if (e.key === "u" || e.key === "U") {
+          if (nextEntry) {
+            e.preventDefault();
+            void handleRecord(nextEntry.requestId, "unknown");
+          }
+          return;
+        }
+        if (e.key === "p" || e.key === "P") {
+          if (nextEntry) {
+            e.preventDefault();
+            void handleRecord(nextEntry.requestId, "postponed");
+          }
+          return;
+        }
+        if (e.key === "r" || e.key === "R") {
+          if (nextEntry) {
+            e.preventDefault();
+            void handleRecord(nextEntry.requestId, "skipped");
+          }
+          return;
+        }
+      }
+
+      // 搜索/选择
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         setCursor(c => e.key === "ArrowDown"
           ? Math.min(results.length - 1, c + 1)
           : Math.max(0, c - 1));
       } else if (e.key === "Escape") {
-        setQuery("");
-        searchRef.current?.focus();
-      } else if (e.key === "Enter") {
+        if (queryRef.current) {
+          setQuery("");
+          searchRef.current?.focus();
+        } else {
+          setTabsOpen(false);
+        }
+      } else if (e.key === "Enter" && !mod) {
         e.preventDefault();
         const s = selRef.current;
-        if (s) { addToQueue(s); setQuery(""); }
-      } else if (e.key === "t" || e.key === "T") {
-        /* 仅浏览态（搜索框为空）触发；搜索中 t 正常输入拼音首字母 */
+        if (s) void handleQueue(s);
+      } else if ((e.key === "t" || e.key === "T") && !typing) {
         if (queryRef.current) return;
         const s = selRef.current;
         if (!s) return;
-        if ((s.tab_files ?? []).length === 0) { showToast(`「${s.title}」还没有曲谱附件`); return; }
+        if ((s.tab_files ?? []).length === 0) {
+          showToast(`「${s.title}」还没有曲谱附件`);
+          return;
+        }
         e.preventDefault();
         setTabsOpen(true);
       }
@@ -215,91 +203,111 @@ export default function QuickView() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results.length]);
+  }, [results.length, nextEntry, live.session]);
 
-  /* 光标行滚进视野 */
+  /* 滚到当前光标 */
   useEffect(() => {
-    listRef.current?.querySelector("[data-sel='1']")
-      ?.scrollIntoView({ block: "nearest" });
+    listRef.current?.querySelector("[data-sel='1']")?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
-  /* ---- 歌单操作 ---- */
-  const pending = queue.filter(i => !i.sung);
-  const done = queue.filter(i => i.sung);
+  /* ----- 操作 ----- */
 
-  const moveItem = (songId: string, dir: -1 | 1) =>
-    setQueue(queue => moveQueueItem(queue, songId, dir));
-  const markSung = (songId: string) => {
-    const item = queue.find(candidate => candidate.song_id === songId);
-    const currentSong = songsById.get(songId);
-    setQueue(queue => toggleSung(queue, songId));
-    if (!item?.sung && currentSong) reportEvent("song_sung", currentSong);
-  };
-  const removeItem = (songId: string) => setQueue(queue => queue.filter(item => item.song_id !== songId));
-
-  const popout = () => {
-    window.open("/quick", "_blank", "width=560,height=780");
+  const handleQueue = async (song: Song) => {
+    if (pendingSongIds.has(song.id)) {
+      showToast(`「${song.title}」已在队列里`);
+      return;
+    }
+    if (sungSongIds.has(song.id)) {
+      showToast(`注意：「${song.title}」今晚已唱过`);
+      return;
+    }
+    const requesterName = prompt("点歌人昵称（可空，默认「速查」）") || "速查";
+    const res = await liveRef.current.queueRequest(song.id, requesterName);
+    showToast(res.message ?? (res.ok ? "已加入" : "失败"));
   };
 
-  const queueRow = (item: QueueItem) => {
-    const resolved = resolveQueueItem(item, songsById);
-    const s = resolved.song;
-    const meta = [
-      s?.key ? `${s.key}${s.capo !== null ? ` · 夹${s.capo}品` : ""}` : "",
-      s?.artists.join("、") ?? "",
-    ].filter(Boolean).join(" · ");
+  const handleRecord = async (requestId: string, result: string) => {
+    const res = await liveRef.current.recordResult(requestId, result);
+    showToast(res.message ?? (res.ok ? "已记录" : "失败"));
+  };
+
+  /* 无 sessionId 时: 全屏引导 */
+  if (!SESSION_ID) {
     return (
-      <div key={item.song_id}
-        className={`group flex items-center gap-2 px-3 py-2 border-b border-zinc-900 ${
-          item.sung ? "opacity-40" : ""}`}>
-        <div className="flex-1 min-w-0">
-          <p className={`text-sm font-serif truncate ${item.sung ? "line-through text-zinc-500" : "text-zinc-100"}`}>
-            {resolved.title}
-            {resolved.missing && <span className="ml-2 text-[9px] text-red-400">歌曲已删除</span>}
-          </p>
-          <p className="text-[10px] text-zinc-500 truncate font-mono">{meta || "—"}</p>
-        </div>
-        {!item.sung && (
-          <div className="hidden group-hover:flex flex-col text-zinc-500">
-            <button onClick={() => moveItem(item.song_id, -1)} className="hover:text-zinc-200 leading-none cursor-pointer">▲</button>
-            <button onClick={() => moveItem(item.song_id, 1)} className="hover:text-zinc-200 leading-none cursor-pointer">▼</button>
-          </div>
-        )}
-        <button onClick={() => markSung(item.song_id)} title={item.sung ? "撤销已唱" : "标记已唱"}
-          className={`text-sm cursor-pointer ${item.sung ? "text-emerald-500" : "text-zinc-600 hover:text-emerald-400"}`}>
-          {item.sung ? "✓" : "○"}
-        </button>
-        <button onClick={() => removeItem(item.song_id)} title="移出歌单"
-          className="hidden group-hover:block text-zinc-600 hover:text-red-400 text-sm cursor-pointer">×</button>
+      <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-4 p-8 font-sans">
+        <p className="text-zinc-500 uppercase tracking-[0.3em] text-[11px] font-mono">QuickView v2</p>
+        <h1 className="text-2xl font-serif">需要 ?session=xxx 参数</h1>
+        <p className="text-zinc-400 text-sm max-w-md text-center">
+          速查窗现在绑定到具体的直播会话。请在打开时附带 session ID：
+        </p>
+        <code className="text-emerald-400 text-sm font-mono bg-zinc-900 px-3 py-2 rounded">
+          /quick?session=live_xxxx
+        </code>
+        <p className="text-zinc-500 text-xs mt-2">
+          可在「直播」后台管理视图中点击「直播速查」自动带上 session 参数。
+        </p>
       </div>
     );
-  };
+  }
+
+  /* sessionId 但还没加载到 session */
+  if (live.session === undefined) {
+    return (
+      <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-3 font-sans">
+        <span className="spinner" />
+        <p className="text-zinc-400 text-sm">加载会话 {SESSION_ID}…</p>
+      </div>
+    );
+  }
+
+  /* sessionId 但加载失败 */
+  if (live.session === null) {
+    return (
+      <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-3 p-8 font-sans">
+        <p className="text-red-400 text-sm" role="alert">会话加载失败</p>
+        <p className="text-zinc-500 text-xs">{live.error}</p>
+        <button type="button" className="secondary-action" onClick={() => void live.refresh()}>重试</button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden font-sans select-none">
+      {/* ===== 顶栏: 会话名 + 状态 + 离线提示 ===== */}
+      <div className="shrink-0 flex items-center gap-3 px-4 h-11 border-b border-zinc-800 text-xs">
+        <span className={`inline-block h-2 w-2 rounded-full ${
+          live.isActive ? "bg-emerald-500" : "bg-zinc-600"}`} />
+        <span className="font-serif truncate">{live.title}</span>
+        <span className="text-zinc-600">
+          {live.session.state === "active" ? "进行中" : "已结束"}
+        </span>
+        {live.pendingCount > 0 && (
+          <span className="text-amber-400 ml-auto" title="离线暂存中, 恢复后自动补报">
+            离线暂存 {live.pendingCount}
+          </span>
+        )}
+        <button type="button" onClick={() => void live.retryPending()} title="重试补报"
+          className="text-zinc-500 hover:text-zinc-200 cursor-pointer"
+          aria-label="重试补报">
+          ↻
+        </button>
+      </div>
+
       {/* ===== 搜索栏 ===== */}
       <div className="shrink-0 flex items-center gap-3 px-5 h-14 border-b border-zinc-800">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-500 shrink-0">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
         </svg>
         <input ref={searchRef} type="text" autoFocus
-          placeholder="歌名 / 歌手 / 拼音首字母…"
+          placeholder="歌名 / 歌手 / 拼音首字母… (Enter 加歌)"
           value={query} onChange={e => setQuery(e.target.value)}
           className="flex-1 bg-transparent text-lg outline-none placeholder:text-zinc-600" />
         <span className="text-xs tabular-nums text-zinc-600">
           {results.length ? `${Math.min(cursor + 1, results.length)} / ${results.length}` : "0"}
         </span>
-        <button onClick={popout} title="弹出独立小窗（可配合系统置顶工具）"
-          className="text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer text-sm px-1">⧉</button>
       </div>
 
       <div className="flex flex-1 min-h-0">
-        {listRequest.status === "error" && (
-          <div className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-lg border border-red-900 bg-red-950/90 px-4 py-2 text-xs text-red-300" role="alert">
-            {listRequest.error?.message} {listRequest.error?.recovery && `· ${listRequest.error.recovery}`}
-            <button type="button" className="ml-3 underline" onClick={refresh}>重试</button>
-          </div>
-        )}
         {/* ===== 结果列表 ===== */}
         <div ref={listRef} className="w-64 shrink-0 overflow-y-auto border-r border-zinc-800">
           {listRequest.status === "loading" && songs.length === 0 ? (
@@ -312,7 +320,7 @@ export default function QuickView() {
           {results.map((s, i) => (
             <div key={s.id} data-sel={i === cursor ? "1" : "0"}
               onClick={() => setCursor(i)}
-              onDoubleClick={() => addToQueue(s)}
+              onDoubleClick={() => void handleQueue(s)}
               className={`px-4 py-2 cursor-pointer border-l-2 transition-colors ${
                 i === cursor
                   ? "border-emerald-500 bg-zinc-900"
@@ -321,10 +329,10 @@ export default function QuickView() {
                 <p className={`text-[15px] font-serif truncate ${s.status === "draft" ? "text-zinc-500" : "text-zinc-100"}`}>
                   {s.title}
                 </p>
-                {queuedSet.has(s.id) && (
+                {pendingSongIds.has(s.id) && (
                   <span className="shrink-0 rounded px-1 text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-900">队列</span>
                 )}
-                {sungSet.has(s.id) && (
+                {sungSongIds.has(s.id) && (
                   <span className="shrink-0 rounded px-1 text-[9px] bg-amber-950 text-amber-400 border border-amber-900">已唱</span>
                 )}
               </div>
@@ -377,19 +385,21 @@ export default function QuickView() {
                   ))}
                 </div>
               )}
+
+              <p className="mt-6 text-[11px] text-zinc-600 font-mono">
+                Enter 加歌 · Space/U/P/R 标记 · T 看谱 · Esc 取消
+              </p>
             </>
           ) : (
             <p className="text-zinc-700 text-lg">输入歌名或拼音首字母开始查</p>
           )}
 
-          {/* toast */}
           {toast && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-lg bg-zinc-800 border border-zinc-700 px-4 py-2 text-sm text-zinc-200 shadow-lg whitespace-nowrap">
               {toast}
             </div>
           )}
 
-          {/* ===== 看谱弹层（T 键，Esc/T/点击关闭）===== */}
           {tabsOpen && sel && (
             <div onClick={() => setTabsOpen(false)}
               className="absolute inset-0 z-40 bg-zinc-950/95 overflow-y-auto p-10 cursor-zoom-out">
@@ -409,62 +419,69 @@ export default function QuickView() {
           )}
         </div>
 
-        {/* ===== 今晚歌单 ===== */}
+        {/* ===== 今晚歌单 (LiveSession 投影) ===== */}
         <div className="w-72 shrink-0 border-l border-zinc-800 flex flex-col min-h-0">
           <div className="shrink-0 px-4 h-11 flex items-center gap-2 border-b border-zinc-800">
             <span className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-mono">今晚歌单</span>
             <span className="text-[11px] tabular-nums text-zinc-500">
-              待唱 {pending.length} · 已唱 {done.length}
+              待唱 {pendingItems.length} · 已唱 {sungItems.length}
             </span>
-            {queue.length > 0 && (
-              <button
-                onClick={() => confirmClear ? setQueue(() => []) : setConfirmClear(true)}
-                className={`ml-auto text-[11px] transition-colors cursor-pointer ${
-                  confirmClear ? "text-red-400" : "text-zinc-600 hover:text-zinc-300"}`}>
-                {confirmClear ? "再点确认清空" : "清空"}
-              </button>
-            )}
           </div>
-          {(storageError || pendingDiagnostic || storage.unresolved_queue.length > 0
-              || storage.unresolved_pending_events.length > 0) && (
-            <div className="shrink-0 border-b border-amber-900/50 bg-amber-950/20 px-3 py-2 text-[10px] leading-relaxed text-amber-300">
-              {storageError && <p>{storageError}</p>}
-              {pendingDiagnostic && <p>待补事件：{pendingDiagnostic}</p>}
-              {storage.unresolved_queue.map((item, index) => (
-                <p key={`queue-${index}`}>未关联队列项：「{item.title}」（{item.reason}）</p>
-              ))}
-              {storage.unresolved_pending_events.map((item, index) => (
-                <p key={`event-${index}`}>未关联事件：{item.type} ·「{item.title}」（不会自动上报）</p>
-              ))}
-            </div>
-          )}
           <div className="flex-1 overflow-y-auto">
-            {!storageReady && !storageError ? (
-              <p className="px-4 py-6 text-xs text-zinc-700">正在加载现场队列…</p>
-            ) : queue.length === 0 ? (
-              <p className="px-4 py-6 text-xs text-zinc-700 leading-relaxed">
-                观众点歌后按 Enter<br />加入今晚队列
-              </p>
+            {queueView.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-zinc-600">空 (回主工作台加歌)</p>
             ) : (
-              <>
-                {pending.map(queueRow)}
-                {done.length > 0 && pending.length > 0 && (
-                  <p className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-zinc-700 font-mono">— 已唱 —</p>
-                )}
-                {done.map(queueRow)}
-              </>
+              <ul>
+                {[...pendingItems, ...sungItems].map(item => {
+                  const song = songsById.get(item.songId);
+                  const isSung = item.state === "sung";
+                  return (
+                    <li key={item.requestId}
+                      data-testid="qv-queue-row"
+                      data-state={item.state}
+                      className={`group flex items-center gap-2 px-3 py-2 border-b border-zinc-900 ${
+                        isSung ? "opacity-40" : ""}`}>
+                      <span className="text-[10px] tabular-nums text-zinc-600 w-6 text-right">
+                        #{item.position}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-serif truncate ${
+                          isSung ? "line-through text-zinc-500" : "text-zinc-100"}`}>
+                          {song?.title ?? item.songId}
+                        </p>
+                        <p className="text-[10px] text-zinc-500 truncate font-mono">
+                          {song?.key ? `${song.key}${song.capo !== null ? ` · 夹${song.capo}品` : ""}` : ""}
+                        </p>
+                      </div>
+                      {live.isActive && (
+                        <div className="hidden group-hover:flex items-center gap-0.5">
+                          <button
+                            onClick={() => void handleRecord(item.requestId, "sung")}
+                            title="已唱 (Space)"
+                            className="h-6 w-6 inline-flex items-center justify-center rounded text-zinc-500 hover:text-emerald-400">
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => void handleRecord(item.requestId, "postponed")}
+                            title="延期 (P)"
+                            className="h-6 w-6 inline-flex items-center justify-center rounded text-zinc-500 hover:text-amber-400">
+                            P
+                          </button>
+                          <button
+                            onClick={() => void handleRecord(item.requestId, "unknown")}
+                            title="不会 (U)"
+                            className="h-6 w-6 inline-flex items-center justify-center rounded text-zinc-500 hover:text-red-400">
+                            U
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </div>
-      </div>
-
-      {/* ===== 底栏 ===== */}
-      <div className="shrink-0 flex items-center px-5 h-8 border-t border-zinc-800 text-[11px] text-zinc-600">
-        <span>↑↓ 选择 · Enter 加入歌单 · T 看谱 · 双击同效 · Esc 清空 · 每 {REFRESH_MS / 1000}s 自动刷新</span>
-        <button onClick={refresh} disabled={listRequest.status === "loading"}
-          className="ml-auto hover:text-zinc-300 transition-colors cursor-pointer disabled:opacity-50">
-          {listRequest.status === "loading" ? "刷新中…" : "手动刷新"}
-        </button>
       </div>
     </div>
   );
