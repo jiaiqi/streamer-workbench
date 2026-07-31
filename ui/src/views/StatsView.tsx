@@ -34,7 +34,7 @@ export default function StatsView({ dark }: StatsViewProps) {
         </div>
       </header>
       <div className="flex-1 overflow-y-auto px-8 pb-10">
-        <div className="flex items-center gap-1 mb-4">
+        <div className="flex items-center gap-1 mb-4" role="tablist" aria-label="统计视图">
           {([
             ["overview", "总览"],
             ["feed", "时间线"],
@@ -45,6 +45,8 @@ export default function StatsView({ dark }: StatsViewProps) {
             <button
               key={k}
               type="button"
+              role="tab"
+              aria-selected={tab === k}
               onClick={() => setTab(k)}
               data-testid={`stats-tab-${k}`}
               className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
@@ -95,7 +97,7 @@ function OverviewPanel({ dark }: { dark: boolean }) {
     { label: "导出海报", value: data.total_posters_exported, color: "emerald" },
   ];
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 stagger-list">
       {cards.map(c => <MetricCard key={c.label} label={c.label} value={c.value} color={c.color} dark={dark} />)}
     </div>
   );
@@ -153,6 +155,7 @@ function FeedPanel({ dark }: { dark: boolean }) {
         <select
           value={limit}
           onChange={e => setLimit(Number(e.target.value))}
+          aria-label="时间线条目数量"
           className={`text-xs rounded-lg px-2 py-1 outline-none ${
             dark ? "bg-zinc-800 text-zinc-200 border border-zinc-700" : "bg-card text-foreground border border-border"
           }`}
@@ -162,7 +165,7 @@ function FeedPanel({ dark }: { dark: boolean }) {
           <option value={100}>100 条</option>
         </select>
       </div>
-      <ul className="space-y-1.5">
+      <ul className="space-y-1.5 stagger-list" role="list">
         {data.items.map(item => <FeedRow key={item.event_id} item={item} dark={dark} />)}
       </ul>
     </div>
@@ -220,7 +223,10 @@ function TopPanel({ dark }: { dark: boolean }) {
           <button
             key={m}
             type="button"
+            role="tab"
+            aria-selected={metric === m}
             onClick={() => setMetric(m)}
+            aria-label={`Top 歌曲按 ${label} 排序`}
             className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
               metric === m
                 ? (dark ? "bg-zinc-700 text-zinc-100" : "bg-primary text-primary-foreground")
@@ -231,7 +237,7 @@ function TopPanel({ dark }: { dark: boolean }) {
           </button>
         ))}
       </div>
-      <ul className="space-y-2">
+      <ul className="space-y-2 stagger-list" role="list">
         {data.items.map((item, idx) => (
           <li
             key={item.song_id}
@@ -300,9 +306,9 @@ function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficult
   if (data.note) return <EmptyNotice note={data.note} dark={dark} />;
   const max = data.buckets.reduce((m, b) => Math.max(m, b.count), 1);
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 stagger-list" role="list">
       {data.buckets.map(b => (
-        <div key={b.label} className="flex items-center gap-3">
+        <div key={b.label} className="flex items-center gap-3" role="listitem">
           <div className={`shrink-0 w-20 text-sm text-right ${dark ? "text-zinc-400" : "text-muted-foreground"}`}>
             {b.label}
           </div>
