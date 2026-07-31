@@ -137,9 +137,16 @@ def compute_streak(logs: List[PracticeLog], today: Optional[str] = None) -> Prac
             longest = max(longest, cur)
             cur = 1
     longest = max(longest, cur)
-    # current_streak: 从 last_date 往回数, 必须有 today (或 last_date == today)
+    # current_streak: 从 last_date 往回数。
+    # 语义 (GitHub-style):
+    #   - last_date == today          → streak 还活着，从今天往回数
+    #   - last_date == today - 1 day  → 今天还没打但 streak 尚未断，从昨天往回数
+    #   - 其他                         → streak 已断, 0
     current_streak = 0
-    if last == today:
+    today_date = date.fromisoformat(today)
+    last_date = date.fromisoformat(last)
+    gap_from_today = (today_date - last_date).days
+    if gap_from_today in (0, 1):
         current_streak = 1
         for i in range(len(unique_dates) - 2, -1, -1):
             prev = date.fromisoformat(unique_dates[i])
