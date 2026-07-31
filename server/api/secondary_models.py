@@ -515,3 +515,62 @@ class DiscoveryItem(BaseModel):
 class DiscoveryResponse(BaseModel):
     items: list[DiscoveryItem] = Field(default_factory=list)
     note: str = ""
+
+
+# ===== R4 Stats =====
+
+class OverviewStatsResponse(BaseModel):
+    total_songs: int
+    active_songs: int
+    draft_songs: int
+    total_events: int
+    events_by_type: dict[str, int] = Field(default_factory=dict)
+    total_practice_minutes: int = 0
+    total_practice_sessions: int = 0
+    current_streak_days: int = 0
+    longest_streak_days: int = 0
+    total_queue_requests: int = 0
+    total_performances: int = 0
+    total_posters_exported: int = 0
+    note: str = ""
+
+
+class FeedItemResponse(BaseModel):
+    event_id: str
+    occurred_at: str
+    type: str
+    source: str
+    song_id: str = ""
+    title_snapshot: str = ""
+    meta: dict = Field(default_factory=dict)
+    summary: str = ""
+
+
+class FeedResponse(BaseModel):
+    items: list[FeedItemResponse] = Field(default_factory=list)
+    note: str = ""
+
+
+class TopSongItemResponse(BaseModel):
+    song_id: str
+    title: str
+    artist: str = ""
+    count: int = 0
+    minutes: int = 0
+
+
+class TopSongsResponse(BaseModel):
+    metric: str
+    items: list[TopSongItemResponse] = Field(default_factory=list)
+    note: str = ""
+
+
+class DistributionBucketResponse(BaseModel):
+    label: str
+    count: int
+
+
+class DistributionResponse(BaseModel):
+    metric: str
+    buckets: list[DistributionBucketResponse] = Field(default_factory=list)
+    note: str = ""

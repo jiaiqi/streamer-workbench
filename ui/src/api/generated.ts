@@ -81,6 +81,19 @@ export interface DiscoveryResponse {
   [key: string]: unknown;
 }
 
+export interface DistributionBucketResponse {
+  "count": number;
+  "label": string;
+  [key: string]: unknown;
+}
+
+export interface DistributionResponse {
+  "buckets"?: Array<DistributionBucketResponse>;
+  "metric": string;
+  "note"?: string;
+  [key: string]: unknown;
+}
+
 export interface EventRecord {
   "event_id"?: string | null;
   "occurred_at"?: string | null;
@@ -152,6 +165,24 @@ export interface ExportedFileResponse {
   "page": number;
   "path": string;
   "theme": string;
+  [key: string]: unknown;
+}
+
+export interface FeedItemResponse {
+  "event_id": string;
+  "meta"?: Record<string, unknown>;
+  "occurred_at": string;
+  "song_id"?: string;
+  "source": string;
+  "summary"?: string;
+  "title_snapshot"?: string;
+  "type": string;
+  [key: string]: unknown;
+}
+
+export interface FeedResponse {
+  "items"?: Array<FeedItemResponse>;
+  "note"?: string;
   [key: string]: unknown;
 }
 
@@ -253,6 +284,23 @@ export interface LiveSessionSummary {
 
 export interface OkResponse {
   "ok"?: boolean;
+  [key: string]: unknown;
+}
+
+export interface OverviewStatsResponse {
+  "active_songs": number;
+  "current_streak_days"?: number;
+  "draft_songs": number;
+  "events_by_type"?: Record<string, number>;
+  "longest_streak_days"?: number;
+  "note"?: string;
+  "total_events": number;
+  "total_performances"?: number;
+  "total_posters_exported"?: number;
+  "total_practice_minutes"?: number;
+  "total_practice_sessions"?: number;
+  "total_queue_requests"?: number;
+  "total_songs": number;
   [key: string]: unknown;
 }
 
@@ -671,6 +719,22 @@ export interface SongsListResponse {
 export interface SongsSummaryResponse {
   "by_len": Record<string, number>;
   "total": number;
+  [key: string]: unknown;
+}
+
+export interface TopSongItemResponse {
+  "artist"?: string;
+  "count"?: number;
+  "minutes"?: number;
+  "song_id": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface TopSongsResponse {
+  "items"?: Array<TopSongItemResponse>;
+  "metric": string;
+  "note"?: string;
   [key: string]: unknown;
 }
 

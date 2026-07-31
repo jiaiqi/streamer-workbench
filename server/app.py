@@ -116,6 +116,20 @@ def _lifespan(config: AppConfig, paths):
             discovery_service = DiscoveryApplicationService(
                 event_store=event_store, song_repository=song_repository,
             )
+            # R4: StatsApplicationService 统计聚合
+            # 海报已导出数: 扫 posters 目录
+            poster_count = 0
+            try:
+                if paths.posters_dir.is_dir():
+                    poster_count = sum(1 for _ in paths.posters_dir.rglob("*.json"))
+            except Exception:
+                poster_count = 0
+            from server.services.stats import StatsApplicationService
+            stats_service = StatsApplicationService(
+                event_store=event_store,
+                song_repository=song_repository,
+                poster_count=poster_count,
+            )
             settings_service = SettingsApplicationService(
                 settings_repository=settings_repository,
             )
@@ -140,6 +154,7 @@ def _lifespan(config: AppConfig, paths):
                 live_persistence_service=live_persistence_service,
                 practice_service=practice_service,
                 discovery_service=discovery_service,
+                stats_service=stats_service,
                 render_service=render_page,
                 song_service=song_service,
                 preset_service=preset_service,
@@ -195,7 +210,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
               name="song_tabs")
 
     from server.routers import songs, render, export, events, settings, presets, posters
-    from server.routers import live, practice, discovery
+    from server.routers import live, practice, discovery, stats
     app.include_router(songs.router)
     app.include_router(render.router)
     app.include_router(export.router)
@@ -206,6 +221,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(live.router)
     app.include_router(practice.router)
     app.include_router(discovery.router)
+    app.include_router(stats.router)
 
     @app.get("/api/health")
     def health(request: Request):
