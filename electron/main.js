@@ -1,31 +1,55 @@
-// 主播工作台 — Electron 桌面壳（dev 模式）
+// 主播工作台 — Electron 桌面壳（dev 模式 + packaged 模式）
 //
-// 设计（ADR-005 / spike 后正式落地）：
-// 1) Electron 主进程同时管理 Vite dev server + Python uvicorn
-//    - 若 5174/8765 端口已被外部占用，假设用户已手起 → 复用不重启
-//    - 若空闲，spawn 启动子进程，quit 时 kill（无孤儿）
-// 2) 主窗口：常规可被 OBS 覆盖的窗口，加载 http://127.0.0.1:5174
-// 3) 置顶速查子窗口：alwaysOnTop + screen-saver 层级（可压全屏直播软件）
-//    加载 /quick?session=xxx，session 由主窗口通过 IPC 推送
-// 4) 仅 dev 模式；不打包（PyInstaller/electron-builder 留 R7）
+// 模式检测：
+//   dev     (npm start  /  npm run dev): app.isPackaged === false
+//   packaged (electron-builder 出包):   app.isPackaged === true
+//
+// dev 模式行为：
+//   - spawn venv python:  <repo>/../.venv/bin/python -m server --port X
+//   - spawn vite dev:     <ui>/node_modules/.bin/vite --port X --strictPort
+//   - main window:        loadURL http://localhost:5174
+//   - quick window:       loadURL http://localhost:5174/quick?session=...
+//
+// packaged 模式行为：
+//   - spawn PyInstaller binary:  <resources>/backend/streamer-workbench-backend --port X
+//       (PyInstaller binary 内含 themes/fonts/server/core, 启动 ~25s)
+//   - main window:               loadFile <dist>/index.html  (vite build 产物)
+//   - quick window:              loadFile <dist>/index.html#quick?session=...
+//   - 每次启动随机生成 STREAMER_WORKBENCH_SESSION_TOKEN (32+ 字符)
 //
 // 跨平台：
-// - venv python: macOS/Linux → .venv/bin/python; Windows → .venv/Scripts/python.exe
-// - vite bin:    node_modules/.bin/vite (用绝对路径 + shell: false)
+//   - PyInstaller binary: streamer-workbench-backend (.app 内 / .exe 同名 / 可执行)
+//   - venv python:        macOS/Linux → .venv/bin/python; Windows → .venv/Scripts/python.exe
+//   - vite bin:           node_modules/.bin/vite (用绝对路径 + shell: false)
 //
 // 环境变量（可选，用于自定义）：
-// - STREAMER_REPO_ROOT     默认 ../  (electron 所在目录的父目录)
-// - STREAMER_VENV_PYTHON   默认 <repo>/.venv/bin/python（或 Scripts\python.exe）
-// - STREAMER_VITE_BIN      默认 <repo>/ui/node_modules/.bin/vite
-// - STREAMER_VITE_PORT     默认 5174
-// - STREAMER_PY_PORT       默认 8765
-// - STREAMER_PY_HOST       默认 127.0.0.1
-// - STREAMER_NO_SPAWN=1    强制不 spawn（用户自己起）
-const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require("electron");
+//   dev:
+//     STREAMER_REPO_ROOT     默认 ../  (electron 所在目录的父目录)
+//     STREAMER_VENV_PYTHON   默认 <repo>/.venv/bin/python (worktree 嵌套时 ../../.venv)
+//     STREAMER_VITE_BIN      默认 <repo>/ui/node_modules/.bin/vite
+//     STREAMER_VITE_PORT     默认 5174
+//     STREAMER_PY_PORT       默认 8765
+//     STREAMER_NO_SPAWN=1    强制不 spawn（用户自己起）
+//   packaged:
+//     STREAMER_DATA_DIR      用户数据目录（默认 platform_data_root）
+//     STREAMER_BACKEND_BIN   自定义 PyInstaller binary 路径
+//     STREAMER_PY_PORT       默认 8765
+//     STREAMER_NO_SPAWN=1    强制不 spawn
+//
+// 子进程管理：
+//   - 端口被外部占用 → 复用
+//   - 端口空闲 + spawn 成功 → 启动后 quit 时双保险 kill
+//   - 启动后子进程异常退出 → 弹错并退出 Electron
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain, protocol } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
 const http = require("http");
 const net = require("net");
+
+const isPackaged = app.isPackaged;
+const isWin = process.platform === "win32";
 
 // ----- 路径解析 -----
 const REPO_ROOT = process.env.STREAMER_REPO_ROOT
@@ -34,16 +58,27 @@ const REPO_ROOT = process.env.STREAMER_REPO_ROOT
 
 const UI_DIR = path.join(REPO_ROOT, "ui");
 
-const isWin = process.platform === "win32";
-const VENV_PY_DEFAULT = path.join(
-  REPO_ROOT, ".venv",
-  isWin ? "Scripts" : "bin",
-  isWin ? "python.exe" : "python",
-);
-const VITE_BIN_DEFAULT = path.join(UI_DIR, "node_modules", ".bin", isWin ? "vite.cmd" : "vite");
+// packaged 模式下资源路径:  macOS StreamerWorkbench.app/Contents/Resources/
+//                            Windows StreamerWorkbench/resources/
+//                            Linux streamer-workbench/resources/
+const BACKEND_RESOURCES_DIR = isPackaged
+  ? path.join(process.resourcesPath, "backend")
+  : null;
+const UI_DIST_DIR = isPackaged
+  ? path.join(process.resourcesPath, "ui-dist")
+  : null;
+const PRELOAD_PATH = path.join(__dirname, "preload.js");
 
-const VENV_PY = process.env.STREAMER_VENV_PYTHON || VENV_PY_DEFAULT;
-const VITE_BIN = process.env.STREAMER_VITE_BIN || VITE_BIN_DEFAULT;
+// dev 模式工具路径
+const VENV_PY_DEV = isPackaged ? null : (process.env.STREAMER_VENV_PYTHON || path.join(REPO_ROOT, "..", ".venv", "bin", isWin ? "python.exe" : "python"));
+const VITE_BIN_DEV = isPackaged ? null : (process.env.STREAMER_VITE_BIN || path.join(UI_DIR, "node_modules", ".bin", isWin ? "vite.cmd" : "vite"));
+
+// packaged 模式 PyInstaller binary
+const BACKEND_BIN_DEV_NAME = isWin ? "streamer-workbench-backend.exe" : "streamer-workbench-backend";
+const BACKEND_BIN = isPackaged
+  ? (process.env.STREAMER_BACKEND_BIN || path.join(BACKEND_RESOURCES_DIR, BACKEND_BIN_DEV_NAME))
+  : null;
+
 const VITE_PORT = Number(process.env.STREAMER_VITE_PORT) || 5174;
 const PY_PORT = Number(process.env.STREAMER_PY_PORT) || 8765;
 const PY_HOST = process.env.STREAMER_PY_HOST || "127.0.0.1";
@@ -59,18 +94,17 @@ let mainWin = null;
 let quickWin = null;
 let ready = false;
 let shuttingDown = false;
+let sessionToken = null;  // packaged mode 每次启动随机生成
 
 function log(...args) {
-  // 全部 [electron] 开头，方便 dev 终端定位
-  console.log("[electron]", ...args);
+  console.log("[electron]", `[${isPackaged ? "packaged" : "dev"}]`, ...args);
 }
 
 function logErr(...args) {
-  console.error("[electron]", ...args);
+  console.error("[electron]", `[${isPackaged ? "packaged" : "dev"}]`, ...args);
 }
 
-// 探测端口是否被占用（TCP 连接尝试）
-// 用 'localhost' 让 OS 同时尝试 IPv4 + IPv6（macOS 上 vite 监听 IPv6 ::1 only）
+// 探测端口（IPv4 + IPv6 双探, 修 macOS vite::1 only listen）
 function probe(port, host = "localhost", timeoutMs = 800) {
   return new Promise((resolve) => {
     const tryConnect = (target) => new Promise((r) => {
@@ -89,7 +123,6 @@ function probe(port, host = "localhost", timeoutMs = 800) {
       sock.connect(port, target);
     });
     (async () => {
-      // 优先 IPv4 (uvicorn 默认), 再 IPv6 (vite macOS default)
       const v4 = await tryConnect("127.0.0.1");
       if (v4) return resolve(true);
       const v6 = await tryConnect("::1");
@@ -98,7 +131,6 @@ function probe(port, host = "localhost", timeoutMs = 800) {
   });
 }
 
-// 等待 HTTP 200（GET /api/settings 即可）
 function waitHttp(url, retries = 60, intervalMs = 500) {
   return new Promise((resolve, reject) => {
     const tryOnce = (left) => {
@@ -124,7 +156,6 @@ function pipeProcess(name, proc) {
     if (shuttingDown) return;
     logErr(`${name} exited unexpectedly code=${code} signal=${signal}`);
     if (ready) {
-      // 启动后挂掉：弹错对话框并退出
       dialog.showErrorBox(
         `${name} 异常退出`,
         `${name} 在启动后异常退出（code=${code}）。\n` +
@@ -132,10 +163,14 @@ function pipeProcess(name, proc) {
       );
       app.quit();
     } else {
-      // 启动期间挂掉：拒绝 ready 事件
       ready = false;
     }
   });
+}
+
+// 生成 32+ 字符随机 session token（packaged mode 必填）
+function makeSessionToken() {
+  return crypto.randomBytes(32).toString("hex");
 }
 
 async function ensurePython() {
@@ -146,17 +181,48 @@ async function ensurePython() {
   if (NO_SPAWN) {
     throw new Error(`Python 后端未在 ${PY_URL} 运行，且 STREAMER_NO_SPAWN=1 不允许自动启动`);
   }
-  log(`python: spawn ${VENV_PY} -m server --port ${PY_PORT}`);
-  pyProc = spawn(VENV_PY, ["-m", "server", "--port", String(PY_PORT)], {
-    cwd: REPO_ROOT,
-    env: { ...process.env, PYTHONPATH: REPO_ROOT, PYTHONUTF8: "1", STREAMER_DESKTOP: "1" },
-  });
+
+  if (isPackaged) {
+    // packaged: spawn PyInstaller binary
+    if (!fs.existsSync(BACKEND_BIN)) {
+      throw new Error(`packaged mode 需要 ${BACKEND_BIN}，但文件不存在`);
+    }
+    const env = { ...process.env, STREAMER_DESKTOP: "1" };
+    if (sessionToken) env.STREAMER_WORKBENCH_SESSION_TOKEN = sessionToken;
+    if (process.env.STREAMER_DATA_DIR) env.STREAMER_WORKBENCH_DATA_DIR = process.env.STREAMER_DATA_DIR;
+    log(`python: spawn binary ${BACKEND_BIN} --port ${PY_PORT}`);
+    pyProc = spawn(BACKEND_BIN, ["--port", String(PY_PORT)], {
+      env,
+      // macOS 上 binary 解压到 sys._MEIPASS, 启动 ~25s, 给 waitHttp 60 次重试 (30s)
+    });
+  } else {
+    // dev: spawn venv python
+    log(`python: spawn ${VENV_PY_DEV} -m server --port ${PY_PORT}`);
+    pyProc = spawn(VENV_PY_DEV, ["-m", "server", "--port", String(PY_PORT)], {
+      cwd: REPO_ROOT,
+      env: {
+        ...process.env,
+        PYTHONPATH: REPO_ROOT,
+        PYTHONUTF8: "1",
+        STREAMER_DESKTOP: "1",
+      },
+    });
+  }
   pipeProcess("python", pyProc);
   await waitHttp(`${PY_URL}/api/settings`);
   log("python: ready");
 }
 
-async function ensureVite() {
+async function ensureViteOrUI() {
+  if (isPackaged) {
+    // packaged: 用 vite build 产物, 不需要 dev server
+    if (!fs.existsSync(path.join(UI_DIST_DIR, "index.html"))) {
+      throw new Error(`packaged mode 需要 ${UI_DIST_DIR}/index.html`);
+    }
+    log(`vite: packaged dist at ${UI_DIST_DIR}`);
+    return;
+  }
+  // dev: spawn vite
   if (await probe(VITE_PORT, PY_HOST)) {
     log(`vite: ${VITE_URL} 已被外部占用，复用`);
     return;
@@ -164,8 +230,8 @@ async function ensureVite() {
   if (NO_SPAWN) {
     throw new Error(`Vite dev server 未在 ${VITE_URL} 运行，且 STREAMER_NO_SPAWN=1 不允许自动启动`);
   }
-  log(`vite: spawn ${VITE_BIN} --port ${VITE_PORT} --strictPort`);
-  viteProc = spawn(VITE_BIN, ["--port", String(VITE_PORT), "--strictPort"], {
+  log(`vite: spawn ${VITE_BIN_DEV} --port ${VITE_PORT} --strictPort`);
+  viteProc = spawn(VITE_BIN_DEV, ["--port", String(VITE_PORT), "--strictPort"], {
     cwd: UI_DIR,
     env: { ...process.env, VITE_API_PROXY_TARGET: `http://127.0.0.1:${PY_PORT}` },
   });
@@ -204,14 +270,31 @@ function buildMenu() {
       submenu: [
         { role: "toggleDevTools" },
         { type: "separator" },
-        {
+        ...(isPackaged ? [] : [{
           label: "在浏览器打开主窗口",
           click: () => shell.openExternal(VITE_URL),
-        },
+        }]),
       ],
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function mainLoadConfig() {
+  if (isPackaged) {
+    return { file: path.join(UI_DIST_DIR, "index.html") };
+  }
+  return { url: VITE_URL };
+}
+
+function quickLoadConfig(sessionId) {
+  if (isPackaged) {
+    // SPA 路由用 hash 避免 file:// 下 path 解析问题
+    const hash = sessionId ? `#/quick?session=${encodeURIComponent(sessionId)}` : "#/quick";
+    return { file: path.join(UI_DIST_DIR, "index.html"), hash };
+  }
+  const query = sessionId ? `?session=${encodeURIComponent(sessionId)}` : "";
+  return { url: `${VITE_URL}/quick${query}` };
 }
 
 function createMainWindow() {
@@ -222,7 +305,7 @@ function createMainWindow() {
     backgroundColor: "#0b0b0f",
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -230,8 +313,14 @@ function createMainWindow() {
   });
   mainWin.once("ready-to-show", () => mainWin.show());
   mainWin.on("closed", () => { mainWin = null; });
-  mainWin.loadURL(VITE_URL);
-  log(`main: loadURL ${VITE_URL}`);
+  const cfg = mainLoadConfig();
+  if (cfg.file) {
+    mainWin.loadFile(cfg.file);
+    log(`main: loadFile ${cfg.file}`);
+  } else {
+    mainWin.loadURL(cfg.url);
+    log(`main: loadURL ${cfg.url}`);
+  }
 }
 
 function openQuickView(sessionId) {
@@ -242,7 +331,6 @@ function openQuickView(sessionId) {
     }
     return;
   }
-  const query = sessionId ? `?session=${encodeURIComponent(sessionId)}` : "";
   quickWin = new BrowserWindow({
     width: 420,
     height: 720,
@@ -256,22 +344,26 @@ function openQuickView(sessionId) {
     show: false,
     parent: mainWin ?? undefined,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: PRELOAD_PATH,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   });
-  // 最高层级（screen-saver 之上）— 可压 OBS 全屏投影
   quickWin.setAlwaysOnTop(true, "screen-saver");
   quickWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   quickWin.once("ready-to-show", () => quickWin.show());
   quickWin.on("closed", () => { quickWin = null; });
-  quickWin.loadURL(`${VITE_URL}/quick${query}`);
-  log(`quick: loadURL ${VITE_URL}/quick${query ? " (session=" + sessionId + ")" : ""}`);
+  const cfg = quickLoadConfig(sessionId);
+  if (cfg.file) {
+    quickWin.loadFile(cfg.file, { hash: cfg.hash });
+    log(`quick: loadFile ${cfg.file}${cfg.hash ?? ""}`);
+  } else {
+    quickWin.loadURL(cfg.url);
+    log(`quick: loadURL ${cfg.url}`);
+  }
 }
 
-// IPC：主窗口通知 Electron 打开速查子窗口
 ipcMain.handle("quickview:open", (_evt, sessionId) => {
   openQuickView(sessionId);
   return { ok: true };
@@ -282,15 +374,24 @@ ipcMain.handle("quickview:close", () => {
   return { ok: true };
 });
 
+ipcMain.handle("desktop:info", () => ({
+  isPackaged,
+  dataDir: process.env.STREAMER_DATA_DIR || null,
+  pyUrl: PY_URL,
+}));
+
 app.whenReady().then(async () => {
+  // packaged mode 每次启动生成新 session token
+  if (isPackaged) {
+    sessionToken = makeSessionToken();
+    log(`session_token: ${sessionToken.slice(0, 8)}... (${sessionToken.length} chars)`);
+  }
   buildMenu();
   try {
     await ensurePython();
-    await ensureVite();
+    await ensureViteOrUI();
     ready = true;
     createMainWindow();
-    // 自检模式: STREAMER_ELECTRON_SELFTEST=N 时, N 秒后自动 quit (CI 烟雾测试用, 不留窗口)
-    // 自检模式 + STREAMER_ELECTRON_SELFTEST_QUICKVIEW=1 时, 主窗口 ready-to-show 后立即开置顶速查
     if (process.env.STREAMER_ELECTRON_SELFTEST) {
       const seconds = Number(process.env.STREAMER_ELECTRON_SELFTEST) || 5;
       log(`selftest: auto-quit in ${seconds}s`);
@@ -304,11 +405,14 @@ app.whenReady().then(async () => {
     }
   } catch (err) {
     logErr("启动失败:", err.message);
+    const uiHint = isPackaged
+      ? `${UI_DIST_DIR}/index.html 存在`
+      : `${VITE_URL} 端口空闲（可手动跑 cd ui && npm run dev）`;
     dialog.showErrorBox(
       "主播工作台启动失败",
       `${err.message}\n\n请确认：\n` +
-      `1. ${VITE_URL} 端口空闲（可手动跑 \`cd ui && npm run dev\`）\n` +
-      `2. ${PY_URL} 端口空闲（可手动跑 \`python -m server --port ${PY_PORT}\`）\n` +
+      `1. ${PY_URL} 端口空闲（可手动跑 python -m server --port ${PY_PORT}）\n` +
+      `2. ${uiHint}\n` +
       `3. 或设置 STREAMER_NO_SPAWN=1 自行管理进程`,
     );
     app.quit();
@@ -334,7 +438,6 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
-  // 双保险：before-quit 已杀，这里再补一次
   if (viteProc && !viteProc.killed) {
     try { viteProc.kill("SIGKILL"); } catch { /* noop */ }
   }

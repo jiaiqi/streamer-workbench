@@ -15,9 +15,15 @@ import { apiRequest } from "./api/client";
 import { useLatestRequest } from "./async/requestState";
 
 /* ================== 模式解析 ================== */
+// 兼容: dev 模式 (?session=) + Electron packaged 模式 (#/quick?session=)
 const SESSION_ID = (() => {
   if (typeof window === "undefined") return null;
-  return new URLSearchParams(window.location.search).get("session");
+  const fromSearch = new URLSearchParams(window.location.search).get("session");
+  if (fromSearch) return fromSearch;
+  const hashQuery = window.location.hash.includes("?")
+    ? window.location.hash.slice(window.location.hash.indexOf("?"))
+    : "";
+  return new URLSearchParams(hashQuery).get("session");
 })();
 
 /* ================== 工具 ================== */

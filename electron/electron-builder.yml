@@ -1,0 +1,121 @@
+# 主播工作台 — electron-builder 打包配置
+#
+# 用法:
+#   cd electron && npx electron-builder --mac          # macOS .dmg + .zip
+#   npx electron-builder --win                          # Windows .exe (需 Wine 在 macOS 上)
+#   npx electron-builder --linux                        # Linux .AppImage
+#   npx electron-builder --dir                          # 不打包, 输出 unpacked 目录 (调试)
+#
+# 产物: electron/dist/<format>/
+#   macOS:   StreamerWorkbench-0.1.0-arm64.dmg / .zip
+#   Windows: StreamerWorkbench Setup 0.1.0.exe
+#   Linux:   StreamerWorkbench-0.1.0.AppImage
+#
+# 流程:
+#   1) PyInstaller 打包 Python 后端:    tools/build_backend.sh → dist/streamer-workbench-backend
+#   2) UI build:                          cd ui && npm run build → ui/dist/
+#   3) electron-builder 打包:             cd electron && npx electron-builder
+#      会把 main.js + preload.js + node_modules + resources/* 一起打成 .app
+#      其中 resources/backend/ 装 PyInstaller binary, dist/ 装 UI 静态
+#
+# 跨平台 build 限制:
+#   - macOS .dmg:    必须在 macOS 上 build (Apple 限制)
+#   - Windows .exe:  需 Wine (macOS) 或 Windows 主机
+#   - Linux .AppImage: 在 Linux 上 build 最稳
+#   建议在 GitHub Actions matrix 跨平台 build
+#
+# 代码签名 (生产环境必须):
+#   macOS:   mac 证书 + notarization (`CSC_LINK` + `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD`)
+#   Windows: EV 证书 (`CSC_LINK` + `CSC_KEY_PASSWORD`)
+#   开发期不签名也能 build, 但用户装时会弹"未识别开发者"警告
+
+appId: com.streamer-workbench.app
+productName: StreamerWorkbench
+copyright: Copyright © 2026 Streamer Workbench
+
+directories:
+  # electron-builder 读取 electron/ 目录下的 main.js / preload.js, 输出到 electron/dist/
+  output: dist
+  buildResources: build   # 图标等资源放 electron/build/
+
+# 入口 (从 package.json main 字段读取)
+# main: main.js
+
+# 包含的文件
+files:
+  - main.js
+  - preload.js
+  - "package.json"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*.d.ts"
+  - "!**/node_modules/.bin"
+  - "!**/{.DS_Store,.git,.svn,.hg,CVS,RCS,SCCS,*.gypi}"
+  - "!**/{__pycache__,*.pyc,*.pyo}"
+
+# 额外资源 (从仓库根拷到 app/resources/ 然后 app/resourcesPath 访问)
+extraResources:
+  - from: "../dist/streamer-workbench-backend"
+    to: "backend/streamer-workbench-backend"
+    filter: ["**/*"]
+  - from: "../dist/streamer-workbench-backend"
+    to: "backend/streamer-workbench-backend.exe"
+    filter: ["**/*"]
+    # 同时复制为 .exe 后缀, Windows build 走这一份
+  - from: "../ui/dist"
+    to: "ui-dist"
+    filter: ["**/*"]
+
+# 平台特定配置
+mac:
+  category: public.app-category.music
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  # 签名 (未配置时跳过, 用户装时弹"未识别开发者"警告)
+  # identity: "Developer ID Application: <team name> (<team id>)"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  extendInfo:
+    NSHumanReadableCopyright: "Streamer Workbench 2026"
+    LSApplicationCategoryType: public.app-category.music
+    NSHighResolutionCapable: true
+  # notarize: true   # 需 Apple ID + app-specific password
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # signingHashAlgorithms: ['sha256']
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: AudioVideo
+
+# NSIS (Windows 安装器) 配置
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Streamer Workbench
+
+# dmg 配置
+dmg:
+  title: "${productName} ${version}"
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
