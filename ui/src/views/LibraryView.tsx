@@ -48,6 +48,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
   const [actionSong, setActionSong] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
+  const [seedPending, setSeedPending] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
@@ -58,6 +59,27 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
     if (!d) return;
     setSongsData(d);
     onStatsChange({ active: d.active, draft: d.draft });
+  };
+
+  // P1 R1a.2 首用引导：空曲库 → 一键载入内置示例曲库
+  const handleSeedSample = async () => {
+    if (seedPending) return;
+    setSeedPending(true);
+    setActionError("");
+    try {
+      const res = await apiRequest<{ ok: boolean; added: string[] }>(
+        "/api/songs/seed-sample", { method: "POST", body: {} },
+      );
+      if (res.added.length > 0) {
+        setActionError(""); // 清空旧错误
+      }
+      await refresh();
+    } catch (reason) {
+      const failure = toRequestFailure(reason, "示例曲库载入失败");
+      setActionError(failure.message);
+    } finally {
+      setSeedPending(false);
+    }
   };
 
   /* 曲谱上传/删除后局部更新该曲的 tab_files（不必全量 refresh） */
@@ -255,7 +277,13 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
       {/* ===== 分组卡片网格 ===== */}
       {listRequest.status === "loading" && !songsData ? <AsyncStateNotice kind="loading" label="歌曲库" />
       : listRequest.status === "error" && !songsData ? <AsyncStateNotice kind="error" label="歌曲库" error={listRequest.error} onRetry={refresh} />
-      : listRequest.status === "empty" ? <AsyncStateNotice kind="empty" label="歌曲" />
+      : listRequest.status === "empty" ? <AsyncStateNotice
+          kind="empty"
+          label="歌曲"
+          actionLabel="载入示例数据"
+          onAction={handleSeedSample}
+          actionPending={seedPending}
+        />
       : songsData ? (
         <div ref={listRef} className="flex-1 overflow-y-auto">
           {/* 列数探针：与真实网格同 class，键盘导航据此计算 ↑↓ 步长 */}
