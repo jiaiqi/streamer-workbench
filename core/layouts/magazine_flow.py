@@ -31,6 +31,54 @@ VALID_AXES = (
 )
 
 
+# ── 栏数模板（P2 R4 第4步）──
+# 选预设 → 一键应用 columns_per_section (8 个字数分组的栏数)
+# 选 "custom" → 留空让用户手动编辑 section_map
+# 0 = 跟随顶级 columns 参数；正整数 = 该分组独立栏数
+COLUMN_TEMPLATES: dict[str, dict[str, int | str]] = {
+    "balanced": {
+        "label": "均衡",
+        "description": "每组统一 2 栏，常规排版",
+        "values": {"一字": 2, "二字": 2, "三字": 2, "四字": 2,
+                   "五字": 2, "六字": 2, "长歌名": 2, "其他": 2},
+    },
+    "dense": {
+        "label": "密集",
+        "description": "1-2 字 3 栏，3-4 字 2 栏，长歌名单栏",
+        "values": {"一字": 3, "二字": 3, "三字": 2, "四字": 2,
+                   "五字": 1, "六字": 1, "长歌名": 1, "其他": 1},
+    },
+    "spacious": {
+        "label": "宽松",
+        "description": "每组单栏，大字号留白",
+        "values": {"一字": 1, "二字": 1, "三字": 1, "四字": 1,
+                   "五字": 1, "六字": 1, "长歌名": 1, "其他": 1},
+    },
+    "magazine": {
+        "label": "杂志",
+        "description": "1-2 字密集,3-4 字双栏,长歌名单栏,适合宽幅",
+        "values": {"一字": 4, "二字": 3, "三字": 2, "四字": 2,
+                   "五字": 1, "六字": 1, "长歌名": 1, "其他": 1},
+    },
+    "custom": {
+        "label": "自定义",
+        "description": "在下方表格中自由编辑",
+        "values": {},  # 空 → UI 暴露 section_map 让用户填
+    },
+}
+
+
+def get_column_templates() -> list[dict]:
+    """返回栏数模板列表（供 UI 渲染下拉）。
+
+    每项: {key, label, description, values}
+    """
+    return [
+        {"key": k, "label": t["label"], "description": t["description"], "values": t["values"]}
+        for k, t in COLUMN_TEMPLATES.items()
+    ]
+
+
 def _group_by_chars(song):
     t = song.title.strip()
     sec = getattr(song, "section", None)

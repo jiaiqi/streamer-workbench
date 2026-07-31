@@ -105,6 +105,16 @@ def api_layout_capabilities(layout_id: str, req: Request):
     return caps
 
 
+@router.get("/api/layouts/magazine-flow/templates")
+def api_magazine_flow_templates():
+    """P2 R4: magazine-flow 栏数模板列表（密集/宽松/杂志/自定义）。
+
+    UI 顶部下拉选模板 → 一键写入 columns_per_section。
+    """
+    from core.layouts.magazine_flow import get_column_templates
+    return get_column_templates()
+
+
 class AnalyzeQuery(BaseModel):
     """magazine-flow 自动分页分析请求：传入可选 poster_id / 直接的 song_ids."""
     model_config = ConfigDict(extra="forbid")

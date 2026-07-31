@@ -9,6 +9,7 @@ import SettingsView from "./views/SettingsView";
 import ExportDialog from "./components/ExportDialog";
 import PreviewCrossfade from "./components/PreviewCrossfade";
 import ParamInspector from "./components/ParamInspector";
+import ColumnTemplatePicker from "./components/ColumnTemplatePicker";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
 import type { AppearanceSettings } from "./types";
@@ -27,6 +28,7 @@ export default function App() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [layouts, setLayouts] = useState<Layout[]>([]);
   const [selTheme, setSelTheme] = useState<string>("");
+  const [selLayout, setSelLayout] = useState<string>("grid-wrap");
   const [page, setPage] = useState(1);
   const [avoid, setAvoid] = useState(true);
   const [canvas, setCanvas] = useState<string>("抖音全屏 9:20");
@@ -40,11 +42,14 @@ export default function App() {
   const [resourceError, setResourceError] = useState("");
   const [renderKey, setRenderKey] = useState(0);
   // P0-1: 排版参数受控（初始为 grid-wrap 默认值，ParamSpec 拉取后合并）
-  const [params, setParams] = useState<Record<string, number>>({
+  // P2 R4: 类型放宽为 unknown，section_map 是 dict<int>，bool 是 number 0/1
+  const [params, setParams] = useState<Record<string, unknown>>({
     margin: 58, font_song: 36, row_h: 44, sec_gap: 26,
   });
   // Phase 2: 参数面板动态渲染（对接 /api/layouts/{id}/params 的 ParamSpec 契约）
   const [paramSpecs, setParamSpecs] = useState<ParamSpec[]>([]);
+  // P2 R4: magazine-flow 栏数模板
+  const [columnTemplates, setColumnTemplates] = useState<import("./types").ColumnTemplate[]>([]);
   // Phase 2: 视图路由
   const [view, setView] = useState<string>("workspace");
   // Phase 2: 导出对话框
@@ -127,6 +132,35 @@ export default function App() {
     load();
     return () => { active = false; };
   }, []);
+
+  // P2 R4: 切换排版时重新拉 params specs + (如果是 magazine-flow) 拉栏数模板
+  useEffect(() => {
+    if (!selLayout) return;
+    let active = true;
+    (async () => {
+      try {
+        const specs = await apiRequest<ParamSpec[]>(`/api/layouts/${selLayout}/params`);
+        if (!active) return;
+        setParamSpecs(specs);
+        setParams(prev => {
+          const merged = { ...prev };
+          for (const spec of specs) if (merged[spec.key] === undefined) merged[spec.key] = spec.default;
+          return merged;
+        });
+        if (selLayout === "magazine-flow") {
+          const tpls = await apiRequest<import("./types").ColumnTemplate[]>(
+            "/api/layouts/magazine-flow/templates",
+          );
+          if (active) setColumnTemplates(tpls);
+        } else {
+          setColumnTemplates([]);
+        }
+      } catch (reason) {
+        if (active) setResourceError(reason instanceof Error ? reason.message : "排版参数加载失败");
+      }
+    })();
+    return () => { active = false; };
+  }, [selLayout]);
 
   const saveAppearance = async (next: AppearanceSettings) => {
     if (appearanceSaving || settingsSaving || view === "settings") return;
@@ -562,6 +596,15 @@ export default function App() {
               </details>
 
               {/* 折叠：布局参数（默认展开）—— P2 R4 通用 Inspector 接管 */}
+              {/* magazine-flow 专用：栏数模板下拉 */}
+              {selLayout === "magazine-flow" && columnTemplates.length > 0 && (
+                <ColumnTemplatePicker
+                  templates={columnTemplates}
+                  value={(params.columns_per_section as Record<string, number>) || {}}
+                  onChange={next => setParams(prev => ({ ...prev, columns_per_section: next }))}
+                  dark={dark}
+                />
+              )}
               <ParamInspector
                 specs={paramSpecs}
                 values={params}

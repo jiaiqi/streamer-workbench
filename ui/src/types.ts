@@ -40,6 +40,13 @@ export interface SongsData {
 export type ParamSpecKind =
   | "int" | "float" | "bool" | "select" | "section_map" | "group_order";
 
+export interface ColumnTemplate {
+  key: string;             // "balanced" | "dense" | "spacious" | "magazine" | "custom"
+  label: string;           // 显示名
+  description: string;
+  values: Record<string, number>;  // 8 个字数分组 → 栏数
+}
+
 export interface ParamSpec {
   key: string;
   label: string;
