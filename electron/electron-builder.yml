@@ -69,15 +69,14 @@ extraResources:
 # 平台特定配置
 mac:
   category: public.app-category.music
+  # 当前主开发机是 Apple Silicon, 只出 arm64 (Intel Mac 用户是少数, 以后再加回 x64)
   target:
     - target: dmg
       arch:
         - arm64
-        - x64
     - target: zip
       arch:
         - arm64
-        - x64
   # 签名 (未配置时跳过, 用户装时弹"未识别开发者"警告)
   # identity: "Developer ID Application: <team name> (<team id>)"
   hardenedRuntime: true
