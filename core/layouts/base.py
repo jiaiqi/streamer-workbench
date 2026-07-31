@@ -3,22 +3,56 @@
 每个排版一个模块。现有「全行网格绕排版」(grid-wrap) 是原 build_playlist.py
 排版逻辑移植，作为第一个插件。新排版（便签拼贴/歌手分区…）写的时候，
 胶囊标签、网格、绕排这些「零件」从 DrawContext 开箱即用，只写布局差异。
+
+P2 R4 通用化：ParamSpec 升级为全平台契约，UI 右侧 Inspector 通用渲染。
+新支持的 kind:
+  - "int" / "float"   数值（带 min/max/step）
+  - "bool"            开关
+  - "select"          单选下拉（choices 是 list[str|int|float]）
+  - "section_map"     分类→数值映射（专为「每个字数分组的栏数」设计）
+  - "group_order"     分类顺序（UI 渲染成上下拖拽列表）
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List
+from typing import Any, List, Literal, Optional
+
+
+# UI 渲染侧的 kind 枚举（Literal 比 string 更利于前端类型生成）
+ParamSpecKind = Literal[
+    "int", "float", "bool", "select", "section_map", "group_order",
+]
 
 
 @dataclass
 class ParamSpec:
-    """暴露给右侧参数面板的可调项，UI 据此动态生成控件。"""
-    key: str            # 对应 CanvasSpec 字段或插件自有参数
-    label: str          # 显示名，如「歌名字号」
-    kind: str           # "int" | "color" | "bool" | "choice"
-    default: object
-    min: int = None
-    max: int = None
-    choices: list = None
+    """暴露给右侧参数面板的可调项，UI 据此动态生成控件。
+
+    字段语义：
+      key           参数名（POST /api/render/document 的 parameters 字段）
+      label         显示名（中文/任意）
+      kind          控件类型（见 ParamSpecKind）
+      default       默认值
+      min / max     数值范围（kind=int/float）
+      step          滑块步长（缺省=1）
+      choices       kind=select 时的候选项（值列表，UI 渲染为下拉）
+      group         Inspector 内的分组（"布局"/"样式"/"分组"/"画布"等）
+      help          鼠标悬停提示文案
+      section_axis  kind=section_map 时绑定的分组轴
+                    ("chars"/"artist"/"genre"/"language"/"initial"/"status")
+      unit          显示单位（如 "px"），仅展示用
+    """
+    key: str
+    label: str
+    kind: ParamSpecKind
+    default: Any
+    min: Optional[float] = None
+    max: Optional[float] = None
+    step: Optional[float] = None
+    choices: Optional[list] = None
+    group: str = "布局"
+    help: str = ""
+    section_axis: Optional[str] = None
+    unit: str = ""
 
 
 @dataclass

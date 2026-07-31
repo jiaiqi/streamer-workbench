@@ -43,10 +43,18 @@ class GridWrapLayout(LayoutPlugin):
 
     def params(self) -> list[ParamSpec]:
         return [
-            ParamSpec("margin", "边距", "int", 58, 0, 200),
-            ParamSpec("font_song", "歌名字号", "int", 36, 20, 60),
-            ParamSpec("row_h", "行高", "int", 44, 30, 80),
-            ParamSpec("sec_gap", "分类间距", "int", 26, 0, 80),
+            ParamSpec("margin", "边距", "int", 58, min=0, max=200,
+                      group="画布", unit="px", step=2,
+                      help="四边留白，0 表示贴边"),
+            ParamSpec("font_song", "歌名字号", "int", 36, min=20, max=60,
+                      group="样式", unit="pt", step=1,
+                      help="歌名主体字号"),
+            ParamSpec("row_h", "行高", "int", 44, min=30, max=80,
+                      group="样式", unit="px", step=1,
+                      help="每行垂直高度"),
+            ParamSpec("sec_gap", "分类间距", "int", 26, min=0, max=80,
+                      group="样式", unit="px", step=1,
+                      help="分组标题与正文间距"),
         ]
 
     def estimate_capacity(self, canvas) -> dict:

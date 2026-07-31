@@ -152,9 +152,22 @@ class MagazineFlowLayout(LayoutPlugin):
 
     def params(self) -> list[ParamSpec]:
         return [
-            ParamSpec("columns", "栏数", "choice", 2, choices=[2, 3]),
-            ParamSpec("show_date", "显示日期", "bool", True),
-            ParamSpec("margin", "边距", "int", 58, 0, 200),
+            ParamSpec("columns", "栏数", "select", 2,
+                      choices=[2, 3], group="布局",
+                      help="双栏宽松，三栏密集"),
+            ParamSpec("columns_per_section", "每分组栏数覆盖", "section_map",
+                      default={"一字": 1, "二字": 3, "三字": 2,
+                                "四字": 2, "五字": 1, "六字": 1, "长歌名": 1,
+                                "其他": 1},
+                      group="布局", section_axis="chars",
+                      help="按字数分组单独指定栏数；留 0=跟随上面「栏数」"),
+            ParamSpec("collapse_threshold", "稀疏合并阈值", "int", 3,
+                      min=0, max=20, group="布局", step=1,
+                      help="某分组歌曲数 < 此值时与下个组合并；0=不合并"),
+            ParamSpec("show_date", "显示日期", "bool", True,
+                      group="样式", help="刊头是否带日期"),
+            ParamSpec("margin", "边距", "int", 58, min=0, max=200,
+                      group="画布", unit="px", step=2),
         ]
 
     def capabilities(self) -> dict:
