@@ -4,6 +4,7 @@ import { CANVAS_OPTIONS } from "./types";
 import { Icon } from "./icons";
 import LibraryView from "./views/LibraryView";
 import LearningView from "./views/LearningView";
+import LiveView from "./views/LiveView";
 import SettingsView from "./views/SettingsView";
 import ExportDialog from "./components/ExportDialog";
 import PreviewCrossfade from "./components/PreviewCrossfade";
@@ -16,6 +17,7 @@ const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
   { id: "library", label: "歌曲库", icon: Icon.list },
   { id: "learning", label: "学歌管理", icon: Icon.book },
+  { id: "live", label: "直播", icon: Icon.live },
   // 主题管理/场景预设/导出历史不作占位导航：按路线图改为工作台内资源面板时再上线
 ];
 
@@ -513,6 +515,9 @@ export default function App() {
               onStatsChange={setSongStats}
               onEditTargetChange={setLibDialogOpen} />
           )}
+
+          {/* ===== 直播视图 ===== */}
+          {view === "live" && <LiveView dark={dark} />}
 
           {/* ===== RIGHT: params（仅工作台视图显示，<800px 隐藏） ===== */}
           {view === "workspace" && (
