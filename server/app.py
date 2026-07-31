@@ -111,6 +111,11 @@ def _lifespan(config: AppConfig, paths):
             practice_service = PracticeApplicationService(
                 event_store=event_store, song_repository=song_repository,
             )
+            # R3: DiscoveryApplicationService 学歌发现 (3 套机制 + 智能推荐)
+            from server.services.discovery import DiscoveryApplicationService
+            discovery_service = DiscoveryApplicationService(
+                event_store=event_store, song_repository=song_repository,
+            )
             settings_service = SettingsApplicationService(
                 settings_repository=settings_repository,
             )
@@ -134,6 +139,7 @@ def _lifespan(config: AppConfig, paths):
                 poster_repository=poster_repository,
                 live_persistence_service=live_persistence_service,
                 practice_service=practice_service,
+                discovery_service=discovery_service,
                 render_service=render_page,
                 song_service=song_service,
                 preset_service=preset_service,
@@ -189,7 +195,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
               name="song_tabs")
 
     from server.routers import songs, render, export, events, settings, presets, posters
-    from server.routers import live, practice
+    from server.routers import live, practice, discovery
     app.include_router(songs.router)
     app.include_router(render.router)
     app.include_router(export.router)
@@ -199,6 +205,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(posters.router)
     app.include_router(live.router)
     app.include_router(practice.router)
+    app.include_router(discovery.router)
 
     @app.get("/api/health")
     def health(request: Request):

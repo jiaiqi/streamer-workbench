@@ -492,3 +492,26 @@ class ParamSpecResponse(BaseModel):
     help: str = ""
     section_axis: str | None = None
     unit: str = ""
+
+
+# ===== R3 Discovery =====
+
+class DiscoveryItem(BaseModel):
+    song_id: str
+    title: str
+    artist: str = ""
+    difficulty: str = ""
+    key: str = ""
+    capo: int | None = 0
+    last_learned_at: str = ""
+    last_requested_at: str = ""
+    last_performed_at: str = ""
+    practice_count: int = 0
+    request_count: int = 0
+    perform_count: int = 0
+    reason: str = ""
+
+
+class DiscoveryResponse(BaseModel):
+    items: list[DiscoveryItem] = Field(default_factory=list)
+    note: str = ""

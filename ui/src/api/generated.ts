@@ -58,6 +58,29 @@ export interface DataDirSwitchResponse {
   [key: string]: unknown;
 }
 
+export interface DiscoveryItem {
+  "artist"?: string;
+  "capo"?: number | null;
+  "difficulty"?: string;
+  "key"?: string;
+  "last_learned_at"?: string;
+  "last_performed_at"?: string;
+  "last_requested_at"?: string;
+  "perform_count"?: number;
+  "practice_count"?: number;
+  "reason"?: string;
+  "request_count"?: number;
+  "song_id": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface DiscoveryResponse {
+  "items"?: Array<DiscoveryItem>;
+  "note"?: string;
+  [key: string]: unknown;
+}
+
 export interface EventRecord {
   "event_id"?: string | null;
   "occurred_at"?: string | null;

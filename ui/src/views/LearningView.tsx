@@ -6,6 +6,7 @@ import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
 import PracticeStatsCard from "../practice/PracticeStatsCard";
 import PracticeLogDialog from "../practice/PracticeLogDialog";
+import { DiscoveryTabs, TheoryHelper } from "../discovery";
 import { apiRequest } from "../api/client";
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
 
@@ -153,6 +154,16 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
 
         {/* P4 R4: 练习打卡统计卡片区 */}
         <PracticeStatsCard dark={dark} onLogClick={() => setLogDialogOpen(true)} />
+
+        {/* R3: 3 套发现机制 (今天该练什么 / 最近学会 / 点歌热度) */}
+        <div className="mt-4">
+          <DiscoveryTabs dark={dark} />
+        </div>
+
+        {/* R3: 乐理辅助占位 (12 平均律 + 关系小调 + 常用和弦) */}
+        <div className="mt-4">
+          <TheoryHelper dark={dark} />
+        </div>
 
         {listRequest.status === "loading" && songs.length === 0 ? (
           <div className="grid grid-cols-2 gap-4">
