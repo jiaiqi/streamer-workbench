@@ -467,3 +467,28 @@ class PracticeMonthSummaryResponse(BaseModel):
     unique_songs: int
     rated_count: int
     rating_avg: float = 0.0
+
+
+# ── P2 R4: 排版参数面板契约 (ParamSpec) ──────────────────────────
+# 镜像 core/layouts/base.py::ParamSpec；UI 据此动态生成 Inspector 控件。
+# kind 取值: "int" | "float" | "bool" | "select" | "section_map" | "group_order"
+
+ParamSpecKind = Literal[
+    "int", "float", "bool", "select", "section_map", "group_order",
+]
+
+
+class ParamSpecResponse(BaseModel):
+    """单个可调参数描述。"""
+    key: str
+    label: str
+    kind: ParamSpecKind
+    default: Any = None
+    min: float | None = None
+    max: float | None = None
+    step: float | None = None
+    choices: list[Any] | None = None
+    group: str = "布局"
+    help: str = ""
+    section_axis: str | None = None
+    unit: str = ""

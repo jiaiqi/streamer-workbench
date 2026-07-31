@@ -11,10 +11,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from server.dependencies import get_app_context
 from server.api.errors import ApiError
 from server.api.handlers import api_error_response
-from server.api.secondary_models import RenderRequest
+from server.api.secondary_models import (
+    ParamSpecResponse,
+    RenderDocumentRequest,
+    RenderDocumentResponse,
+    RenderRequest,
+)
 from core.spec import get_canvas_spec
 from core.layouts import get_layout, list_layouts, layout_params
-from server.api.secondary_models import RenderDocumentRequest, RenderDocumentResponse
 from server.services.posters import (
     PosterNotFound,
     PosterServiceError,
@@ -62,12 +66,24 @@ def api_layouts():
     return list_layouts()
 
 
-@router.get("/api/layouts/{layout_id}/params")
-def api_layout_params(layout_id: str):
+@router.get("/api/layouts/{layout_id}/params", response_model=list[ParamSpecResponse])
+def api_layout_params(layout_id: str, req: Request):
+    """P2 R4: 排版参数面板契约 — 镜像 core/layouts/base.py::ParamSpec。
+    UI 据此动态生成 Inspector 控件。
+    """
     try:
-        return layout_params(layout_id)
+        plugin = get_layout(layout_id)
     except KeyError as e:
-        return Response(str(e), status_code=404)
+        return api_error_response(
+            req, 404, ApiError("layout_not_found", str(e)),
+        )
+    return [ParamSpecResponse(**_param_spec_asdict(ps)) for ps in plugin.params()]
+
+
+def _param_spec_asdict(ps) -> dict:
+    """ParamSpec → dict (含 Pydantic 期望字段)"""
+    from dataclasses import asdict
+    return asdict(ps)
 
 
 @router.get("/api/layouts/{layout_id}/capabilities")

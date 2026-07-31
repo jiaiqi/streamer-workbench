@@ -233,6 +233,22 @@ export interface OkResponse {
   [key: string]: unknown;
 }
 
+export interface ParamSpecResponse {
+  "choices"?: Array<unknown> | null;
+  "default"?: unknown;
+  "group"?: string;
+  "help"?: string;
+  "key": string;
+  "kind": "int" | "float" | "bool" | "select" | "section_map" | "group_order";
+  "label": string;
+  "max"?: number | null;
+  "min"?: number | null;
+  "section_axis"?: string | null;
+  "step"?: number | null;
+  "unit"?: string;
+  [key: string]: unknown;
+}
+
 export interface PosterExportSettings {
   "dpi"?: number;
   "format"?: string;

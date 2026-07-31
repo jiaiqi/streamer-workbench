@@ -37,14 +37,22 @@ export interface SongsData {
   draft: number;
   songs: Song[];
 }
+export type ParamSpecKind =
+  | "int" | "float" | "bool" | "select" | "section_map" | "group_order";
+
 export interface ParamSpec {
   key: string;
   label: string;
-  kind: string;            // "int" | "color" | "bool" | "choice"
-  default: number;
-  min: number | null;
-  max: number | null;
-  choices: string[] | null;
+  kind: ParamSpecKind;
+  default: unknown;          // kind 决定形状: int/number/boolean/string | section_map→Record<string, number> | group_order→string[]
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
+  choices?: Array<string | number> | null;
+  group?: string;            // "布局"/"样式"/"画布"/"分组"
+  help?: string;
+  section_axis?: string | null;   // kind=section_map 时绑定
+  unit?: string;             // "px"/"pt" 等
 }
 export interface Settings {
   output_dir: string;
