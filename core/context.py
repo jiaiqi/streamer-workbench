@@ -8,8 +8,8 @@ draw_label / draw_grid / draw_grid_wrap 严格照抄旧实现，保证渲染结�
 避让区几何定义来自 CanvasSpec.avoid_zones，但避让策略（r_at / r_below）
 是 grid-wrap 的实现细节，不放在 CanvasSpec 上。
 """
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 from PIL import ImageDraw, ImageFont
 
@@ -38,6 +38,10 @@ class DrawContext:
     style: Style
     font_song: ImageFont.FreeTypeFont
     font_label: ImageFont.FreeTypeFont
+    # P2 R4: 排版参数（来自 ParamSpec）。engine 路径不传；magazine-flow 等
+    # 排版插件按需通过 setattr 或单测 fixture 注入。RenderDocument 路径会从
+    # poster.parameters 取出后注入。
+    parameters: Optional[dict] = None
 
     # ---- 排版公共能力 ----
 

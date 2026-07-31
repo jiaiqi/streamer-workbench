@@ -188,16 +188,27 @@ class MagazineFlowLayout(LayoutPlugin):
         """
         return analyze(library, axis=axis, canvas=canvas)
 
-    def categorize(self, library, axis: str = AXIS_NONE) -> list[PageSections]:
+    def categorize(self, library, axis: str = AXIS_NONE, *, parameters: dict | None = None) -> list[PageSections]:
         """分配歌曲到页。pages=auto：每页第一桶做刊头，其后每 N 首歌换页。
 
-        R1b 简化版：均分为 N 页（每页 ~ per_page_max 首歌）。真实场景再迭代。
+        P2 R4: 接受 parameters dict，应用 columns_per_section (section_map)
+        和 collapse_threshold (int) 两个用户参数。
+        - collapse_threshold: 歌曲数 < 阈值的桶合并到下一个非空桶
+        - columns_per_section: dict[bucket_label -> cols], 0 = 用顶级 columns
         """
+        params = parameters or {}
+        threshold = int(params.get("collapse_threshold", 0) or 0)
+        per_section_cols = params.get("columns_per_section") or {}
+        if not isinstance(per_section_cols, dict):
+            per_section_cols = {}
+
         cats = categorize_by_axis(library, axis)
+        # 应用稀疏合并：把 < threshold 的桶并到下一个非空桶
+        cats = _apply_collapse(cats, threshold)
         analysis = analyze(library, axis=axis, canvas=_dummy_canvas())
         per_page = analysis["per_page_max"]
         # 把所有标题按桶顺序拼成单序列，再分页
-        flat: list[tuple[str, str]] = []  # (bucket_label, title)
+        flat: list[tuple[str, str]] = []
         for label, titles in cats:
             for t in titles:
                 flat.append((label, t))
@@ -206,22 +217,28 @@ class MagazineFlowLayout(LayoutPlugin):
             start = (page - 1) * per_page
             end = start + per_page
             chunk = flat[start:end]
-            # 同桶归类
             from collections import OrderedDict
             grouped: "OrderedDict[str, list[str]]" = OrderedDict()
             for label, t in chunk:
                 grouped.setdefault(label, []).append(t)
-            sections = [{"label": k, "songs": v} for k, v in grouped.items()]
+            sections = []
+            for k, v in grouped.items():
+                cols = per_section_cols.get(k, 0)
+                sections.append({"label": k, "songs": v, "columns": cols})
             pages.append(PageSections(page=page, sections=sections))
         return pages
 
     def render_page(self, ctx: DrawContext, page: int, library) -> int:
-        """渲染指定页。第 1 页包含刊头。"""
+        """渲染指定页。第 1 页包含刊头。
+
+        P2 R4: section 维度由 ctx.parameters['columns_per_section'] 决定栏数;
+        0 = 跟随顶级 ctx.parameters['columns'] (默认 2)。
+        """
         axis = getattr(ctx, "axis", AXIS_NONE)
-        page_sections = self.categorize(library, axis)
+        params = getattr(ctx, "parameters", {}) or {}
+        page_sections = self.categorize(library, axis, parameters=params)
         if not page_sections:
             return 0
-        # 取 page_th 的 sections：页码 1-based，超出返回首页或 last
         target = None
         for ps in page_sections:
             if ps.page == page:
@@ -238,7 +255,6 @@ class MagazineFlowLayout(LayoutPlugin):
             y = 100 + OFF
             ctx.draw_label(spec.margin, y, "MAGAZINE FLOW")
             y += 60
-            # 标题 + 日期（简化：用 ctx.title 替代）
             try:
                 d.text((spec.margin, y), getattr(ctx, "title", "") or "Poster",
                        font=ctx.font_title, fill=ctx.style.text)
@@ -251,21 +267,77 @@ class MagazineFlowLayout(LayoutPlugin):
                        fill=ctx.style.mist)
                 y += 40
             y += 30
+        # 顶级栏数（section 维度为 0 时回退到这里）
+        default_cols = int(params.get("columns", 2) or 2)
         # 内容（按 sections 顺序铺）
         for section in target.sections:
+            section_cols = section.get("columns", 0) or 0
+            cols = section_cols if section_cols > 0 else default_cols
+            cols = max(1, min(cols, 5))  # 安全限制
             ctx.draw_label(spec.margin, y, section["label"])
             y += 30
-            col = 0
-            x = spec.margin
             titles = section["songs"]
-            col_w = (spec.width - 2 * spec.margin) // 2
-            for t in titles:
-                d.text((x, y), t, font=ctx.font_song, fill=ctx.style.text)
-                y += spec.row_h
-                if y >= spec.height - spec.margin:
-                    break
+            if cols == 1:
+                # 单栏：直接垂直铺
+                for t in titles:
+                    d.text((spec.margin, y), t, font=ctx.font_song, fill=ctx.style.text)
+                    y += spec.row_h
+                    if y >= spec.height - spec.margin:
+                        break
+            else:
+                # 多栏：水平均分
+                avail = spec.width - 2 * spec.margin
+                col_w = avail // cols
+                for i, t in enumerate(titles):
+                    r, c = divmod(i, cols)
+                    cx = spec.margin + c * col_w
+                    d.text((cx, y + r * spec.row_h), t,
+                           font=ctx.font_song, fill=ctx.style.text)
+                    # 本节占用行数 = ceil(len/cols)
+                    rows = (len(titles) + cols - 1) // cols
+                    if i == len(titles) - 1:
+                        y += rows * spec.row_h
+                        if y >= spec.height - spec.margin:
+                            break
             y += spec.sec_gap
         return y
+
+
+def _apply_collapse(
+    cats: list[tuple[str, list]],
+    threshold: int,
+) -> list[tuple[str, list]]:
+    """P2 R4: 稀疏合并 — 歌曲数 < threshold 的桶并到下一个非空桶。
+
+    例：threshold=3, cats=[(一字, 2首), (二字, 36首), (三字, 1首), (四字, 5首)]
+        → [(一字+三字, 3首), (二字, 36首), (四字, 5首)]
+    合并桶的 label 用 "A+B" 形式，方便 UI 标识。
+
+    threshold=0 → 不合并（保留所有桶）。
+    """
+    if threshold <= 0:
+        return list(cats)
+    result: list[tuple[str, list]] = []
+    pending_label: str | None = None
+    pending_songs: list[str] = []
+    for label, songs in cats:
+        if len(songs) < threshold and pending_label is None:
+            # 暂存到 pending，等下一个非空桶合并
+            pending_label = label
+            pending_songs = list(songs)
+        elif pending_label is not None:
+            # 与 pending 合并
+            merged_label = f"{pending_label}+{label}"
+            merged_songs = pending_songs + songs
+            result.append((merged_label, merged_songs))
+            pending_label = None
+            pending_songs = []
+        else:
+            result.append((label, songs))
+    # 末尾 pending 单独成桶（没有下一个非空桶）
+    if pending_label is not None:
+        result.append((pending_label, pending_songs))
+    return result
 
 
 def _dummy_canvas():
