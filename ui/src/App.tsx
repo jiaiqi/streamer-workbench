@@ -8,6 +8,7 @@ import LiveView from "./views/LiveView";
 import SettingsView from "./views/SettingsView";
 import ExportDialog from "./components/ExportDialog";
 import PreviewCrossfade from "./components/PreviewCrossfade";
+import ParamInspector from "./components/ParamInspector";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
 import type { AppearanceSettings } from "./types";
@@ -560,44 +561,17 @@ export default function App() {
                 </div>
               </details>
 
-              {/* 折叠：布局参数（默认展开） */}
-              <details open className="group">
-                <summary className="flex items-center justify-between cursor-pointer py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
-                  布局参数
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
-                </summary>
-                <div className="mt-2.5 space-y-2.5">
-                  {paramSpecs.length === 0 && (
-                    <p className="text-xs text-muted-foreground">参数加载中…</p>
-                  )}
-                  {paramSpecs.map(p => (
-                    <label key={p.key} className="flex items-center justify-between text-xs text-muted-foreground">
-                      {p.label}
-                      {p.kind === "int" && (
-                        <input type="number" value={params[p.key] ?? p.default}
-                          min={p.min ?? undefined} max={p.max ?? undefined}
-                          onChange={e => {
-                            const v = parseInt(e.target.value, 10);
-                            if (!isNaN(v)) setParams(prev => ({ ...prev, [p.key]: v }));
-                          }}
-                          className={`w-16 rounded-lg px-2 py-1 text-xs outline-none text-right ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`} />
-                      )}
-                      {p.kind === "bool" && (
-                        <input type="checkbox" checked={!!params[p.key]}
-                          onChange={e => setParams(prev => ({ ...prev, [p.key]: e.target.checked ? 1 : 0 }))}
-                          className="w-3.5 h-3.5 rounded accent-primary" />
-                      )}
-                      {p.kind === "choice" && (
-                        <select value={params[p.key] ?? p.default}
-                          onChange={e => setParams(prev => ({ ...prev, [p.key]: Number(e.target.value) }))}
-                          className={`rounded-lg px-2 py-1 text-xs outline-none cursor-pointer ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`}>
-                          {(p.choices ?? []).map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              </details>
+              {/* 折叠：布局参数（默认展开）—— P2 R4 通用 Inspector 接管 */}
+              <ParamInspector
+                specs={paramSpecs}
+                values={params}
+                onChange={(key, value) => setParams(prev => ({ ...prev, [key]: value }))}
+                onReset={key => {
+                  const sp = paramSpecs.find(p => p.key === key);
+                  if (sp) setParams(prev => ({ ...prev, [key]: sp.default }));
+                }}
+                dark={dark}
+              />
 
               {/* 折叠：当前主题（默认折叠） */}
               {activeTheme && (
