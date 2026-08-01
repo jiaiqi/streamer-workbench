@@ -403,7 +403,7 @@ export default function App() {
                 <span>主题：<span className={dark ? "text-zinc-300" : "text-foreground"}>{ws.selTheme || "—"}</span></span>
                 <span className={`w-px h-4 ${dark ? "bg-zinc-700" : "bg-border"}`} />
                 <span>画布：<span className={dark ? "text-zinc-300" : "text-foreground"}>{ws.canvas}</span></span>
-                <span className={`hidden xl:inline ml-2 ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>⌘E 导出 · ⌘R 刷新 · ←→ 翻页 · ⌘1~7 切主题</span>
+                <span className={`hidden xl:inline ml-2 ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>⌘E 导出 · ⌘R 刷新 · ←→ 翻页 · ⌘K 命令面板</span>
               </div>
               <div className="flex items-center gap-2">
                 {ws.previewSrc && (
