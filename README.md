@@ -2,7 +2,7 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-08-02 凌晨）**：R0（数据/应用/服务契约）、R1a（海报闭环）、R1b（magazine-flow 自动分页）、R2（直播闭环 + 桌面壳 dev）、R2.5（live-set 复盘海报）、R3（学歌闭环）、R3.5（learning-report 学歌海报）、R4（数据统计）、R5（工作台系统化）、R4.0 Phase 1+2（layout helper + god 拆解 + 专用海报 + 真保存 + 暗色 hardcode 收口）、R4.1（4 统一组件 + Cmd+K + narrow helper）、R4.2（Top/时间线 → 海报/Preset + 导出历史）、R4 Runtime v1（DataChannel 契约 + supported_channels 声明）全部收口。
+> **进度快照（2026-08-02 凌晨）**：R0（数据/应用/服务契约）、R1a（海报闭环）、R1b（magazine-flow 自动分页）、R2（直播闭环 + 桌面壳 dev）、R2.5（live-set 复盘海报）、R3（学歌闭环）、R3.5（learning-report 学歌海报）、R4（数据统计）、R5（工作台系统化）、R4.0 Phase 1+2（layout helper + god 拆解 + 专用海报 + 真保存 + 暗色 hardcode 收口）、R4.1（4 统一组件 + Cmd+K + narrow helper）、R4.2（Top/时间线 → 海报/Preset + 导出历史）、R4 Runtime v1（DataChannel 契约 + supported_channels 声明）全部收口；R8 弹唱播放器 v5 设计阶段（路线图 + 子阶段 + 退出条件）已落，未开始实现。
 >
 > **测试基线**：Python 634/634 + vitest 228/228 + node:test 16/16 + 4 套金标准 32/32（grid-wrap 16 + magazine-flow 6 + live-set 5 + learning-report 5）；TSC 干净。
 >
@@ -21,7 +21,7 @@
 > - **R4 Runtime v1 抽象** — `DataChannel` Literal 枚举（`song_library` / `live_session` / `learning_report`）；4 套 layout 显式声明 `supported_channels`，engine 不再 duck-typing；`get_layout(id, channel=...)` / `list_layouts(channel=...)` 按 channel 过滤；30 项测试 + 32/32 金标准复跑。**v2 待做**：统一 `LayoutPlan` / `Palette-Skin` 接线 / Path 排文。
 > - **R2.5+Electron** — 桌面壳（macOS arm64）+ PyInstaller 后端单文件 + electron-builder 打包 + 置顶速查窗 (Cmd/Ctrl+Shift+U)。
 >
-> **下一步**：R4 Runtime v2 抽象（统一 `LayoutPlan` 数据结构 + `Palette/Skin` 接线 + `Path 排文`）；R5c 高级体验（撤销重做扩展、WCAG AA、移动端真布局）；R7 桌面正式发布门（electron-builder + 签名公证 + 自动更新）。
+> **下一步**：R8.0 弹唱基础（Song 字段增量 + LRC/chordpro 解析 + LyricsPanel/TabsPanel/PlayerBar 组件 + PlayView 框架 + 歌曲库入口）；R4 Runtime v2 抽象（统一 `LayoutPlan` 数据结构 + `Palette/Skin` 接线 + `Path 排文`）；R5c 高级体验；R7 桌面正式发布门。
 >
 > 文档入口见 [`AGENTS.md`](AGENTS.md)、[`HANDOFF.md`](HANDOFF.md) 与 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >

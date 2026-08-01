@@ -30,6 +30,7 @@
    - `learning-report`（R3.5）→ `LearningReportSnapshot`（一段时间窗口的事件聚合）
    - 不与 grid-wrap / magazine-flow 共享 `SongLibrary` 路径
 10. **编辑器（R7）只在 3 套新布局上线并被真实使用后启动**，不提前造完整图片编辑器。
+11. **R8 弹唱播放器不与 R0-R7 路径共用**：PlayView 走 `core/player/` 模块而非 `core/layouts`（弹唱屏幕不是海报）；音频本地优先，避免在线版权；chordpro 曲谱优先于 tab_files 图片（图片仅作 fallback 全屏放大镜）。
 11. **`design/archive/` 中的文档已退役**。只允许追溯历史，不得据此判断当前状态或执行顺序；当前真相以主规格、路线图、数据路线图和 ADR 为准。
 
 ---
@@ -42,7 +43,7 @@
 |---|---|---|
 | **唯一执行主规格** | `design/产品优化方案终版-0727/产品优化方案终版.md` | 产品/UI/架构/多布局完整规格 |
 | **2026-07-29 详细增量规格** | `design/产品优化方案终版-0727/产品与技术规格-v3.md` | 独立海报、点歌规则、直播台账、乐理辅助和 UI/技术契约 |
-| **唯一路线图** | `design/产品优化方案终版-0727/路线图.md` | R0–R7 执行路径与阶段门；P 编号仅作历史能力分组 |
+| **唯一路线图** | `design/产品优化方案终版-0727/路线图.md` | R0–R8 执行路径与阶段门（v5 新增 R8 弹唱）；P 编号仅作历史能力分组 |
 | **数据路线图（S1–S5）** | `design/roadmap-data-stats.md` | 事件 Schema/统计口径唯一真相 |
 | **架构决策记录** | `ADR-001.md`–`ADR-008.md`；ADR-005 负责应用边界与安全，ADR-006 负责独立海报与能力匹配，ADR-007 负责点歌规则/权益/优先队列，ADR-008 负责应用主色与海报颜色隔离 |
 | **项目 README** | `README.md` | 运行命令/目录结构/API 列表 |
@@ -69,6 +70,7 @@
               R4.1 ✅  视觉与体验统一（4 组件 + Cmd+K + narrow helper + selLayout 已删）
               R4.2 ✅  数据反哺创作补全（R4.2.1+2 收口：Top 歌曲/时间线 → 创建海报/Preset；R4.2.3 导出历史：复用 events.jsonl + ExportLogPanel 嵌入 4 处）
               R4-R7 🟡  Layout Runtime v1 抽象已交付（最小化：DataChannel 契约 + supported_channels 声明 + 30 项测试 + 32/32 金标准）；v2 待做（统一 LayoutPlan / Palette-Skin 接线 / 桌面发布门）
+              R8     ⬜  弹唱播放器（v5 新增；产品设计已落路线图，R8.0 数据+解析+组件先行，R8.1 接音频，R8.2 接直播联动+录屏）
 桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
 UI        ~97%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 + 4 嵌入点导出历史 均可用
 ```
@@ -80,7 +82,7 @@ UI        ~97%       工作台/歌曲库/学歌/速查/海报/直播会话/复�
 | 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；grid-wrap 16/16 + magazine-flow 6 PNG + live-set 5 PNG + learning-report 5 PNG |
 | 后端 | FastAPI 0.115.0（requirements）+ uvicorn | AppContext + Repository adapters + services + routers；边界见 ADR-005；含 `/api/live-sessions*` 7 端点 |
 | 前端 | React 19 + Vite 6 + Tailwind 4 + shadcn/ui | `ui/`；组件优先用 shadcn/ui（`ui/src/components/ui/`），shadcn 不满足需求再自写组件；`usePosterStore` 状态机 + `WorkspacePosterBridge` 接入工作台左栏；R4.1 新增 4 统一组件（`EmptyState`/`Spinner`/`StatusBadge`/`ErrorBanner`）+ `CommandPalette`（Cmd+K） |
-| 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量） |
+| 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量）、data/tabs/{song_id}/（曲谱附件）、data/audio/{song_id}/（R8 音频，v8.1+） |
 | 桌面壳 | Electron（spike） | Python 作 child_process；正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
 | 测试 | 33 项 Python 测试文件（634/634） + 22 项 vitest（228/228） + 16 项 node:test + 16/16 grid 金标准 + 6/6 magazine PNG + 5/5 live-set PNG + 5/5 learning-report PNG + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
