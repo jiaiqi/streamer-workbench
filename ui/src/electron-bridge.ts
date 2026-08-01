@@ -1,13 +1,18 @@
 /// Electron preload 暴露的 window.streamer API 类型与跨平台调用工具。
 ///
-/// 浏览器中 window.streamer 不存在 → 走 window.open(target=_blank)
-/// Electron 中 window.streamer 存在 → 拦截默认行为，调用 IPC 开置顶速查子窗口
+/// 浏览器中 window.streamer 不存在 → 浏览器 <a download> 路径
+/// Electron 中 window.streamer 存在 → IPC 弹原生保存对话框（R4.0.12）
 declare global {
   interface Window {
     streamer?: {
       openQuickView(sessionId?: string): Promise<{ ok: boolean }>;
       closeQuickView(): Promise<{ ok: boolean }>;
       onQuickViewSession(listener: (sessionId: string) => void): () => void;
+      saveFile?(params: {
+        data: ArrayBuffer;
+        defaultName: string;
+        mimeType?: string;
+      }): Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
     };
   }
 }
@@ -33,17 +38,37 @@ export function openQuickView(
   // 此函数不主动调用，调用方应使用 <a> 让浏览器打开
 }
 
+/* ---- R4.0.12 海报真保存：抽到 lib/saveFile.ts ---- */
+import { saveBlob, type SaveFileResult } from "./lib/saveFile";
+
+/** 文件名辅助：直播复盘海报 */
+function livePosterFilename(sessionId: string): string {
+  const date = new Date();
+  const stamp = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, "0")}${date.getDate().toString().padStart(2, "0")}`;
+  return `复盘海报-${sessionId.slice(0, 8)}-${stamp}.png`;
+}
+
+/** 文件名辅助：学歌报告 */
+function learningReportFilename(days: number, label: string): string {
+  const date = new Date();
+  const stamp = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, "0")}${date.getDate().toString().padStart(2, "0")}`;
+  const safeLabel = label ? label.replace(/[\\/:*?"<>|]/g, "_") : `${days}天`;
+  return `学歌报告-${safeLabel}-${stamp}.png`;
+}
+
 /**
- * R2.5: 渲染并打开直播复盘海报 PNG。
+ * R2.5: 渲染并保存直播复盘海报 PNG。
+ * Electron 走原生保存对话框；浏览器走 <a download>。
  * @param sessionId LiveSession id
  * @param baseUrl API 根（默认当前 origin）
  * @param authToken 会话令牌（packaged 模式需要）
+ * @returns SaveFileResult — caller 可用于 toast 提示「已保存到 xxx」
  */
 export async function openLivePoster(
   sessionId: string,
   baseUrl: string = window.location.origin,
   authToken: string = "",
-): Promise<void> {
+): Promise<SaveFileResult> {
   const headers: Record<string, string> = {};
   if (authToken) headers["X-Session-Token"] = authToken;
   const res = await fetch(
@@ -61,18 +86,11 @@ export async function openLivePoster(
     throw new Error(`live-set 海报渲染失败：HTTP ${res.status}`);
   }
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, "_blank", "noopener,noreferrer");
-  // 浏览器在 window 被关时自动释放；Electron popup blocker 兜底
-  if (!w) {
-    console.warn("openLivePoster: 浏览器拦截了新窗口打开");
-  }
-  // 30 秒后释放 blob URL（足够用户操作）
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  return await saveBlob(blob, livePosterFilename(sessionId));
 }
 
 /**
- * R3.5: 渲染并打开学歌报告海报 PNG。
+ * R3.5: 渲染并保存学歌报告海报 PNG。
  * @param options days / period_label / top_n_artists
  * @param baseUrl API 根
  * @param authToken 会话令牌（packaged 模式需要）
@@ -81,7 +99,9 @@ export async function openLearningReportPoster(
   options: { days?: number; period_label?: string; top_n_artists?: number } = {},
   baseUrl: string = window.location.origin,
   authToken: string = "",
-): Promise<void> {
+): Promise<SaveFileResult> {
+  const days = options.days ?? 30;
+  const label = options.period_label ?? `${days}天`;
   const headers: Record<string, string> = {};
   if (authToken) headers["X-Session-Token"] = authToken;
   const res = await fetch(
@@ -92,8 +112,8 @@ export async function openLearningReportPoster(
       body: JSON.stringify({
         theme_id: "海洋柔光",
         canvas_id: "抖音全屏 9:20",
-        days: options.days ?? 30,
-        period_label: options.period_label ?? "",
+        days,
+        period_label: label,
         top_n_artists: options.top_n_artists ?? 5,
       }),
     },
@@ -102,10 +122,5 @@ export async function openLearningReportPoster(
     throw new Error(`learning-report 海报渲染失败：HTTP ${res.status}`);
   }
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, "_blank", "noopener,noreferrer");
-  if (!w) {
-    console.warn("openLearningReportPoster: 浏览器拦截了新窗口打开");
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  return await saveBlob(blob, learningReportFilename(days, label));
 }

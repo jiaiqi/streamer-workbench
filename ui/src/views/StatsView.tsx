@@ -24,6 +24,7 @@ interface StatsViewProps {
 export default function StatsView({ dark }: StatsViewProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const [posterError, setPosterError] = useState<string | null>(null);
+  const [posterSuccess, setPosterSuccess] = useState<string | null>(null);
   // R4.0: 导出进度反馈（避免重复点击 + spinner 可见）
   const [posterLoading, setPosterLoading] = useState(false);
   return (
@@ -47,6 +48,15 @@ export default function StatsView({ dark }: StatsViewProps) {
               {posterError}
             </div>
           )}
+          {posterSuccess && (
+            <div
+              className={`rounded-lg px-3 py-1 text-xs ${dark ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-50 text-emerald-700"}`}
+              role="status"
+              data-testid="stats-poster-success"
+            >
+              {posterSuccess}
+            </div>
+          )}
           {/* R3.5 learning-report 海报导出 + R4.0 loading 反馈 */}
           <button
             type="button"
@@ -59,9 +69,15 @@ export default function StatsView({ dark }: StatsViewProps) {
             onClick={async () => {
               if (posterLoading) return;
               setPosterError(null);
+              setPosterSuccess(null);
               setPosterLoading(true);
               try {
-                await openLearningReportPoster();
+                const res = await openLearningReportPoster();
+                if (res.ok) {
+                  setPosterSuccess(res.path ? `已保存到 ${res.path}` : "已下载海报");
+                } else if (!res.cancelled) {
+                  setPosterError(res.error ?? "导出失败");
+                }
               } catch (err) {
                 console.error("导出学习报告失败", err);
                 setPosterError(err instanceof Error ? err.message : "导出失败");

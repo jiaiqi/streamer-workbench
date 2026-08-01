@@ -24,4 +24,12 @@ contextBridge.exposeInMainWorld("streamer", {
     ipcRenderer.on("quickview:session", wrapped);
     return () => ipcRenderer.removeListener("quickview:session", wrapped);
   },
+  /**
+   * R4.0.12 海报真保存路径：弹原生保存对话框写盘。
+   * @param {{ data: ArrayBuffer, defaultName: string, mimeType?: string }} params
+   * @returns {Promise<{ok: boolean, path?: string, cancelled?: boolean, error?: string}>}
+   */
+  saveFile(params) {
+    return ipcRenderer.invoke("dialog:saveFile", params);
+  },
 });

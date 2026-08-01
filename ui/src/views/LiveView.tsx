@@ -282,8 +282,16 @@ export default function LiveView({ dark }: { dark: boolean }) {
     if (posterLoading) return;
     setPosterLoading(true);
     setActionError("");
+    setActionNotice("");
     try {
-      await openLivePoster(sessionId);
+      const res = await openLivePoster(sessionId);
+      if (res.ok) {
+        if (res.path) setActionNotice(`已保存到 ${res.path}`);
+        else if (res.method === "download") setActionNotice("已下载海报");
+      } else if (!res.cancelled) {
+        setActionError(res.error ?? "导出失败");
+      }
+      // cancelled: 静默
     } catch (err) {
       console.error("导出复盘海报失败", err);
       setActionError(err instanceof Error ? err.message : "导出失败");

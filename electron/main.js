@@ -374,6 +374,37 @@ ipcMain.handle("quickview:close", () => {
   return { ok: true };
 });
 
+/**
+ * R4.0.12 海报真保存路径：渲染层把 ArrayBuffer 传过来，主进程弹原生保存对话框写盘。
+ * @param {{ data: ArrayBuffer, defaultName: string, mimeType: string }} params
+ * @returns { ok: boolean, path?: string, cancelled?: boolean, error?: string }
+ */
+ipcMain.handle("dialog:saveFile", async (_evt, params) => {
+  const { data, defaultName, mimeType } = params || {};
+  if (!data || !defaultName) {
+    return { ok: false, error: "missing data or defaultName" };
+  }
+  try {
+    const win = BrowserWindow.getFocusedWindow() || mainWin;
+    const result = await dialog.showSaveDialog(win, {
+      title: "保存海报",
+      defaultPath: defaultName,
+      filters: mimeType === "image/jpeg"
+        ? [{ name: "JPEG", extensions: ["jpg", "jpeg"] }]
+        : [{ name: "PNG", extensions: ["png"] }],
+    });
+    if (result.canceled || !result.filePath) {
+      return { ok: false, cancelled: true };
+    }
+    fs.writeFileSync(result.filePath, Buffer.from(data));
+    log(`saved: ${result.filePath} (${data.byteLength} bytes)`);
+    return { ok: true, path: result.filePath };
+  } catch (err) {
+    logErr("saveFile:", err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 ipcMain.handle("desktop:info", () => ({
   isPackaged,
   dataDir: process.env.STREAMER_DATA_DIR || null,
