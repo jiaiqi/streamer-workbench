@@ -10,6 +10,9 @@ R4.0 收紧：analyze 端点的 days / top_n_artists 由 FastAPI Query 限制范
 from __future__ import annotations
 
 import io
+import time
+import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
@@ -22,6 +25,14 @@ from server.services.learning_report import build_learning_report_snapshot
 
 
 router = APIRouter()
+
+
+def _learning_report_filename(days: int, label: str, when: datetime) -> str:
+    """R4.2.3: 与前端 electron-bridge.learningReportFilename 同规则。"""
+    stamp = when.strftime("%Y%m%d")
+    safe = label.strip() or f"{days}天"
+    safe = "".join(c if c not in "\\/:*?\"<>|" else "_" for c in safe)
+    return f"学歌报告-{safe}-{stamp}.png"
 
 
 @router.post(
@@ -72,9 +83,30 @@ def api_learning_report_poster(payload: LearningReportPosterRequest, req: Reques
                                 f"可选：{supported}"),
         )
     font_path = str(ctx.paths.fonts_dir / "MaokenAssortedSans.ttf")
+    started = time.perf_counter()
     img = render_page(theme, plugin, snapshot, spec, 1, font_path)
+    total_ms = round((time.perf_counter() - started) * 1000, 1)
     buf = io.BytesIO()
     img.save(buf, "PNG")
+    # R4.2.3: 在 events.jsonl 写 poster_exported 事件
+    when = datetime.now().astimezone()
+    label = payload.period_label.strip() or f"{payload.days}天"
+    ctx.event_store.append({
+        "schema_version": 2,
+        "event_id": f"evt_{uuid.uuid4().hex}",
+        "occurred_at": when.isoformat(timespec="seconds"),
+        "recorded_at": when.isoformat(timespec="seconds"),
+        "type": "poster_exported",
+        "source": "learning-report-api",
+        "meta": {
+            "kind": "learning-report",
+            "days": payload.days,
+            "period_label": label,
+            "filename": _learning_report_filename(payload.days, label, when),
+            "count": 1,
+            "total_ms": total_ms,
+        },
+    })
     return Response(buf.getvalue(), media_type="image/png")
 
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { apiRequest } from "../api/client";
 import { toRequestFailure } from "../async/requestState";
+import ExportLogPanel from "../posters/ExportLogPanel";
 
 /* ---- 导出对话框：范围选择 + 预估 + 进度 + 打开目录 ----
    常挂载（open 控制显隐），保证范围选择跨次打开记忆；
@@ -164,6 +165,19 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
           </div>
         )}
         {error && <div className="mb-4 rounded-xl bg-red-500/10 px-3 py-2.5 text-sm text-red-500" role="alert">{error}</div>}
+
+        {/* R4.2.3: 最近的导出（仅在完成或失败后显示） */}
+        {(done || error) && !exporting && (
+          <div className="mb-4">
+            <ExportLogPanel
+              dark={dark}
+              limit={3}
+              kindFilter="grid-export"
+              title="最近的导出"
+              inline
+            />
+          </div>
+        )}
 
         {/* 操作按钮 */}
         <div className="flex justify-end gap-2">

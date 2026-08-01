@@ -322,6 +322,36 @@ class ExportOpenResponse(BaseModel):
     output_dir: str
 
 
+# ── R4.2.3 导出历史 ──────────────────────────────────────────────
+
+class ExportLogEntryResponse(BaseModel):
+    """GET /api/exports/recent - 单条导出历史。
+
+    来源: events.jsonl 的 type=poster_exported 事件，按时间倒序返回。
+    kind: "grid-export" (工作台批量/单页) | "live-poster" (直播复盘) | "learning-report" (学歌报告)
+    """
+    event_id: str
+    occurred_at: str
+    source: str
+    kind: str
+    subject: str
+    count: int
+    total_ms: float | None = None
+    filename: str = ""
+    output_dir: str = ""
+    # 仅 live-poster 才有
+    session_id: str = ""
+    title: str = ""
+    # 仅 learning-report 才有
+    days: int = 0
+    period_label: str = ""
+
+
+class ExportLogRecentResponse(BaseModel):
+    """GET /api/exports/recent 响应。"""
+    items: list[ExportLogEntryResponse]
+
+
 # ── R2 P3 直播会话 HTTP 模型 ────────────────────────────────────────
 
 class LiveSessionCreateRequest(StrictRequest):

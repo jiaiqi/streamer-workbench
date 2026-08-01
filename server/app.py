@@ -211,6 +211,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     from server.routers import songs, render, export, events, settings, presets, posters
     from server.routers import live, practice, discovery, stats, learning_report
+    from server.routers import exports
     app.include_router(songs.router)
     app.include_router(render.router)
     app.include_router(export.router)
@@ -223,6 +224,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(discovery.router)
     app.include_router(stats.router)
     app.include_router(learning_report.router)
+    app.include_router(exports.router)
 
     @app.get("/api/health")
     def health(request: Request):

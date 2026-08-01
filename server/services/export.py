@@ -293,15 +293,21 @@ def run_export_job(job_input: ExportJobInput) -> None:
             job["done"] += 1
         job["status"] = "done"
         job["total_ms"] = round((time.perf_counter() - started) * 1000, 1)
+        files = len(job["files"])
+        themes = sorted({target.theme_name for target in snapshot.targets})
+        subject = "，".join(themes) if files == 1 and themes else f"{len(themes)} 个主题 × {files // max(len(themes), 1) if themes else files} 页"
         job_input.event_store.append({
             "schema_version": 2, "event_id": f"evt_{uuid.uuid4().hex}",
             "occurred_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "recorded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "type": "poster_exported", "source": "export-api",
-            "meta": {"job_id": snapshot.job_id,
+            "meta": {"kind": "grid-export",
+                     "job_id": snapshot.job_id,
                      "snapshot_id": snapshot.snapshot_id,
                      "document_ids": [item.document_id for item in snapshot.documents],
-                     "files": len(job["files"]), "total_ms": job["total_ms"]},
+                     "files": files, "total_ms": job["total_ms"],
+                     "subject": subject, "themes": themes,
+                     "output_dir": str(snapshot.targets[0].path.parent) if snapshot.targets else ""},
         })
     except Exception as error:
         job["status"] = "error"

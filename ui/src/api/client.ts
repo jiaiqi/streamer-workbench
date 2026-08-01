@@ -110,3 +110,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
 }
 
 export const apiRequest = createApiClient();
+
+/* ---- 业务方法（R4.2.3: 导出历史） ----------------------------------- */
+
+import type { ExportLogRecentResponse } from "./generated";
+
+/**
+ * R4.2.3: 拉取最近的导出历史（工作台批量 / 直播复盘 / 学歌报告三类合一）。
+ * 走 GET /api/exports/recent；后端从 events.jsonl 读 type=poster_exported 事件。
+ * @param limit 1 ~ 100；默认 20
+ */
+export function listExportLog(limit: number = 20): Promise<ExportLogRecentResponse> {
+  const safe = Math.max(1, Math.min(100, Math.floor(limit)));
+  return apiRequest<ExportLogRecentResponse>(`/api/exports/recent?limit=${safe}`);
+}

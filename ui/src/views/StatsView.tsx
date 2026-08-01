@@ -16,6 +16,7 @@ import { openLearningReportPoster } from "../electron-bridge";
 import Spinner from "../components/Spinner";
 import ErrorBanner from "../components/ErrorBanner";
 import EmptyState from "../components/EmptyState";
+import ExportLogPanel from "../posters/ExportLogPanel";
 
 type Tab = "overview" | "feed" | "top" | "difficulty" | "key";
 type TopMetric = "request" | "perform" | "practice";
@@ -102,6 +103,17 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
           </button>
         </div>
       </header>
+
+      {/* R4.2.3: 最近导出 — 学习报告历史 */}
+      <div className="shrink-0 px-8 pb-2">
+        <ExportLogPanel
+          dark={dark}
+          limit={3}
+          kindFilter="learning-report"
+          title="最近导出的学习报告"
+        />
+      </div>
+
       <div className="flex-1 overflow-y-auto px-8 pb-10">
         <div className="flex items-center gap-1 mb-4" role="tablist" aria-label="统计视图">
           {([

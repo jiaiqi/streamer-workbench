@@ -13,7 +13,10 @@
 from __future__ import annotations
 
 import io
+import time
+import uuid
 from dataclasses import asdict
+from datetime import datetime
 
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
@@ -39,6 +42,12 @@ from server.services.live_persistence import (
 )
 from server.services.live_poster import build_live_session_snapshot
 from server.services.entitlements import EntitlementServiceError
+
+
+def _live_poster_filename(session_id: str, when: datetime) -> str:
+    """R4.2.3: 与前端 electron-bridge.livePosterFilename 同规则。"""
+    stamp = when.strftime("%Y%m%d")
+    return f"复盘海报-{session_id[:8]}-{stamp}.png"
 
 
 router = APIRouter()
@@ -321,9 +330,29 @@ def api_live_sessions_poster(
                                 f"可选：{supported}"),
         )
     font_path = str(ctx.paths.fonts_dir / "MaokenAssortedSans.ttf")
+    started = time.perf_counter()
     img = render_page(theme, plugin, snapshot, spec, 1, font_path)
+    total_ms = round((time.perf_counter() - started) * 1000, 1)
     buf = io.BytesIO()
     img.save(buf, "PNG")
+    # R4.2.3: 在 events.jsonl 写 poster_exported 事件，供 GET /api/exports/recent 拉取
+    when = datetime.now().astimezone()
+    ctx.event_store.append({
+        "schema_version": 2,
+        "event_id": f"evt_{uuid.uuid4().hex}",
+        "occurred_at": when.isoformat(timespec="seconds"),
+        "recorded_at": when.isoformat(timespec="seconds"),
+        "type": "poster_exported",
+        "source": "live-poster-api",
+        "meta": {
+            "kind": "live-poster",
+            "session_id": session_id,
+            "title": live.session.title or "",
+            "filename": _live_poster_filename(session_id, when),
+            "count": 1,
+            "total_ms": total_ms,
+        },
+    })
     return Response(buf.getvalue(), media_type="image/png")
 
 

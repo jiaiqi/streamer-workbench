@@ -28,6 +28,7 @@ import { toRequestFailure, useLatestRequest } from "../async/requestState";
 import { openQuickView, openLivePoster, isElectron } from "../electron-bridge";
 import { asRecord, asString, asNumber, asBoolean } from "../lib/narrow";
 import StatusBadge from "../components/StatusBadge";
+import ExportLogPanel from "../posters/ExportLogPanel";
 
 /* ================== 类型 narrow helpers (R4.1.7 改用 lib/narrow) ================== */
 
@@ -398,6 +399,7 @@ export default function LiveView({ dark }: { dark: boolean }) {
               isActive={isActive}
               songTitle={songTitle}
               songs={songs}
+              dark={dark}
               onClose={() => handleClose(activeSession.id)}
               onRecord={handleRecord}
               onRefresh={() => loadDetail(activeSession.id)}
@@ -460,7 +462,7 @@ function SessionCard({ session, active, dark, onSelect }: {
 
 function SessionDetail({
   session, detail, queue, performances, isActive, songTitle,
-  songs, onClose, onRecord, onRefresh, onOpenManualPicker,
+  songs, dark, onClose, onRecord, onRefresh, onOpenManualPicker,
   onExportPoster,
   posterLoading,
 }: {
@@ -551,6 +553,17 @@ function SessionDetail({
           onClick={(e) => openQuickView(undefined, e)}
         > 直播速查 </a>。
       </p>
+
+      {/* R4.2.3: 最近导出 — 复盘海报历史 */}
+      <section>
+        <h2 className="eyebrow mb-2">最近的复盘海报</h2>
+        <ExportLogPanel
+          dark={dark}
+          limit={3}
+          kindFilter="live-poster"
+          title=""
+        />
+      </section>
 
       <section>
         <h2 className="eyebrow mb-2">待唱 ({queue.length})</h2>

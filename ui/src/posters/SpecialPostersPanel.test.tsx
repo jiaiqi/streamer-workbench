@@ -79,7 +79,10 @@ describe("SpecialPostersPanel 加载", () => {
     globalThis.fetch = vi.fn(async () => new Response("err", { status: 500 })) as unknown as typeof fetch;
     render(<SpecialPostersPanel dark={false} />);
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeTruthy();
+      // SpecialPostersPanel 自身 + ExportLogPanel 错误态都带 role=alert，
+      // 用 getAllByRole + 内容断言确保「直播列表」错误出现。
+      const alerts = screen.getAllByRole("alert");
+      expect(alerts.some(node => node.textContent?.includes("加载失败"))).toBe(true);
     });
   });
 });

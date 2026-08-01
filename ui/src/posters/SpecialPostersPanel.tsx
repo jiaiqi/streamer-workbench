@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../api/client";
 import { openLivePoster, openLearningReportPoster } from "../electron-bridge";
 import type { LiveSessionSummary } from "../api/generated";
+import ExportLogPanel from "./ExportLogPanel";
 
 const RECENT_SESSIONS_LIMIT = 3;
 
@@ -282,6 +283,17 @@ export default function SpecialPostersPanel({ dark }: SpecialPostersPanelProps) 
           {exportSuccess}
         </p>
       )}
+
+      {/* ===== R4.2.3 导出历史 ===== */}
+      <h3 className={`text-[11px] font-semibold uppercase tracking-wider mt-4 mb-1.5 ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+        最近导出
+      </h3>
+      <ExportLogPanel
+        dark={dark}
+        limit={5}
+        title=""
+        data-testid="special-posters-log"
+      />
 
       {/* ===== 自定义弹层 ===== */}
       {showAllSessions && (

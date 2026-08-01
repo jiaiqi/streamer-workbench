@@ -147,6 +147,28 @@ export interface ExportJobResponse {
   [key: string]: unknown;
 }
 
+export interface ExportLogEntryResponse {
+  "count": number;
+  "days"?: number;
+  "event_id": string;
+  "filename"?: string;
+  "kind": string;
+  "occurred_at": string;
+  "output_dir"?: string;
+  "period_label"?: string;
+  "session_id"?: string;
+  "source": string;
+  "subject": string;
+  "title"?: string;
+  "total_ms"?: number | null;
+  [key: string]: unknown;
+}
+
+export interface ExportLogRecentResponse {
+  "items": Array<ExportLogEntryResponse>;
+  [key: string]: unknown;
+}
+
 export interface ExportOpenResponse {
   "ok"?: boolean;
   "output_dir": string;
