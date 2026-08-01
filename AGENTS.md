@@ -66,20 +66,21 @@
               R5     ✅ 工作台系统化（focus-visible / stagger / aria / 响应式）
               R4.0 ✅  Phase 1 收口（6dbdc63 — layout helper + 导出反馈 + streak + .gitignore）
               R4.0 ✅  Phase 2 收口（feat-0801 — useWorkspaceState 拆解 + 专用海报区 + 海报真保存 + 暗色 hardcode 收口发现是空集）
-              R4.1 ⬜  视觉与体验统一（EmptyState / Spinner / StatusBadge / ErrorBanner 4 组件 + 跨视图快捷键 + localStorage 改名 + narrow helper + 删 selLayout 死代码 + README/AGENTS 同步）
+              R4.1 ✅  视觉与体验统一（4 组件 + Cmd+K + narrow helper + selLayout 已删）
+              R4.2 ⬜  数据反哺创作补完（Top 歌曲 / 时间线 → 创建海报/Preset + 导出历史）
               R4.2 ⬜  数据反哺创作补完（Top 歌曲 / 时间线 → 创建海报/Preset + 导出历史）
               R4-R7 ⬜  Layout Runtime v1 抽象 + 数据反哺 + 桌面发布门（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
 桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
-UI        ~95%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报 均可用
+UI        ~96%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 均可用
 ```
 
 ### 技术栈
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；grid-wrap 16/16 + magazine-flow 6 PNG |
+| 渲染引擎 | Python 3.12+ + Pillow 12.2.0（requirements） | 纯函数，金标准保护；grid-wrap 16/16 + magazine-flow 6 PNG + live-set 5 PNG + learning-report 5 PNG |
 | 后端 | FastAPI 0.115.0（requirements）+ uvicorn | AppContext + Repository adapters + services + routers；边界见 ADR-005；含 `/api/live-sessions*` 7 端点 |
-| 前端 | React 19 + Vite 6 + Tailwind 4 + shadcn/ui | `ui/`；组件优先用 shadcn/ui（`ui/src/components/ui/`），shadcn 不满足需求再自写组件；`usePosterStore` 状态机 + `WorkspacePosterBridge` 接入工作台左栏 |
+| 前端 | React 19 + Vite 6 + Tailwind 4 + shadcn/ui | `ui/`；组件优先用 shadcn/ui（`ui/src/components/ui/`），shadcn 不满足需求再自写组件；`usePosterStore` 状态机 + `WorkspacePosterBridge` 接入工作台左栏；R4.1 新增 4 统一组件（`EmptyState`/`Spinner`/`StatusBadge`/`ErrorBanner`）+ `CommandPalette`（Cmd+K） |
 | 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量） |
 | 桌面壳 | Electron（spike） | Python 作 child_process；正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
