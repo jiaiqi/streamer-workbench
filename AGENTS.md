@@ -64,10 +64,13 @@
               R3.5 ✅ learning-report 学歌报告海报（LearningReportSnapshot 数据通道 + 5 PNG 金标准 + 导出学习报告按钮）
               R4     ✅ 数据统计 4 端点 + 5 tab UI
               R5     ✅ 工作台系统化（focus-visible / stagger / aria / 响应式）
-              R4.0 🟡  v3 新增：三套新布局凑齐后的减债与新布局接入（P0 进行中：抽 _common.py / 导出反馈 / streak 修相对时间 / settings.json 写 .gitignore）
+              R4.0 ✅  Phase 1 收口（6dbdc63 — layout helper + 导出反馈 + streak + .gitignore）
+              R4.0 ✅  Phase 2 收口（feat-0801 — useWorkspaceState 拆解 + 专用海报区 + 海报真保存 + 暗色 hardcode 收口发现是空集）
+              R4.1 ⬜  视觉与体验统一（EmptyState / Spinner / StatusBadge / ErrorBanner 4 组件 + 跨视图快捷键 + localStorage 改名 + narrow helper + 删 selLayout 死代码 + README/AGENTS 同步）
+              R4.2 ⬜  数据反哺创作补完（Top 歌曲 / 时间线 → 创建海报/Preset + 导出历史）
               R4-R7 ⬜  Layout Runtime v1 抽象 + 数据反哺 + 桌面发布门（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
-桌面壳    spike 已过  正式壳 ⬜
-UI        ~92%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告 均可用
+桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
+UI        ~95%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报 均可用
 ```
 
 ### 技术栈
