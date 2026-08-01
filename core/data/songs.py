@@ -55,6 +55,13 @@ class Song:
     #   2. section 未标记 → 按字数自动分组（中文按 len()，含英文字母归 group 7）
     # 覆盖文件：songs.py 的 YI/ER/SAN/.../LONG_CN 列表维护全部 section 标记。
     section: Optional[int] = None
+    # R8 弹唱：歌词（双通道：LRC 带时间戳 / 纯文本兜底；v8.0 默认空）
+    lyrics_lrc: str = ""              # LRC 格式 [mm:ss.xx] 歌词
+    lyrics_plain: str = ""            # 无时间戳纯文本（无 LRC 时按行均分）
+    # R8 弹唱：音频（本地优先，v8.0 默认空；v8.1 加上传 + 播放）
+    audio_vocal_path: str = ""        # 原声 data/audio/{song_id}/vocal.{mp3|m4a|ogg|wav}
+    audio_instrumental_path: str = "" # 伴奏 data/audio/{song_id}/instrumental.{...}
+    audio_duration_ms: int = 0        # 主音频时长缓存（避免每次解码）
 
 
 @dataclass
@@ -230,6 +237,32 @@ class SongLibrary:
         return data
 
     @staticmethod
+    def _migrate_v5_to_v6(data: dict) -> dict:
+        """v5→v6：R8 弹唱字段增量。
+
+        所有 R8 字段都有 dataclass 默认值（空字符串 / 0），缺失时 setdefault
+        填充；显式 None 视作缺省并清空（防御 dirty data）。
+        """
+        for item in data.get("songs", []):
+            item.setdefault("lyrics_lrc", "")
+            item.setdefault("lyrics_plain", "")
+            item.setdefault("audio_vocal_path", "")
+            item.setdefault("audio_instrumental_path", "")
+            item.setdefault("audio_duration_ms", 0)
+            # 防御：None / 非字符串 / 负数 → 默认值
+            if not isinstance(item.get("lyrics_lrc"), str):
+                item["lyrics_lrc"] = ""
+            if not isinstance(item.get("lyrics_plain"), str):
+                item["lyrics_plain"] = ""
+            if not isinstance(item.get("audio_vocal_path"), str):
+                item["audio_vocal_path"] = ""
+            if not isinstance(item.get("audio_instrumental_path"), str):
+                item["audio_instrumental_path"] = ""
+            if not isinstance(item.get("audio_duration_ms"), int) or item["audio_duration_ms"] < 0:
+                item["audio_duration_ms"] = 0
+        return data
+
+    @staticmethod
     def _validate_v5(data: dict) -> dict:
         """拒绝空身份、重复身份和重复歌名，避免带病写入 v5。
 
@@ -342,7 +375,8 @@ class SongLibrary:
 
 # 注册版本迁移链（类外注册，避免类体内方法引用顺序问题）
 SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2, 2: SongLibrary._migrate_v2_to_v3,
-                               3: SongLibrary._migrate_v3_to_v4, 4: SongLibrary._migrate_v4_to_v5})
+                               3: SongLibrary._migrate_v3_to_v4, 4: SongLibrary._migrate_v4_to_v5,
+                               5: SongLibrary._migrate_v5_to_v6})
 
 
 def pinyin_initials(title: str) -> str:
