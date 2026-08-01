@@ -1,5 +1,14 @@
-import { useState, useEffect } from "react";
-import type { Theme, Layout, SongsData, ParamSpec, Settings } from "./types";
+/// R4.0.10 App.tsx 拆解后的工作台主入口。
+///
+/// App 现在只做 3 件事：
+///   1. 路由（view 状态 + 导航）
+///   2. 跨视图外观（appearance / dark / settingsSaving）
+///   3. 跨视图对话框（ExportDialog / Library 对话框守卫）
+///
+/// 工作台视图专属的状态（themes / selTheme / page / canvas / avoid / params /
+/// renderKey / loading / previewError / hasFrame / 持久化 / 防抖 / 派生）全部由
+/// `useWorkspaceState` 接管。
+import { useEffect, useMemo, useState } from "react";
 import { CANVAS_OPTIONS } from "./types";
 import { Icon } from "./icons";
 import LibraryView from "./views/LibraryView";
@@ -13,9 +22,12 @@ import ParamInspector from "./components/ParamInspector";
 import ColumnTemplatePicker from "./components/ColumnTemplatePicker";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
-import type { AppearanceSettings } from "./types";
+import type { AppearanceSettings, Settings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
+import SpecialPostersPanel from "./posters/SpecialPostersPanel";
+import { usePosterStore } from "./posters/usePosterStore";
 import { openQuickView, isElectron } from "./electron-bridge";
+import { useWorkspaceState } from "./workspace/useWorkspaceState";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -28,44 +40,28 @@ const navItems = [
 
 /* ==================== App ==================== */
 export default function App() {
-  const [themes, setThemes] = useState<Theme[]>([]);
-  const [layouts, setLayouts] = useState<Layout[]>([]);
-  const [selTheme, setSelTheme] = useState<string>("");
-  const [selLayout, setSelLayout] = useState<string>("grid-wrap");
-  const [page, setPage] = useState(1);
-  const [avoid, setAvoid] = useState(true);
-  const [canvas, setCanvas] = useState<string>("抖音全屏 9:20");
-  const [zoom, setZoom] = useState(45);
-  const [loading, setLoading] = useState(false);
+  /* ---- 工作台状态（由 useWorkspaceState 接管）---- */
+  const posterStore = usePosterStore();
+  const ws = useWorkspaceState({ layoutId: posterStore.current.layout_id });
+
+  /* ---- 跨视图状态：外观 + 暗色 ---- */
   const [appearance, setAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
   const [savedAppearance, setSavedAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
   const [appearanceSaving, setAppearanceSaving] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
-  const [resourceError, setResourceError] = useState("");
-  const [renderKey, setRenderKey] = useState(0);
-  // P0-1: 排版参数受控（初始为 grid-wrap 默认值，ParamSpec 拉取后合并）
-  // P2 R4: 类型放宽为 unknown，section_map 是 dict<int>，bool 是 number 0/1
-  const [params, setParams] = useState<Record<string, unknown>>({
-    margin: 58, font_song: 36, row_h: 44, sec_gap: 26,
-  });
-  // Phase 2: 参数面板动态渲染（对接 /api/layouts/{id}/params 的 ParamSpec 契约）
-  const [paramSpecs, setParamSpecs] = useState<ParamSpec[]>([]);
-  // P2 R4: magazine-flow 栏数模板
-  const [columnTemplates, setColumnTemplates] = useState<import("./types").ColumnTemplate[]>([]);
-  // Phase 2: 视图路由
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
+  );
+
+  /* ---- 跨视图状态：路由 + 对话框 ---- */
   const [view, setView] = useState<string>("workspace");
-  // Phase 2: 导出对话框
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [lastRenderMs, setLastRenderMs] = useState<number | null>(null);
-  // Phase 2: 状态栏歌曲统计（LibraryView 上报）
   const [songStats, setSongStats] = useState<{ active: number; draft: number } | null>(null);
-  // 歌曲编辑对话框开合状态（LibraryView 上报，用于快捷键避让）
   const [libDialogOpen, setLibDialogOpen] = useState(false);
-  // Phase 2: 启动恢复
-  const [restored, setRestored] = useState(false);
+
   const dark = resolveAppearance(appearance.appearanceMode, systemDark) === "dark";
 
+  /* ---- 暗色系统监听 ---- */
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => setSystemDark(media.matches);
@@ -73,98 +69,7 @@ export default function App() {
     return () => media.removeEventListener("change", update);
   }, []);
 
-  // Phase 2: 启动恢复
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("gp-workspace");
-      if (saved) {
-        const s = JSON.parse(saved);
-        if (s.selTheme) setSelTheme(s.selTheme);
-        if (s.page) setPage(s.page);
-        if (s.canvas) setCanvas(s.canvas);
-        if (s.avoid !== undefined) setAvoid(s.avoid);
-        if (s.params) setParams(s.params);
-      }
-    } catch { /* ignore */ }
-    setRestored(true);
-  }, []);
-
-  // Phase 2: 持久化到 localStorage
-  useEffect(() => {
-    if (!restored) return;
-    localStorage.setItem("gp-workspace", JSON.stringify({
-      selTheme, page, canvas, avoid, params,
-    }));
-  }, [selTheme, page, canvas, avoid, params, restored]);
-
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const savedWorkspace = localStorage.getItem("gp-workspace");
-        const [st, themeData, layoutData, songs, specs] = await Promise.all([
-          apiRequest<Settings>("/api/settings"),
-          apiRequest<Theme[]>("/api/themes"),
-          apiRequest<Layout[]>("/api/layouts"),
-          apiRequest<SongsData>("/api/songs/list"),
-          apiRequest<ParamSpec[]>("/api/layouts/grid-wrap/params"),
-        ]);
-        if (!active) return;
-        const nextAppearance = normalizeAppearance(st);
-        setAppearance(nextAppearance);
-        setSavedAppearance(nextAppearance);
-        if (!savedWorkspace && st.default_canvas) setCanvas(st.default_canvas);
-        setThemes(themeData);
-        setLayouts(layoutData);
-        setSongStats({ active: songs.active, draft: songs.draft });
-        if (themeData.length && !selTheme) {
-          const defaultTheme = savedWorkspace ? undefined : themeData.find(theme => theme.name === st.default_theme);
-          setSelTheme(defaultTheme?.name ?? themeData[0].name);
-        }
-        setParamSpecs(specs);
-        setParams(previous => {
-          const merged = { ...previous };
-          for (const spec of specs) if (merged[spec.key] === undefined) merged[spec.key] = spec.default;
-          return merged;
-        });
-        setResourceError("");
-      } catch (reason) {
-        if (active) setResourceError(reason instanceof Error ? reason.message : "工作台资源加载失败");
-      }
-    };
-    load();
-    return () => { active = false; };
-  }, []);
-
-  // P2 R4: 切换排版时重新拉 params specs + (如果是 magazine-flow) 拉栏数模板
-  useEffect(() => {
-    if (!selLayout) return;
-    let active = true;
-    (async () => {
-      try {
-        const specs = await apiRequest<ParamSpec[]>(`/api/layouts/${selLayout}/params`);
-        if (!active) return;
-        setParamSpecs(specs);
-        setParams(prev => {
-          const merged = { ...prev };
-          for (const spec of specs) if (merged[spec.key] === undefined) merged[spec.key] = spec.default;
-          return merged;
-        });
-        if (selLayout === "magazine-flow") {
-          const tpls = await apiRequest<import("./types").ColumnTemplate[]>(
-            "/api/layouts/magazine-flow/templates",
-          );
-          if (active) setColumnTemplates(tpls);
-        } else {
-          setColumnTemplates([]);
-        }
-      } catch (reason) {
-        if (active) setResourceError(reason instanceof Error ? reason.message : "排版参数加载失败");
-      }
-    })();
-    return () => { active = false; };
-  }, [selLayout]);
-
+  /* ---- 外观保存 ---- */
   const saveAppearance = async (next: AppearanceSettings) => {
     if (appearanceSaving || settingsSaving || view === "settings") return;
     const previous = savedAppearance;
@@ -173,52 +78,31 @@ export default function App() {
     try {
       await apiRequest("/api/settings", { method: "POST", body: next });
       setSavedAppearance(next);
-      setResourceError("");
+      ws.setResourceError("");
     } catch {
       setAppearance(previous);
-      setResourceError("外观保存失败，已恢复为上次保存状态。");
+      ws.setResourceError("外观保存失败，已恢复为上次保存状态。");
     } finally {
       setAppearanceSaving(false);
     }
   };
 
-  // Phase 2: 参数防抖（300ms）
-  const [debouncedParams, setDebouncedParams] = useState(params);
+  /* ---- 跨视图：加载 settings 用于 app 顶部状态（歌单统计旁） ---- */
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedParams(params), 300);
-    return () => clearTimeout(t);
-  }, [params]);
+    let active = true;
+    apiRequest<Settings>("/api/settings")
+      .then(s => {
+        if (!active) return;
+        const nextAppearance = normalizeAppearance(s);
+        setAppearance(nextAppearance);
+        setSavedAppearance(nextAppearance);
+      })
+      .catch(() => { /* 工作台自己的 effect 会捕获资源错误 */ });
+    return () => { active = false; };
+  }, []);
 
-  const maxPage = layouts.find(l => l.id === "grid-wrap")?.pages ?? 2;
-  const paramsQuery = Object.entries(debouncedParams)
-    .map(([k, v]) => `&${k}=${v}`)
-    .join("");
-  // P1 R1a.8 预览缓存治理：URL 仅含结构化输入；浏览器可对相同输入缓存。
-  // 「强制重新渲染」的契约改为「改变结构化输入」或调用 reload()；
-  // renderKey + 1 触发刷新时，通过 settings.themeIndex 之外的 useState 副作用让
-  // <img> 直接重新挂载（key）实现 —— 这里我们手动用 React key 解决。
-  const previewSrc = selTheme
-    ? `/api/render?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`
-    : "";
-  // previewKey 在结构化输入变化时 = 0；renderKey 增加时 = renderKey（强制重挂载）。
-  const previewKey = renderKey > 0 ? `k${renderKey}` : "stable";
-  const activeTheme = themes.find(t => t.name === selTheme);
-
-  // P0-1: 预览加载反馈——src 任何变化（切主题/翻页/调参/刷新）都进入 loading；
-  // 失败进入错误态给出重试入口，不再静默白屏
-  const [previewError, setPreviewError] = useState(false);
-  // crossfade POC：是否已有可保持的旧帧（有旧帧时加载新图不再盖 spinner）
-  const [hasFrame, setHasFrame] = useState(false);
-  useEffect(() => {
-    if (previewSrc) { setLoading(true); setPreviewError(false); }
-  }, [previewSrc]);
-
-  // Phase 2: 快捷键（设计文档 §6.8 的 Web 落地子集）
-  // Ctrl/⌘+E 导出 · Ctrl/⌘+R 刷新预览 · ←→ 翻页 · Ctrl/⌘+1~7 切主题 ·
-  // Ctrl/⌘+, 设置。输入控件聚焦时不拦截；Esc 由各对话框内部处理。
-  // P2 R4: Cmd+Z / Cmd+Shift+Z 撤销/重做 (海报文档)。
-  //   — 工作台视图 + 非对话框激活时生效
-  //   — 输入控件聚焦时**不**拦截 (浏览器默认文本框内 Cmd+Z 行为优先)
+  /* ---- 跨视图：快捷键 ---- */
+  const maxPage = ws.maxPage;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (appearanceSaving || settingsSaving) return;
@@ -230,7 +114,6 @@ export default function App() {
       if (mod && !typing && view === "workspace" && !exportDialogOpen && !libDialogOpen) {
         if (e.key === "z" || e.key === "Z") {
           e.preventDefault();
-          // WorkspacePosterBridge 监听此事件, 调用 store.undo / store.redo
           window.dispatchEvent(new CustomEvent(
             e.shiftKey ? "poster:redo" : "poster:undo",
           ));
@@ -245,22 +128,27 @@ export default function App() {
         setExportDialogOpen(true);
       } else if (mod && e.key === "r") {
         e.preventDefault();
-        setLoading(true); setRenderKey(k => k + 1);
+        ws.refresh();
       } else if (mod && e.key === ",") {
         e.preventDefault();
         setView("settings");
       } else if (mod && /^[1-7]$/.test(e.key)) {
         e.preventDefault();
-        const t = themes[parseInt(e.key, 10) - 1];
-        if (t) { setSelTheme(t.name); setPage(1); }
+        const t = ws.themes[parseInt(e.key, 10) - 1];
+        if (t) { ws.selectTheme(t.name); }
       } else if (!mod && view === "workspace" && !exportDialogOpen && !libDialogOpen) {
-        if (e.key === "ArrowLeft") setPage(p => Math.max(1, p - 1));
-        else if (e.key === "ArrowRight") setPage(p => Math.min(maxPage, p + 1));
+        if (e.key === "ArrowLeft") ws.setPage(p => Math.max(1, p - 1));
+        else if (e.key === "ArrowRight") ws.setPage(p => Math.min(maxPage, p + 1));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [themes, view, maxPage, exportDialogOpen, libDialogOpen, appearanceSaving, settingsSaving]);
+  }, [ws, view, maxPage, exportDialogOpen, libDialogOpen, appearanceSaving, settingsSaving]);
+
+  /* ---- 移动端 / 桌面端分支判断 ---- */
+  const inWorkspace = view === "workspace";
+  const settingsBusy = appearanceSaving || settingsSaving;
+  const resourceAlert = ws.resourceError;
 
   return (
     <div className="app-shell flex h-screen w-screen overflow-hidden font-sans" data-mode={dark ? "dark" : "light"} data-accent={appearance.applicationAccentId}>
@@ -290,7 +178,7 @@ export default function App() {
             title={item.label}
             aria-label={item.label}
             aria-current={item.id === view ? "page" : undefined}
-            disabled={appearanceSaving || settingsSaving}
+            disabled={settingsBusy}
             onClick={() => setView(item.id)}
             className={`relative flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 group ${item.id === view
               ? "bg-primary-soft text-primary"
@@ -310,13 +198,13 @@ export default function App() {
 
         <div className="mt-auto flex flex-col items-center gap-1">
           <button onClick={() => saveAppearance({ ...appearance, appearanceMode: dark ? "light" : "dark" })}
-            disabled={appearanceSaving || settingsSaving || view === "settings"}
+            disabled={settingsBusy || view === "settings"}
             aria-busy={appearanceSaving}
             title={view === "settings" ? "请在设置页调整外观" : dark ? "切换到画廊白" : "切换到暗色舞台"}
             className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.sun}</button>
           <button onClick={() => setView("settings")} title="设置"
-            disabled={appearanceSaving || settingsSaving}
+            disabled={settingsBusy}
             className={`flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${dark ? "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
           >{Icon.settings}</button>
         </div>
@@ -328,38 +216,40 @@ export default function App() {
         <header className={`flex h-11 shrink-0 items-center gap-5 border-b px-5 text-[13px] transition-colors duration-500 ${dark ? "border-zinc-700/50 text-zinc-500" : "border-border text-muted-foreground"}`}>
           <span className={`font-serif text-[15px] font-semibold tracking-wide whitespace-nowrap ${dark ? "text-zinc-200" : "text-foreground"}`}>主播工作台</span>
           <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
-          <span className="hidden min-[800px]:inline whitespace-nowrap">{themes.length} 个主题 · {maxPage} 页</span>
+          <span className="hidden min-[800px]:inline whitespace-nowrap">{ws.themes.length} 个主题 · {ws.maxPage} 页</span>
           <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
           <span className="hidden min-[800px]:inline whitespace-nowrap">已会 {songStats?.active ?? "—"} · 未会 {songStats?.draft ?? "—"}</span>
-          {lastRenderMs !== null && (
-            <span className="ml-auto tabular-nums hidden min-[800px]:inline">渲染 {Math.round(lastRenderMs)}ms/张</span>
+          {ws.lastRenderMs !== null && (
+            <span className="ml-auto tabular-nums hidden min-[800px]:inline">渲染 {Math.round(ws.lastRenderMs)}ms/张</span>
           )}
-          {resourceError && <button className="resource-alert" type="button" onClick={() => window.location.reload()} title={resourceError}>资源异常 · 重试</button>}
+          {resourceAlert && <button className="resource-alert" type="button" onClick={() => window.location.reload()} title={resourceAlert}>资源异常 · 重试</button>}
         </header>
 
         <div className="flex flex-1 overflow-hidden">
           {/* ===== LEFT: theme list（仅工作台视图显示，<800px 隐藏） ===== */}
-          {view === "workspace" && (
+          {inWorkspace && (
           <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
-            {/* P1 R1a.5 海报文档区 + 歌曲来源（独立 hook 状态机） */}
+            {/* R1a.5 海报文档区 + 歌曲来源（独立 hook 状态机） */}
             <WorkspacePosterBridge
               dark={dark}
-              availableThemeNames={themes.map(t => t.name)}
-              onThemeSelect={(name) => { setSelTheme(name); setPage(1); }}
-              onCanvasSelect={(id) => setCanvas(id)}
+              availableThemeNames={ws.themes.map(t => t.name)}
+              onThemeSelect={ws.selectTheme}
+              onCanvasSelect={ws.setCanvas}
             />
+            {/* R4.0.11 专用海报：直播复盘 + 学歌报告 */}
+            <SpecialPostersPanel dark={dark} />
             <div className="px-4 pt-5 pb-3">
               <p className="eyebrow">策展资源</p>
               <h2 className="panel-title">海报主题</h2>
               <p className="panel-copy">主题与布局独立组合。选择后实时更新中央展品。</p>
             </div>
             <div className="px-3 pb-4 space-y-2">
-              {themes.length === 0 && !resourceError && <div className="panel-empty" aria-busy="true"><span className="spinner" />正在陈列主题…</div>}
-              {themes.map(t => (
+              {ws.themes.length === 0 && !ws.resourceError && <div className="panel-empty" aria-busy="true"><span className="spinner" />正在陈列主题…</div>}
+              {ws.themes.map(t => (
                 <button
                   key={t.name}
-                  onClick={() => { setSelTheme(t.name); setPage(1); }}
-                  className={`w-full text-left rounded-xl overflow-hidden transition-all duration-200 group ${selTheme === t.name
+                  onClick={() => ws.selectTheme(t.name)}
+                  className={`w-full text-left rounded-xl overflow-hidden transition-all duration-200 group ${ws.selTheme === t.name
                     ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
                     : "hover:ring-1 hover:ring-border"
                   }`}
@@ -384,15 +274,15 @@ export default function App() {
           )}
 
           {/* ===== CENTER: preview（<800px 隐藏，走移动端兜底面板） ===== */}
-          {view === "workspace" && (
+          {inWorkspace && (
           <main className="workspace-gallery flex-1 flex flex-col items-center justify-center relative overflow-hidden max-[800px]:hidden">
             <div className="gallery-room-label" aria-hidden="true">独立海报 · 画廊策展台</div>
             {/* toolbar */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
               <div className={`flex items-center gap-1.5 rounded-xl px-3 py-2 shadow-sm transition-colors duration-500 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
-                {Array.from({ length: maxPage }, (_, i) => (
-                  <button key={i} onClick={() => setPage(i + 1)}
-                    className={`w-11 h-11 rounded-lg text-xs font-medium transition-all ${page === i + 1
+                {Array.from({ length: ws.maxPage }, (_, i) => (
+                  <button key={i} onClick={() => ws.setPage(i + 1)}
+                    className={`w-11 h-11 rounded-lg text-xs font-medium transition-all ${ws.page === i + 1
                       ? "bg-primary text-primary-foreground"
                       : (dark ? "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50" : "text-muted-foreground hover:text-foreground hover:bg-muted")
                     }`}
@@ -401,7 +291,7 @@ export default function App() {
                 <span className={`w-px h-5 mx-1 ${dark ? "bg-zinc-700" : "bg-border"}`} />
                 <label title="避开抖音右侧评论/礼物互动区（9:20 画布右下安全区）"
                   className="flex items-center gap-1.5 text-xs cursor-pointer select-none text-muted-foreground">
-                  <input type="checkbox" checked={avoid} onChange={e => setAvoid(e.target.checked)}
+                  <input type="checkbox" checked={ws.avoid} onChange={e => ws.setAvoid(e.target.checked)}
                     className="w-3.5 h-3.5 rounded accent-primary" />
                   避让互动区
                 </label>
@@ -409,11 +299,11 @@ export default function App() {
 
               <div className="flex items-center gap-2">
                 <div className={`flex items-center gap-1 rounded-lg px-2 py-1.5 shadow-sm transition-colors duration-500 ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
-                  <button onClick={() => setZoom(z => Math.max(15, z - 10))}
+                  <button onClick={() => ws.setZoom(z => Math.max(15, z - 10))}
                     className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-                  <span className="text-[11px] text-muted-foreground w-10 text-center tabular-nums">{zoom}%</span>
-                  <button onClick={() => setZoom(z => Math.min(150, z + 10))}
+                  <span className="text-[11px] text-muted-foreground w-10 text-center tabular-nums">{ws.zoom}%</span>
+                  <button onClick={() => ws.setZoom(z => Math.min(150, z + 10))}
                     className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   ><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
                 </div>
@@ -426,46 +316,45 @@ export default function App() {
                 if (e.ctrlKey || e.metaKey) {
                   e.preventDefault();
                   const delta = e.deltaY > 0 ? -5 : 5;
-                  setZoom(z => Math.max(15, Math.min(150, z + delta)));
+                  ws.setZoom(z => Math.max(15, Math.min(150, z + delta)));
                 }
               }}
               style={{ touchAction: "none" }}>
-              {selTheme ? (
+              {ws.selTheme ? (
                 <div className="relative rounded-2xl overflow-hidden transition-all duration-300"
                   style={{
-                    width: `${(1080 * zoom) / 100}px`,
+                    width: `${(1080 * ws.zoom) / 100}px`,
                     // max-width 由 max-height 和画布比例反推：让容器按比例缩小，不破坏避让线对齐
-                    // (2026-07-30 修复: 旧 maxHeight+aspectRatio 组合在高 zoom 时容器被压扁)
-                    maxWidth: canvas === "标准 9:16"
+                    maxWidth: ws.canvas === "标准 9:16"
                       ? "calc((100vh - 120px) * 9 / 16)"
                       : "calc((100vh - 120px) * 9 / 20)",
-                    aspectRatio: canvas === "标准 9:16" ? "9 / 16" : "9 / 20",
+                    aspectRatio: ws.canvas === "标准 9:16" ? "9 / 16" : "9 / 20",
                     boxShadow: "0 4px 12px rgba(35,55,48,0.06), 0 24px 56px rgba(35,55,48,0.13)",
                   }}>
-                  {previewError ? (
+                  {ws.previewError ? (
                     /* P0-1: 渲染失败兜底——错误占位 + 重试，不再静默白屏 */
                     <div className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${dark ? "bg-zinc-800" : "bg-muted"}`}>
                       <p className="text-sm text-muted-foreground">预览渲染失败</p>
-                      <button onClick={() => { setPreviewError(false); setLoading(true); setRenderKey(k => k + 1); }}
+                      <button onClick={() => ws.refresh()}
                         className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm bg-primary hover:bg-primary-strong text-primary-foreground font-medium transition-all active:scale-95 cursor-pointer">
                         {Icon.refresh} 重试
                       </button>
                     </div>
                   ) : (
                     /* §4.6 POC：旧图保持至新图完成再 crossfade，reduced-motion 直换 */
-                    <PreviewCrossfade src={previewSrc}
-                      alt={`${selTheme} 主题，第 ${page} 页预览`}
-                      reloadKey={renderKey}
-                      onLoaded={() => { setHasFrame(true); setLoading(false); }}
-                      onFailed={() => { setLoading(false); setPreviewError(true); }} />
+                    <PreviewCrossfade src={ws.previewSrc}
+                      alt={`${ws.selTheme} 主题，第 ${ws.page} 页预览`}
+                      reloadKey={ws.renderKey}
+                      onLoaded={ws.markLoaded}
+                      onFailed={ws.markFailed} />
                   )}
-                  {loading && !previewError && !hasFrame && (
+                  {ws.loading && !ws.previewError && !ws.hasFrame && (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2.5 ${dark ? "bg-zinc-800/60" : "bg-background/60"}`}>
                       <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                       <p className="text-xs text-muted-foreground">渲染中…</p>
                     </div>
                   )}
-                  {avoid && canvas === "抖音全屏 9:20" && (
+                  {ws.avoid && ws.canvas === "抖音全屏 9:20" && (
                     <div className="absolute right-0 border-l-2 border-dashed border-red-400/60 pointer-events-none"
                       style={{
                         top: `${(1080 / 2400) * 100}%`,
@@ -488,14 +377,14 @@ export default function App() {
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>排版：<span className={dark ? "text-zinc-300" : "text-foreground"}>全行网格绕排版</span></span>
                 <span className={`w-px h-4 ${dark ? "bg-zinc-700" : "bg-border"}`} />
-                <span>主题：<span className={dark ? "text-zinc-300" : "text-foreground"}>{selTheme || "—"}</span></span>
+                <span>主题：<span className={dark ? "text-zinc-300" : "text-foreground"}>{ws.selTheme || "—"}</span></span>
                 <span className={`w-px h-4 ${dark ? "bg-zinc-700" : "bg-border"}`} />
-                <span>画布：<span className={dark ? "text-zinc-300" : "text-foreground"}>{canvas}</span></span>
+                <span>画布：<span className={dark ? "text-zinc-300" : "text-foreground"}>{ws.canvas}</span></span>
                 <span className={`hidden xl:inline ml-2 ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>⌘E 导出 · ⌘R 刷新 · ←→ 翻页 · ⌘1~7 切主题</span>
               </div>
               <div className="flex items-center gap-2">
-                {previewSrc && (
-                  <a href={previewSrc} download={`${activeTheme?.prefix ?? "poster"}-p${page}.png`}
+                {ws.previewSrc && (
+                  <a href={ws.previewSrc} download={`${ws.activeTheme?.prefix ?? "poster"}-p${ws.page}.png`}
                     className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer no-underline text-muted-foreground hover:text-foreground hover:bg-muted">
                     {Icon.download} 下载
                   </a>
@@ -504,9 +393,9 @@ export default function App() {
                   className="primary-action flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm cursor-pointer">
                   {Icon.download} 导出…
                 </button>
-                <button onClick={() => { setLoading(true); setRenderKey(k => k + 1); }}
+                <button onClick={ws.refresh}
                   className="flex items-center gap-1.5 bg-primary hover:bg-primary-strong text-primary-foreground font-medium rounded-xl px-5 py-2 text-sm transition-all active:scale-95 cursor-pointer">
-                  {Icon.refresh} {loading ? "渲染中…" : "刷新预览"}
+                  {Icon.refresh} {ws.loading ? "渲染中…" : "刷新预览"}
                 </button>
               </div>
             </div>
@@ -514,34 +403,34 @@ export default function App() {
           )}
 
           {/* ===== 移动端兜底（<800px）：不裁剪桌面三栏，引导去直播速查 ===== */}
-          {view === "workspace" && (
+          {inWorkspace && (
           <div className="mobile-workspace flex-1 hidden max-[800px]:flex flex-col items-center gap-4 overflow-y-auto p-4 text-center">
             <div className="mobile-workspace-heading">
               <p className="eyebrow">轻量工作区</p>
               <h2>预览与导出</h2>
               <p>歌曲、布局和主题调整请在宽屏完成，移动端保留核对与导出。</p>
             </div>
-            {previewSrc ? (
+            {ws.previewSrc ? (
               <div className="mobile-preview-frame">
-                {previewError ? (
+                {ws.previewError ? (
                   <div className="mobile-preview-error" role="alert">
                     <span>预览渲染失败</span>
-                    <button type="button" className="secondary-action" onClick={() => { setPreviewError(false); setLoading(true); setRenderKey(key => key + 1); }}>重试</button>
+                    <button type="button" className="secondary-action" onClick={ws.refresh}>重试</button>
                   </div>
                 ) : (
                   // key={previewKey}：renderKey 触发整图重挂载，模拟「强制刷新」同时不污染 URL
-                  <img key={previewKey} src={previewSrc} alt={`${selTheme}主题，第 ${page} 页预览`}
-                    onLoad={() => setLoading(false)}
-                    onError={() => { setLoading(false); setPreviewError(true); }} />
+                  <img key={ws.previewKey} src={ws.previewSrc} alt={`${ws.selTheme}主题，第 ${ws.page} 页预览`}
+                    onLoad={ws.markLoaded}
+                    onError={ws.markFailed} />
                 )}
-                {loading && !previewError && <div className="mobile-preview-loading"><span className="spinner" />渲染中…</div>}
+                {ws.loading && !ws.previewError && <div className="mobile-preview-loading"><span className="spinner" />渲染中…</div>}
               </div>
             ) : <div className="panel-empty">尚无可预览主题</div>}
             <div className="mobile-page-picker" aria-label="选择页码">
-              {Array.from({ length: maxPage }, (_, index) => <button key={index} type="button" aria-pressed={page === index + 1} onClick={() => setPage(index + 1)}>{index + 1}</button>)}
+              {Array.from({ length: ws.maxPage }, (_, index) => <button key={index} type="button" aria-pressed={ws.page === index + 1} onClick={() => ws.setPage(index + 1)}>{index + 1}</button>)}
             </div>
             <div className="mobile-actions">
-              {previewSrc && <a href={previewSrc} download={`${activeTheme?.prefix ?? "poster"}-p${page}.png`} className="secondary-action">下载当前页</a>}
+              {ws.previewSrc && <a href={ws.previewSrc} download={`${ws.activeTheme?.prefix ?? "poster"}-p${ws.page}.png`} className="secondary-action">下载当前页</a>}
               <button type="button" className="primary-action" onClick={() => setExportDialogOpen(true)}>批量导出</button>
               <a
                 href="/quick"
@@ -565,7 +454,7 @@ export default function App() {
 
           {/* ===== 设置视图 ===== */}
           {view === "settings" && (
-            <SettingsView dark={dark} themes={themes} appearance={appearance}
+            <SettingsView dark={dark} themes={ws.themes} appearance={appearance}
               onAppearancePreview={setAppearance}
               onAppearanceSaved={next => { setAppearance(next); setSavedAppearance(next); }}
               onSavingChange={setSettingsSaving} />
@@ -585,7 +474,7 @@ export default function App() {
           {view === "stats" && <StatsView dark={dark} />}
 
           {/* ===== RIGHT: params（仅工作台视图显示，<800px 隐藏） ===== */}
-          {view === "workspace" && (
+          {inWorkspace && (
           <aside className={`w-60 shrink-0 border-l overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
             <div className={`px-5 py-4 border-b ${dark ? "border-zinc-700/50" : "border-border"}`}>
               <p className="eyebrow">展品设置</p>
@@ -611,52 +500,52 @@ export default function App() {
                 <div className="mt-2.5 space-y-2.5">
                   <label className="flex items-center justify-between text-xs text-muted-foreground">
                     预设
-                    <select value={canvas} onChange={e => setCanvas(e.target.value)}
+                    <select value={ws.canvas} onChange={e => ws.setCanvas(e.target.value)}
                       className={`rounded-lg px-2 py-1 text-xs outline-none cursor-pointer ${dark ? "bg-zinc-800 border-zinc-700 text-zinc-300" : "bg-muted border-border text-foreground border"}`}>
                       {CANVAS_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </label>
                   <label className="flex items-center justify-between text-xs text-muted-foreground">
-                    尺寸 <span className="tabular-nums text-foreground">{canvas === "标准 9:16" ? "1080×1920" : "1080×2400"}</span>
+                    尺寸 <span className="tabular-nums text-foreground">{ws.canvas === "标准 9:16" ? "1080×1920" : "1080×2400"}</span>
                   </label>
                   <label className="flex items-center justify-between text-xs text-muted-foreground">
-                    页数 <span className="tabular-nums text-foreground">{maxPage}</span>
+                    页数 <span className="tabular-nums text-foreground">{ws.maxPage}</span>
                   </label>
                 </div>
               </details>
 
               {/* 折叠：布局参数（默认展开）—— P2 R4 通用 Inspector 接管 */}
               {/* magazine-flow 专用：栏数模板下拉 */}
-              {selLayout === "magazine-flow" && columnTemplates.length > 0 && (
+              {posterStore.current.layout_id === "magazine-flow" && ws.columnTemplates.length > 0 && (
                 <ColumnTemplatePicker
-                  templates={columnTemplates}
-                  value={(params.columns_per_section as Record<string, number>) || {}}
-                  onChange={next => setParams(prev => ({ ...prev, columns_per_section: next }))}
+                  templates={ws.columnTemplates}
+                  value={(ws.params.columns_per_section as Record<string, number>) || {}}
+                  onChange={next => ws.setParam("columns_per_section", next)}
                   dark={dark}
                 />
               )}
               <ParamInspector
-                specs={paramSpecs}
-                values={params}
-                onChange={(key, value) => setParams(prev => ({ ...prev, [key]: value }))}
+                specs={ws.paramSpecs}
+                values={ws.params}
+                onChange={ws.setParam}
                 onReset={key => {
-                  const sp = paramSpecs.find(p => p.key === key);
-                  if (sp) setParams(prev => ({ ...prev, [key]: sp.default }));
+                  const sp = ws.paramSpecs.find(p => p.key === key);
+                  if (sp) ws.setParam(key, sp.default);
                 }}
                 dark={dark}
               />
 
               {/* 折叠：当前主题（默认折叠） */}
-              {activeTheme && (
+              {ws.activeTheme && (
               <details className="group">
                 <summary className="flex items-center justify-between cursor-pointer py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
                   当前主题
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="transition-transform group-open:rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
                 <div className={`mt-2.5 rounded-xl p-3 space-y-1.5 text-xs shadow-sm ${dark ? "bg-zinc-800/80 border border-zinc-700/50" : "bg-card border border-border"}`}>
-                  <p className="font-medium text-foreground">{activeTheme.name}</p>
-                  <p className="text-muted-foreground break-all leading-relaxed">{activeTheme.notes || "无备注"}</p>
-                  <p className="text-muted-foreground">水印修正：{activeTheme.watermark_fix ? "是" : "否"}</p>
+                  <p className="font-medium text-foreground">{ws.activeTheme.name}</p>
+                  <p className="text-muted-foreground break-all leading-relaxed">{ws.activeTheme.notes || "无备注"}</p>
+                  <p className="text-muted-foreground">水印修正：{ws.activeTheme.watermark_fix ? "是" : "否"}</p>
                 </div>
               </details>
               )}
@@ -671,15 +560,15 @@ export default function App() {
         dark={dark}
         open={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
-        selTheme={selTheme}
-        page={page}
-        maxPage={maxPage}
-        themesCount={themes.length}
-        canvas={canvas}
-        avoid={avoid}
-        paramsQuery={paramsQuery}
-        lastRenderMs={lastRenderMs}
-        onRendered={setLastRenderMs}
+        selTheme={ws.selTheme}
+        page={ws.page}
+        maxPage={ws.maxPage}
+        themesCount={ws.themes.length}
+        canvas={ws.canvas}
+        avoid={ws.avoid}
+        paramsQuery={ws.paramsQuery}
+        lastRenderMs={ws.lastRenderMs}
+        onRendered={ws.setLastRenderMs}
       />
     </div>
   );
