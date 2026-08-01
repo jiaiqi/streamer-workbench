@@ -26,8 +26,9 @@ import type {
 } from "../api/generated";
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
 import { openQuickView, openLivePoster, isElectron } from "../electron-bridge";
+import { asRecord, asString, asNumber, asBoolean } from "../lib/narrow";
 
-/* ================== 类型 narrow helpers ================== */
+/* ================== 类型 narrow helpers (R4.1.7 改用 lib/narrow) ================== */
 
 interface QueueEntry {
   request_id: string;
@@ -51,33 +52,37 @@ interface PerformanceRecord {
 }
 
 function asQueueEntry(value: unknown): QueueEntry | null {
-  if (!value || typeof value !== "object") return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v.request_id !== "string" || typeof v.song_id !== "string") return null;
+  const v = asRecord(value);
+  if (!v) return null;
+  const request_id = asString(v, "request_id");
+  const song_id = asString(v, "song_id");
+  if (!request_id || !song_id) return null;
   return {
-    request_id: v.request_id,
-    song_id: v.song_id,
-    position: typeof v.position === "number" ? v.position : 0,
-    state: typeof v.state === "string" ? v.state : "queued",
-    is_bumped: v.is_bumped === true,
-    requester_name: typeof v.requester_name === "string" ? v.requester_name : "",
-    entitlement_kind: typeof v.entitlement_kind === "string" ? v.entitlement_kind : "",
-    inserted_at: typeof v.inserted_at === "string" ? v.inserted_at : "",
+    request_id,
+    song_id,
+    position: asNumber(v, "position") ?? 0,
+    state: asString(v, "state") ?? "queued",
+    is_bumped: asBoolean(v, "is_bumped") ?? false,
+    requester_name: asString(v, "requester_name") ?? "",
+    entitlement_kind: asString(v, "entitlement_kind") ?? "",
+    inserted_at: asString(v, "inserted_at") ?? "",
   };
 }
 
 function asPerformance(value: unknown): PerformanceRecord | null {
-  if (!value || typeof value !== "object") return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v.id !== "string" || typeof v.song_id !== "string") return null;
+  const v = asRecord(value);
+  if (!v) return null;
+  const id = asString(v, "id");
+  const song_id = asString(v, "song_id");
+  if (!id || !song_id) return null;
   return {
-    id: v.id,
-    request_id: typeof v.request_id === "string" ? v.request_id : "",
-    song_id: v.song_id,
-    result: typeof v.result === "string" ? v.result : "sung",
-    performed_at: typeof v.performed_at === "string" ? v.performed_at : null,
-    recorded_at: typeof v.recorded_at === "string" ? v.recorded_at : "",
-    reason: typeof v.reason === "string" ? v.reason : "",
+    id,
+    request_id: asString(v, "request_id") ?? "",
+    song_id,
+    result: asString(v, "result") ?? "sung",
+    performed_at: asString(v, "performed_at") ?? null,
+    recorded_at: asString(v, "recorded_at") ?? "",
+    reason: asString(v, "reason") ?? "",
   };
 }
 
