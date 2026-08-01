@@ -20,6 +20,7 @@ import ExportDialog from "./components/ExportDialog";
 import PreviewCrossfade from "./components/PreviewCrossfade";
 import ParamInspector from "./components/ParamInspector";
 import ColumnTemplatePicker from "./components/ColumnTemplatePicker";
+import CommandPalette, { type Command } from "./components/CommandPalette";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
 import type { AppearanceSettings, Settings } from "./types";
@@ -103,6 +104,21 @@ export default function App() {
 
   /* ---- 跨视图：快捷键 ---- */
   const maxPage = ws.maxPage;
+  /* ---- R4.1.5 命令面板：Cmd+K 跨视图 ---- */
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const commands: Command[] = useMemo(() => [
+    { id: "view-workspace", title: "切换到海报工作台", group: "视图", shortcut: "1", keywords: ["poster", "海报"], action: () => setView("workspace") },
+    { id: "view-library", title: "切换到歌曲库", group: "视图", shortcut: "2", keywords: ["song", "歌曲"], action: () => setView("library") },
+    { id: "view-learning", title: "切换到学歌管理", group: "视图", shortcut: "3", keywords: ["learn", "学歌"], action: () => setView("learning") },
+    { id: "view-live", title: "切换到直播", group: "视图", shortcut: "4", keywords: ["live", "直播"], action: () => setView("live") },
+    { id: "view-stats", title: "切换到数据统计", group: "视图", shortcut: "5", keywords: ["stats", "统计"], action: () => setView("stats") },
+    { id: "view-settings", title: "打开设置", group: "视图", shortcut: "⌘,", keywords: ["setting", "设置"], action: () => setView("settings") },
+    { id: "act-export", title: "导出当前海报", group: "操作", shortcut: "⌘E", keywords: ["export", "下载"], action: () => setExportDialogOpen(true), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
+    { id: "act-refresh", title: "刷新预览", group: "操作", shortcut: "⌘R", keywords: ["refresh", "reload"], action: () => ws.refresh(), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
+    { id: "act-quickview", title: "打开直播速查", group: "速查", keywords: ["quickview", "速查"], action: () => openQuickView() },
+  ], [view, ws]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (appearanceSaving || settingsSaving) return;
@@ -110,8 +126,15 @@ export default function App() {
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
+      // R4.1.5: Cmd+K 打开命令面板（任何视图 + 输入控件聚焦时也允许）
+      if (mod && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setPaletteOpen(p => !p);
+        return;
+      }
+
       // P2 R4: undo/redo 优先级 — 输入控件聚焦让浏览器默认处理
-      if (mod && !typing && view === "workspace" && !exportDialogOpen && !libDialogOpen) {
+      if (mod && !typing && view === "workspace" && !exportDialogOpen && !libDialogOpen && !paletteOpen) {
         if (e.key === "z" || e.key === "Z") {
           e.preventDefault();
           window.dispatchEvent(new CustomEvent(
@@ -569,6 +592,13 @@ export default function App() {
         paramsQuery={ws.paramsQuery}
         lastRenderMs={ws.lastRenderMs}
         onRendered={ws.setLastRenderMs}
+      />
+      {/* R4.1.5 Cmd+K 命令面板 */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={commands}
+        dark={dark}
       />
     </div>
   );
