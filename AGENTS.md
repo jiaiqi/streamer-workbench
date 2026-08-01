@@ -67,10 +67,10 @@
               R4.0 ✅  Phase 1 收口（6dbdc63 — layout helper + 导出反馈 + streak + .gitignore）
               R4.0 ✅  Phase 2 收口（feat-0801 — useWorkspaceState 拆解 + 专用海报区 + 海报真保存 + 暗色 hardcode 收口发现是空集）
               R4.1 ✅  视觉与体验统一（4 组件 + Cmd+K + narrow helper + selLayout 已删）
-              R4.2 🟡  数据反哺创作补完（R4.2.1+2 收口：Top 歌曲/时间线 → 创建海报/Preset；R4.2.3 导出历史待办）
+              R4.2 ✅  数据反哺创作补全（R4.2.1+2 收口：Top 歌曲/时间线 → 创建海报/Preset；R4.2.3 导出历史：复用 events.jsonl + ExportLogPanel 嵌入 4 处）
               R4-R7 ⬜  Layout Runtime v1 抽象 + 数据反哺 + 桌面发布门（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
 桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
-UI        ~96%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 均可用
+UI        ~97%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 + 4 嵌入点导出历史 均可用
 ```
 
 ### 技术栈
@@ -83,7 +83,7 @@ UI        ~96%       工作台/歌曲库/学歌/速查/海报/直播会话/复�
 | 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量） |
 | 桌面壳 | Electron（spike） | Python 作 child_process；正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 31 项 Python 测试文件 + 34 项 vitest + 16 项 node:test + 16/16 grid 金标准 + 6/6 magazine PNG + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
+| 测试 | 32 项 Python 测试文件（604/604） + 22 项 vitest（228/228） + 16 项 node:test + 16/16 grid 金标准 + 6/6 magazine PNG + 5/5 live-set PNG + 5/5 learning-report PNG + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
 
 ---
 

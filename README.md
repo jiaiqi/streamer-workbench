@@ -2,9 +2,9 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-08-01 末）**：R0（数据/应用/服务契约）、R1a（海报闭环）、R1b（magazine-flow 自动分页）、R2（直播闭环 + 桌面壳 dev）、R2.5（live-set 复盘海报）、R3（学歌闭环）、R3.5（learning-report 学歌海报）、R4（数据统计）、R5（工作台系统化）、R4.0 Phase 1+2（layout helper + god 拆解 + 专用海报 + 真保存 + 暗色 hardcode 收口）、R4.1（4 统一组件 + Cmd+K + narrow helper）全部收口。
+> **进度快照（2026-08-02 凌晨）**：R0（数据/应用/服务契约）、R1a（海报闭环）、R1b（magazine-flow 自动分页）、R2（直播闭环 + 桌面壳 dev）、R2.5（live-set 复盘海报）、R3（学歌闭环）、R3.5（learning-report 学歌海报）、R4（数据统计）、R5（工作台系统化）、R4.0 Phase 1+2（layout helper + god 拆解 + 专用海报 + 真保存 + 暗色 hardcode 收口）、R4.1（4 统一组件 + Cmd+K + narrow helper）、R4.2（Top/时间线 → 海报/Preset + 导出历史）全部收口。
 >
-> **测试基线**：Python 622/622 + vitest 200/200 + node:test 16/16 + 4 套金标准 32/32（grid-wrap 16 + magazine-flow 6 + live-set 5 + learning-report 5）；TSC 干净。
+> **测试基线**：Python 604/604 + vitest 228/228 + node:test 16/16 + 4 套金标准 32/32（grid-wrap 16 + magazine-flow 6 + live-set 5 + learning-report 5）；TSC 干净。
 >
 > **已上线能力**：
 > - **R1a 海报闭环** — PosterDocument 领域 + 仓储 + 服务 + HTTP `/api/posters*` + 样例曲库 + 能力声明 + RenderDocument；`usePosterStore` 状态机 + 自动保存 + 撤销重做（Cmd+Z）+ Bridge；最近海报 3 动作内可导出。
@@ -13,13 +13,14 @@
 > - **R2.5 live-set 复盘海报** — `LiveSessionSnapshot` 数据通道；5 PNG 金标准；工作台左栏"专用海报"区 + LiveView 双入口。
 > - **R3 学歌闭环** — S4 打卡（note/minutes/self_rating）+ 学会周期 + 乐理辅助（Key/Capo/原调/和声进行/结构/音域/移调）+ 智能推荐。
 > - **R3.5 learning-report 学歌海报** — `LearningReportSnapshot` 数据通道；5 PNG 金标准；7d/30d/90d 预设 + 自定义窗口。
-> - **R4 数据统计** — 4 端点（overview/feed/top-songs/distribution） + 5 tab UI；Top 歌曲 → Preset 快捷（R4.2 待接）。
+> - **R4 数据统计** — 4 端点（overview/feed/top-songs/distribution） + 5 tab UI；Top 歌曲 → 创建海报 + 时间线 → 创建 Preset。
 > - **R5 工作台系统化** — focus-visible + stagger fade + aria + 响应式 + 撤销重做。
 > - **R4.0 Phase 1+2 收口** — 4 套 layout 公共 helper 抽离（`core/layouts/_common.py`，8 个）；App.tsx god 拆解（686 → 572 行，`useWorkspaceState` 接管工作台状态机）；专用海报区把 4 套 layout 入口同视图可达；海报真保存路径（Electron 原生 dialog / 浏览器 `<a download>`，3 路径统一）；暗色 hardcode 收口（实际为空集，已确认）。
 > - **R4.1 视觉与体验统一** — 4 个统一组件（`EmptyState` / `Spinner` / `StatusBadge` / `ErrorBanner`）；`CommandPalette` Cmd+K 跨 5 视图命令面板；`lib/narrow.ts` 公共 narrow helper 取代散落的 `asXxx` 函数；`localStorage` key 改 `sw-workspace`（兼容读 `gp-workspace`）。
+> - **R4.2 数据反哺创作补全** — StatsView Top tab「据此创建海报」/Feed tab「据此创建 Preset」；导出历史：live.py / learning_report.py 完成后写 `type=poster_exported` 事件，3 种 kind（`grid-export` / `live-poster` / `learning-report`）走同一 `GET /api/exports/recent`；`ExportLogPanel` 嵌入 4 处（SpecialPostersPanel / ExportDialog / LiveView SessionDetail / StatsView），含 30 秒静默轮询 + kind 过滤 + 相对时间。
 > - **R2.5+Electron** — 桌面壳（macOS arm64）+ PyInstaller 后端单文件 + electron-builder 打包 + 置顶速查窗 (Cmd/Ctrl+Shift+U)。
 >
-> **下一步**：R4.2 数据反哺创作补完（Top 歌曲/时间线 → 创建海报/Preset + 导出历史）；R4 Runtime v1 抽象（DataChannel 双层契约）；R5c 高级体验（撤销重做扩展、WCAG AA）；R7 桌面正式发布门。
+> **下一步**：R4 Runtime v1 抽象（DataChannel 双层契约 + 4 套 layout 显式声明 `supported_channels`）；R5c 高级体验（撤销重做扩展、WCAG AA、移动端真布局）；R7 桌面正式发布门（electron-builder + 签名公证 + 自动更新）。
 >
 > 文档入口见 [`AGENTS.md`](AGENTS.md)、[`HANDOFF.md`](HANDOFF.md) 与 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >
