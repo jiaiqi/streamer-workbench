@@ -16,6 +16,7 @@ import LearningView from "./views/LearningView";
 import LiveView from "./views/LiveView";
 import StatsView from "./views/StatsView";
 import SettingsView from "./views/SettingsView";
+import PlayView from "./play/PlayView";
 import ExportDialog from "./components/ExportDialog";
 import PreviewCrossfade from "./components/PreviewCrossfade";
 import ParamInspector from "./components/ParamInspector";
@@ -60,6 +61,8 @@ export default function App() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [songStats, setSongStats] = useState<{ active: number; draft: number } | null>(null);
   const [libDialogOpen, setLibDialogOpen] = useState(false);
+  // R8.0: 弹唱视图 - 当前播放的 song_id（null 时切回 library）
+  const [playSongId, setPlaySongId] = useState<string | null>(null);
 
   const dark = resolveAppearance(appearance.appearanceMode, systemDark) === "dark";
 
@@ -522,7 +525,16 @@ export default function App() {
           {view === "library" && (
             <LibraryView dark={dark}
               onStatsChange={setSongStats}
-              onEditTargetChange={setLibDialogOpen} />
+              onEditTargetChange={setLibDialogOpen}
+              onPlaySong={(id) => { setPlaySongId(id); setView("play"); }} />
+          )}
+
+          {/* ===== 弹唱视图（R8.0） ===== */}
+          {view === "play" && playSongId && (
+            <PlayView
+              dark={dark}
+              songId={playSongId}
+              onBack={() => { setView("library"); setPlaySongId(null); }} />
           )}
 
           {/* ===== 设置视图 ===== */}

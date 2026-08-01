@@ -34,10 +34,12 @@ function KeyCapo({ song }: { song: Song }) {
 const GRID_CLASS = "grid gap-3 grid-cols-[repeat(auto-fill,minmax(232px,1fr))]";
 
 /* ================= 主视图 ================= */
-export default function LibraryView({ dark, onStatsChange, onEditTargetChange }: {
+export default function LibraryView({ dark, onStatsChange, onEditTargetChange, onPlaySong }: {
   dark: boolean;
   onStatsChange: (s: { active: number; draft: number }) => void;
   onEditTargetChange?: (open: boolean) => void;
+  /** R8.0: 触发弹唱视图（点击卡片 ▶ 按钮 / 双击行） */
+  onPlaySong?: (songId: string) => void;
 }) {
   const [songsData, setSongsData] = useState<SongsData | null>(null);
   const [query, setQuery] = useState("");
@@ -324,8 +326,8 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                               ? (dark ? "bg-zinc-800/70" : "bg-muted/70")
                               : (dark ? "bg-zinc-800/40 hover:bg-zinc-800/60" : "bg-muted/40 hover:bg-muted/60")}`}
                       >
-                        {/* 歌名 + 展开指示 */}
-                        <div className="flex items-start gap-2">
+                        {/* 歌名 + 展开指示 + 弹唱按钮 */}
+                        <div className="flex items-start gap-1.5">
                           <span className={`flex-1 min-w-0 font-serif text-[14px] leading-snug truncate ${
                             s.status === "draft"
                               ? (dark ? "text-zinc-400" : "text-muted-foreground")
@@ -333,6 +335,23 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange }:
                             title={s.title}>
                             {s.title}
                           </span>
+                          {/* R8.0 弹唱按钮 */}
+                          {onPlaySong && (
+                            <button
+                              type="button"
+                              data-testid={`library-play-${s.id}`}
+                              onClick={e => { e.stopPropagation(); onPlaySong(s.id); }}
+                              title="弹唱这首歌（歌词 + 曲谱 + 模拟时间）"
+                              aria-label={`弹唱 ${s.title}`}
+                              className={`shrink-0 rounded p-1 text-xs transition-colors ${
+                                dark
+                                  ? "text-zinc-500 hover:bg-zinc-700 hover:text-emerald-300"
+                                  : "text-muted-foreground hover:bg-muted hover:text-emerald-700"
+                              }`}
+                            >
+                              ▶
+                            </button>
+                          )}
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                             className={`mt-1 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""} ${dark ? "text-zinc-600" : "text-muted-foreground/60"}`}>
                             <path d="m6 9 6 6 6-6"/>
