@@ -40,6 +40,8 @@ class GridWrapLayout(LayoutPlugin):
     name = "全行网格绕排版"
     pages = 2
     supports_avoidance = True
+    # R4 Runtime v1: 走 SongLibrary 数据通道
+    supported_channels = ("song_library",)
 
     def params(self) -> list[ParamSpec]:
         return [

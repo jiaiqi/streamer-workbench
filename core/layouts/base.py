@@ -11,10 +11,16 @@ P2 R4 通用化：ParamSpec 升级为全平台契约，UI 右侧 Inspector 通�
   - "select"          单选下拉（choices 是 list[str|int|float]）
   - "section_map"     分类→数值映射（专为「每个字数分组的栏数」设计）
   - "group_order"     分类顺序（UI 渲染成上下拖拽列表）
+
+R4 Runtime v1：LayoutPlugin 显式声明 supported_channels（见 channel.py）。
+新 layout 必须从 ("song_library" / "live_session" / "learning_report") 中
+至少选一个；不声明 = 默认空 tuple = 不被任何通道接受（防御性兜底）。
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, List, Literal, Optional
+from typing import Any, ClassVar, List, Literal, Optional
+
+from .channel import DataChannel
 
 
 # UI 渲染侧的 kind 枚举（Literal 比 string 更利于前端类型生成）
@@ -67,6 +73,11 @@ class LayoutPlugin(ABC):
     name: str                            # "全行网格绕排版"
     pages: int | None = None             # 固定页数（如 2）；None = 自动分页
     supports_avoidance: bool = True      # 是否支持 avoid_zones 避让
+    # R4 Runtime v1：该 layout 接受哪些数据通道。子 layout 必须显式覆盖；
+    # 默认空 tuple 表示"未声明"——外部按 channel 找 layout 时会被过滤掉。
+    # 不强制子类必须非空（保留向后兼容：老 layout 没声明时仍能工作，
+    # 显式声明后会出现在 get_layout(channel=...) 列表里）。
+    supported_channels: ClassVar[tuple[DataChannel, ...]] = ()
 
     def get_page_capacity(self, spec) -> int:
         """单页最大内容高度（px），自动分页时使用。默认从画布高度推算。
@@ -110,4 +121,7 @@ class LayoutPlugin(ABC):
             "supports_grouping": ["none", "chars"],
             "page_policy_mode": "legacy-fixed-2",
             "max_density": {},     # {"section": N} 等
+            # R4 Runtime v1：layout 接受的数据通道列表（来自 supported_channels
+            # 类属性；子类重写 capabilities 时应一并返回）。
+            "supported_channels": list(self.supported_channels),
         }

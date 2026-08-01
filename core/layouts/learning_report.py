@@ -107,6 +107,8 @@ class LearningReportLayout(LayoutPlugin):
     name = "学歌报告"
     pages = 1
     supports_avoidance = True
+    # R4 Runtime v1: 走 LearningReportSnapshot 数据通道
+    supported_channels = ("learning_report",)
 
     def params(self) -> list[ParamSpec]:
         return [
@@ -144,6 +146,8 @@ class LearningReportLayout(LayoutPlugin):
                 "artists_max": 10,
             },
             "input_kind": "learning_report_snapshot",
+            # R4 Runtime v1: 与 supported_channels 类属性保持一致
+            "supported_channels": list(self.supported_channels),
         }
 
     def analyze(self, library, canvas, **kwargs) -> dict:

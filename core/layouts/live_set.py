@@ -135,6 +135,8 @@ class LiveSetLayout(LayoutPlugin):
     name = "直播复盘"
     pages = 1                 # 单页布局
     supports_avoidance = True
+    # R4 Runtime v1: 走 LiveSessionSnapshot 数据通道
+    supported_channels = ("live_session",)
 
     def params(self) -> list[ParamSpec]:
         return [
@@ -176,6 +178,8 @@ class LiveSetLayout(LayoutPlugin):
             },
             # 标识这不是从 SongLibrary 派生的
             "input_kind": "live_session_snapshot",
+            # R4 Runtime v1: 与 supported_channels 类属性保持一致
+            "supported_channels": list(self.supported_channels),
         }
 
     def analyze(self, library: LiveSessionSnapshot, canvas, **kwargs) -> dict:

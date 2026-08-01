@@ -197,6 +197,8 @@ class MagazineFlowLayout(LayoutPlugin):
     name = "刊头流式分页"
     pages: int | None = None  # auto: 由 analyze 决定
     supports_avoidance = True
+    # R4 Runtime v1: 走 SongLibrary 数据通道
+    supported_channels = ("song_library",)
 
     def params(self) -> list[ParamSpec]:
         return [
@@ -227,6 +229,7 @@ class MagazineFlowLayout(LayoutPlugin):
             "supports_grouping": list(VALID_AXES),
             "page_policy_mode": "auto",
             "max_density": {"per_page": 36},
+            "supported_channels": list(self.supported_channels),
         }
 
     def analyze(self, library, canvas, axis: str = AXIS_NONE) -> dict:

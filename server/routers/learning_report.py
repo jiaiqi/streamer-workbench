@@ -44,6 +44,8 @@ def api_learning_report_poster(payload: LearningReportPosterRequest, req: Reques
 
     数据流：StatsApplicationService 事件聚合 → LearningReportSnapshot
     → engine.render_page(layout=learning-report)
+    R4 Runtime v1：get_layout("learning-report", channel="learning_report")
+    显式校验通道契约。
 
     days / top_n_artists 范围由 Pydantic 422 拒绝；theme/canvas 范围由本函数 400/404 拒绝。
     """
@@ -73,7 +75,13 @@ def api_learning_report_poster(payload: LearningReportPosterRequest, req: Reques
         days=payload.days,
         top_n_artists=payload.top_n_artists,
     )
-    plugin = get_layout("learning-report")
+    # R4 Runtime v1: 显式声明 channel
+    try:
+        plugin = get_layout("learning-report", channel="learning_report")
+    except KeyError as exc:
+        return api_error_response(
+            req, 500, ApiError("layout_channel_mismatch", str(exc)),
+        )
     # 严格校验画布
     supported = plugin.capabilities().get("supported_canvas_ids", [])
     if payload.canvas_id not in supported:

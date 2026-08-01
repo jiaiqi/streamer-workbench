@@ -286,8 +286,8 @@ def api_live_sessions_poster(
     """R2.5: 渲染 live-set 直播复盘海报，返回 PNG。
 
     数据流：LiveService 状态 → LiveSessionSnapshot → engine.render_page
-    关键：library 是 LiveSessionSnapshot（不是 SongLibrary），
-    live-set layout 通过 duck-typing 识别并直接读 library 字段。
+    R4 Runtime v1：用 get_layout("live-set", channel="live_session") 显式校验
+    通道契约；snapshot 是 LiveSessionSnapshot，layout 读其字段。
     """
     from core.engine import render_page
     from core.layouts import get_layout
@@ -320,7 +320,13 @@ def api_live_sessions_poster(
     snapshot = build_live_session_snapshot(
         live, song_repository=ctx.song_repository,
     )
-    plugin = get_layout("live-set")
+    # R4 Runtime v1: 显式声明 channel，让 capabilities() 校验失败早暴露
+    try:
+        plugin = get_layout("live-set", channel="live_session")
+    except KeyError as exc:
+        return api_error_response(
+            req, 500, ApiError("layout_channel_mismatch", str(exc)),
+        )
     # 严格校验画布（live-set 只支持 9:20/9:16）
     supported = plugin.capabilities().get("supported_canvas_ids", [])
     if payload.canvas_id not in supported:
