@@ -22,9 +22,13 @@ type TopMetric = "request" | "perform" | "practice";
 
 interface StatsViewProps {
   dark: boolean;
+  /** R4.2.1: 用 Top 歌曲 ID 列表创建海报（在父组件切视图 + 选中） */
+  onCreatePosterFromTop?: (songIds: string[], metric: TopMetric) => Promise<void>;
+  /** R4.2.2: 用时间线事件中的歌曲 ID 创建 Preset */
+  onCreatePresetFromFeed?: (songIds: string[], name: string) => Promise<void>;
 }
 
-export default function StatsView({ dark }: StatsViewProps) {
+export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetFromFeed }: StatsViewProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const [posterError, setPosterError] = useState<string | null>(null);
   const [posterSuccess, setPosterSuccess] = useState<string | null>(null);
@@ -125,8 +129,23 @@ export default function StatsView({ dark }: StatsViewProps) {
           ))}
         </div>
         {tab === "overview" && <OverviewPanel dark={dark} />}
-        {tab === "feed" && <FeedPanel dark={dark} />}
-        {tab === "top" && <TopPanel dark={dark} />}
+        {tab === "feed" && (
+          <FeedPanel
+            dark={dark}
+            onCreatePreset={onCreatePresetFromFeed
+              ? (songIds, name) => onCreatePresetFromFeed(songIds, name)
+              : undefined}
+          />
+        )}
+        {tab === "top" && (
+          <TopPanel
+            dark={dark}
+            onCreatePoster={onCreatePosterFromTop
+              ? (songIds, metric) => onCreatePosterFromTop(songIds, metric)
+              : undefined}
+            currentMetric="request"
+          />
+        )}
         {tab === "difficulty" && <DistributionPanel dark={dark} metric="difficulty" />}
         {tab === "key" && <DistributionPanel dark={dark} metric="key" />}
       </div>
@@ -205,10 +224,12 @@ function MetricCard({ label, value, color, dark }: {
   );
 }
 
-function FeedPanel({ dark }: { dark: boolean }) {
+function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (songIds: string[], name: string) => Promise<void> }) {
   const [data, setData] = useState<FeedResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
   const [limit, setLimit] = useState(50);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const req = useLatestRequest<FeedResponse>({ isEmpty: d => d.items.length === 0 && !d.note });
 
   const load = (n: number) => {
@@ -219,6 +240,35 @@ function FeedPanel({ dark }: { dark: boolean }) {
   };
 
   useEffect(() => { load(limit); /* eslint-disable-next-line */ }, [limit]);
+
+  const handleCreatePreset = async () => {
+    if (!onCreatePreset || !data || data.items.length === 0 || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      // 从事件中抽去重 song_id（保留顺序）
+      const seen = new Set<string>();
+      const songIds: string[] = [];
+      for (const item of data.items) {
+        const songId = (item as unknown as { song_id?: string }).song_id;
+        if (songId && !seen.has(songId)) {
+          seen.add(songId);
+          songIds.push(songId);
+        }
+      }
+      if (songIds.length === 0) {
+        setCreateError("时间线中没有可用的 song_id");
+        return;
+      }
+      const today = new Date();
+      const stamp = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+      await onCreatePreset(songIds, `时间线 ${stamp}`);
+    } catch (reason) {
+      setCreateError(reason instanceof Error ? reason.message : "创建 Preset 失败");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
   if (!data) return (
@@ -237,23 +287,54 @@ function FeedPanel({ dark }: { dark: boolean }) {
   />;
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <p className={`text-xs ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
           最近 {data.items.length} 条事件, 最新在前
         </p>
-        <select
-          value={limit}
-          onChange={e => setLimit(Number(e.target.value))}
-          aria-label="时间线条目数量"
-          className={`text-xs rounded-lg px-2 py-1 outline-none ${
-            dark ? "bg-zinc-800 text-zinc-200 border border-zinc-700" : "bg-card text-foreground border border-border"
-          }`}
-        >
-          <option value={20}>20 条</option>
-          <option value={50}>50 条</option>
-          <option value={100}>100 条</option>
-        </select>
+        <div className="flex items-center gap-2">
+          {onCreatePreset && (
+            <button
+              type="button"
+              className="secondary-action"
+              data-testid="feed-create-preset"
+              data-loading={creating ? "true" : "false"}
+              disabled={creating}
+              aria-busy={creating}
+              onClick={() => { void handleCreatePreset(); }}
+              title="从时间线去重的歌曲创建 Preset"
+            >
+              {creating ? (
+                <>
+                  <Spinner size="sm" tone="current" decorative />
+                  <span className="ml-1.5">创建中…</span>
+                </>
+              ) : "据此创建 Preset"}
+            </button>
+          )}
+          <select
+            value={limit}
+            onChange={e => setLimit(Number(e.target.value))}
+            aria-label="时间线条目数量"
+            className={`text-xs rounded-lg px-2 py-1 outline-none ${
+              dark ? "bg-zinc-800 text-zinc-200 border border-zinc-700" : "bg-card text-foreground border border-border"
+            }`}
+          >
+            <option value={20}>20 条</option>
+            <option value={50}>50 条</option>
+            <option value={100}>100 条</option>
+          </select>
+        </div>
       </div>
+      {createError && (
+        <ErrorBanner
+          severity="error"
+          title="创建 Preset 失败"
+          message={createError}
+          onDismiss={() => setCreateError(null)}
+          dark={dark}
+          className="mb-3"
+        />
+      )}
       <ul className="space-y-1.5 stagger-list" role="list">
         {data.items.map(item => <FeedRow key={item.event_id} item={item} dark={dark} />)}
       </ul>
@@ -283,10 +364,12 @@ function FeedRow({ item, dark }: { item: import("../api/generated").FeedItemResp
   );
 }
 
-function TopPanel({ dark }: { dark: boolean }) {
-  const [metric, setMetric] = useState<TopMetric>("request");
+function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCreatePoster?: (songIds: string[], metric: TopMetric) => Promise<void>; currentMetric: TopMetric }) {
+  const [metric, setMetric] = useState<TopMetric>(currentMetric);
   const [data, setData] = useState<TopSongsResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const req = useLatestRequest<TopSongsResponse>({ isEmpty: d => d.items.length === 0 && !d.note });
 
   useEffect(() => {
@@ -313,9 +396,22 @@ function TopPanel({ dark }: { dark: boolean }) {
   />;
 
   const max = data.items[0]?.count || 1;
+  const handleCreatePoster = async () => {
+    if (!onCreatePoster || !data || data.items.length === 0 || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const songIds = data.items.map(item => item.song_id).filter(id => !!id);
+      await onCreatePoster(songIds, metric);
+    } catch (reason) {
+      setCreateError(reason instanceof Error ? reason.message : "创建海报失败");
+    } finally {
+      setCreating(false);
+    }
+  };
   return (
     <div>
-      <div className="flex items-center gap-1 mb-3">
+      <div className="flex items-center gap-1 mb-3 flex-wrap">
         {([
           ["request", "点歌 Top"],
           ["perform", "演唱 Top"],
@@ -337,7 +433,36 @@ function TopPanel({ dark }: { dark: boolean }) {
             {label}
           </button>
         ))}
+        {onCreatePoster && data && data.items.length > 0 && (
+          <button
+            type="button"
+            className="ml-auto secondary-action"
+            data-testid="top-create-poster"
+            data-loading={creating ? "true" : "false"}
+            disabled={creating}
+            aria-busy={creating}
+            onClick={() => { void handleCreatePoster(); }}
+            title={`用这 ${data.items.length} 首创建海报`}
+          >
+            {creating ? (
+              <>
+                <Spinner size="sm" tone="current" decorative />
+                <span className="ml-1.5">创建中…</span>
+              </>
+            ) : `据此创建海报（${data.items.length} 首）`}
+          </button>
+        )}
       </div>
+      {createError && (
+        <ErrorBanner
+          severity="error"
+          title="创建海报失败"
+          message={createError}
+          onDismiss={() => setCreateError(null)}
+          dark={dark}
+          className="mb-3"
+        />
+      )}
       <ul className="space-y-2 stagger-list" role="list">
         {data.items.map((item, idx) => (
           <li

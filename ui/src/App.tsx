@@ -8,7 +8,7 @@
 /// 工作台视图专属的状态（themes / selTheme / page / canvas / avoid / params /
 /// renderKey / loading / previewError / hasFrame / 持久化 / 防抖 / 派生）全部由
 /// `useWorkspaceState` 接管。
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { CANVAS_OPTIONS } from "./types";
 import { Icon } from "./icons";
 import LibraryView from "./views/LibraryView";
@@ -23,6 +23,7 @@ import ColumnTemplatePicker from "./components/ColumnTemplatePicker";
 import CommandPalette, { type Command } from "./components/CommandPalette";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
+import { savePoster } from "./api/posters";
 import type { AppearanceSettings, Settings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 import SpecialPostersPanel from "./posters/SpecialPostersPanel";
@@ -100,6 +101,55 @@ export default function App() {
       })
       .catch(() => { /* 工作台自己的 effect 会捕获资源错误 */ });
     return () => { active = false; };
+  }, []);
+
+  /* ---- R4.2 数据反哺创作 ---- */
+  const handleCreatePosterFromTop = useCallback(async (songIds: string[], metric: string) => {
+    if (songIds.length === 0) throw new Error("Top 歌曲为空");
+    const today = new Date();
+    const stamp = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+    const metricLabel: Record<string, string> = { request: "点歌", perform: "演唱", practice: "练习" };
+    const res = await savePoster({
+      name: `Top ${songIds.length}（${metricLabel[metric] ?? metric}）${stamp}`,
+      song_source: { type: "manual" },
+      selected_song_ids: songIds,
+      layout_id: posterStore.current.layout_id,
+      theme_id: ws.selTheme || undefined,
+      canvas_id: ws.canvas,
+      page_policy: posterStore.current.layout_id === "grid-wrap"
+        ? { mode: "legacy-fixed-2" }
+        : { mode: "auto", min_pages: 1, max_pages: 8 },
+      parameters: ws.params,
+      export_settings: {
+        format: "png",
+        jpeg_quality: 92,
+        single_page: false,
+        dpi: 144,
+      },
+    });
+    setView("workspace");
+    await posterStore.select(res.id);
+  }, [posterStore, ws.selTheme, ws.canvas, ws.params]);
+
+  const handleCreatePresetFromFeed = useCallback(async (songIds: string[], name: string) => {
+    if (songIds.length === 0) throw new Error("时间线歌曲 ID 为空");
+    await apiRequest("/api/presets", {
+      method: "POST",
+      body: {
+        schema_version: 2,
+        id: "",
+        name,
+        song_query: {
+          status: "active",
+          classify: "manual",
+          sort_by: "default",
+          max_songs: 0,
+          custom_ids: songIds,
+          unresolved: [],
+        },
+        layout_id: "grid-wrap",
+      },
+    });
   }, []);
 
   /* ---- 跨视图：快捷键 ---- */
@@ -494,7 +544,13 @@ export default function App() {
           {view === "live" && <LiveView dark={dark} />}
 
           {/* ===== 统计视图 (R4) ===== */}
-          {view === "stats" && <StatsView dark={dark} />}
+          {view === "stats" && (
+            <StatsView
+              dark={dark}
+              onCreatePosterFromTop={handleCreatePosterFromTop}
+              onCreatePresetFromFeed={handleCreatePresetFromFeed}
+            />
+          )}
 
           {/* ===== RIGHT: params（仅工作台视图显示，<800px 隐藏） ===== */}
           {inWorkspace && (
