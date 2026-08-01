@@ -27,6 +27,7 @@ import type {
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
 import { openQuickView, openLivePoster, isElectron } from "../electron-bridge";
 import { asRecord, asString, asNumber, asBoolean } from "../lib/narrow";
+import StatusBadge from "../components/StatusBadge";
 
 /* ================== 类型 narrow helpers (R4.1.7 改用 lib/narrow) ================== */
 
@@ -364,6 +365,7 @@ export default function LiveView({ dark }: { dark: boolean }) {
                       key={s.id}
                       session={s}
                       active={s.id === activeId}
+                      dark={dark}
                       onSelect={() => setActiveId(s.id)}
                     />
                   ))}
@@ -419,13 +421,12 @@ export default function LiveView({ dark }: { dark: boolean }) {
 
 /* ================== 子组件 ================== */
 
-function SessionCard({ session, active, onSelect }: {
+function SessionCard({ session, active, dark, onSelect }: {
   session: LiveSessionSummary;
+  dark: boolean;
   active: boolean;
   onSelect: () => void;
 }) {
-  const stateColor = session.state === "active"
-    ? "var(--color-primary)" : "var(--color-muted-foreground)";
   return (
     <button
       type="button"
@@ -438,14 +439,17 @@ function SessionCard({ session, active, onSelect }: {
       }`}
     >
       <div className="flex items-center gap-2">
-        <span className="inline-block h-2 w-2 rounded-full" style={{ background: stateColor }} />
+        <StatusBadge
+          kind={session.state === "active" ? "active" : "closed"}
+          label={STATE_LABEL[session.state] ?? session.state}
+          compact
+          dark={dark}
+        />
         <span className="text-sm font-medium truncate">
           {session.title || `会话 ${shortId(session.id)}`}
         </span>
       </div>
       <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span>{STATE_LABEL[session.state] ?? session.state}</span>
-        <span>·</span>
         <span>队列 {session.queue_size ?? 0}</span>
         <span>·</span>
         <span>{shortId(session.id)}</span>
@@ -461,6 +465,7 @@ function SessionDetail({
   posterLoading,
 }: {
   session: LiveSessionSummary;
+  dark: boolean;
   detail: LiveSessionDetail | null;
   queue: QueueEntry[];
   performances: PerformanceRecord[];
@@ -484,7 +489,7 @@ function SessionDetail({
         </h1>
         <span className="text-xs text-muted-foreground">·</span>
         <span className="text-xs text-muted-foreground">
-          {STATE_LABEL[session.state] ?? session.state} · {shortId(session.id)}
+          {shortId(session.id)}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" className="secondary-action" onClick={onRefresh}>
