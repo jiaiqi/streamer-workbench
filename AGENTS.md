@@ -67,8 +67,7 @@
               R4.0 ✅  Phase 1 收口（6dbdc63 — layout helper + 导出反馈 + streak + .gitignore）
               R4.0 ✅  Phase 2 收口（feat-0801 — useWorkspaceState 拆解 + 专用海报区 + 海报真保存 + 暗色 hardcode 收口发现是空集）
               R4.1 ✅  视觉与体验统一（4 组件 + Cmd+K + narrow helper + selLayout 已删）
-              R4.2 ⬜  数据反哺创作补完（Top 歌曲 / 时间线 → 创建海报/Preset + 导出历史）
-              R4.2 ⬜  数据反哺创作补完（Top 歌曲 / 时间线 → 创建海报/Preset + 导出历史）
+              R4.2 🟡  数据反哺创作补完（R4.2.1+2 收口：Top 歌曲/时间线 → 创建海报/Preset；R4.2.3 导出历史待办）
               R4-R7 ⬜  Layout Runtime v1 抽象 + 数据反哺 + 桌面发布门（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
 桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
 UI        ~96%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 均可用
