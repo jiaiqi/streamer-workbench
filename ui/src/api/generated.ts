@@ -235,6 +235,12 @@ export interface LiveSessionEntitlementResponse {
   [key: string]: unknown;
 }
 
+export interface LiveSessionPosterRequest {
+  "canvas_id"?: string;
+  "parameters"?: Record<string, unknown>;
+  "theme_id"?: string;
+}
+
 export interface LiveSessionQueueRequest {
   "command_id"?: string | null;
   "entitlement_id"?: string | null;

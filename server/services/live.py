@@ -137,6 +137,16 @@ class LiveService:
     def performances(self) -> dict[str, PerformanceRecord]:
         return dict(self._performances)
 
+    @property
+    def requests(self) -> dict[str, SongRequest]:
+        """R2.5 live-set 海报：所有点歌请求。"""
+        return dict(self._requests)
+
+    @property
+    def queue_entries(self) -> list[QueueEntry]:
+        """R2.5 live-set 海报：当前队列（已唱/已取消会被移除）。"""
+        return list(self._queue)
+
     # ── 会话生命周期 ──
 
     def close(self, *, reason: str = "broadcaster") -> None:

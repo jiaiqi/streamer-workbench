@@ -25,7 +25,7 @@ import type {
   LiveSessionSummary,
 } from "../api/generated";
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
-import { openQuickView, isElectron } from "../electron-bridge";
+import { openQuickView, openLivePoster, isElectron } from "../electron-bridge";
 
 /* ================== 类型 narrow helpers ================== */
 
@@ -370,6 +370,7 @@ export default function LiveView({ dark }: { dark: boolean }) {
               onRecord={handleRecord}
               onRefresh={() => loadDetail(activeSession.id)}
               onOpenManualPicker={() => setManualPickerOpen(true)}
+              onExportPosterError={setActionError}
             />
           )}
 
@@ -425,6 +426,7 @@ function SessionCard({ session, active, onSelect }: {
 function SessionDetail({
   session, detail, queue, performances, isActive, songTitle,
   songs, onClose, onRecord, onRefresh, onOpenManualPicker,
+  onExportPosterError,
 }: {
   session: LiveSessionSummary;
   detail: LiveSessionDetail | null;
@@ -437,6 +439,7 @@ function SessionDetail({
   onRecord: (requestId: string, result: string) => void;
   onRefresh: () => void;
   onOpenManualPicker: () => void;
+  onExportPosterError: (msg: string) => void;
 }) {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -451,6 +454,23 @@ function SessionDetail({
         <div className="ml-auto flex items-center gap-2">
           <button type="button" className="secondary-action" onClick={onRefresh}>
             刷新
+          </button>
+          {/* R2.5: 导出直播复盘海报（live-set 布局） */}
+          <button
+            type="button"
+            className="secondary-action"
+            data-testid="live-export-poster"
+            title="把这场直播生成 live-set 复盘海报"
+            onClick={async () => {
+              try {
+                await openLivePoster(session.id);
+              } catch (err) {
+                console.error("导出复盘海报失败", err);
+                onExportPosterError(err instanceof Error ? err.message : "导出失败");
+              }
+            }}
+          >
+            复盘海报
           </button>
           <a
             href={`/quick?session=${session.id}`}

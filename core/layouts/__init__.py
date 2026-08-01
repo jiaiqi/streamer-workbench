@@ -1,10 +1,12 @@
 """排版插件注册表。MVP 手写注册，后期如需再改目录扫描。"""
 from .grid_wrap import GridWrapLayout
 from .magazine_flow import MagazineFlowLayout
+from .live_set import LiveSetLayout
 
 REGISTRY = {
     "grid-wrap": GridWrapLayout(),
     "magazine-flow": MagazineFlowLayout(),
+    "live-set": LiveSetLayout(),
 }
 
 

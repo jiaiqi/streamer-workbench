@@ -32,3 +32,41 @@ export function openQuickView(
   // 浏览器模式：让外层 <a target="_blank"> 走默认行为
   // 此函数不主动调用，调用方应使用 <a> 让浏览器打开
 }
+
+/**
+ * R2.5: 渲染并打开直播复盘海报 PNG。
+ * @param sessionId LiveSession id
+ * @param baseUrl API 根（默认当前 origin）
+ * @param authToken 会话令牌（packaged 模式需要）
+ */
+export async function openLivePoster(
+  sessionId: string,
+  baseUrl: string = window.location.origin,
+  authToken: string = "",
+): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (authToken) headers["X-Session-Token"] = authToken;
+  const res = await fetch(
+    `${baseUrl}/api/live-sessions/${encodeURIComponent(sessionId)}/poster`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({
+        theme_id: "海洋柔光",
+        canvas_id: "抖音全屏 9:20",
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`live-set 海报渲染失败：HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  // 浏览器在 window 被关时自动释放；Electron popup blocker 兜底
+  if (!w) {
+    console.warn("openLivePoster: 浏览器拦截了新窗口打开");
+  }
+  // 30 秒后释放 blob URL（足够用户操作）
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}

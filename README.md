@@ -107,6 +107,8 @@ cd ui; npx tsc --noEmit
 - 歌曲与曲谱：`/api/songs*`、`/api/songs/{identity}/tabs`（`song_id` 优先，title 仅为迁移期兼容）；
 - 渲染与导出：`GET /api/render`、`POST /api/export`、`POST /api/export/batch`；
 - 事件、设置、预设：`/api/events*`、`/api/settings`、`/api/presets*`；预设支持复制、软删除与 `POST /api/presets/{id}/default` 默认切换。
+- 直播：`/api/live-sessions*`（7 端点）+ `POST /api/live-sessions/{id}/poster`（R2.5 live-set 复盘海报，事件驱动数据通道，绕开曲库）。
+- 学歌发现 & 数据统计：`/api/discovery/{recent-learned,request-hot,recommend}`、`/api/stats/{overview,feed,top-songs,distribution}`。
 
 目标 API 契约和迁移阶段见主规格 §10.3 与路线图 R0；README 不重复维护完整参数表。
 

@@ -416,6 +416,17 @@ class LiveSessionEntitlementResponse(BaseModel):
     expires_at: str | None = None
 
 
+class LiveSessionPosterRequest(StrictRequest):
+    """R2.5: POST /api/live-sessions/{id}/poster - 渲染直播复盘海报。
+
+    library 是 LiveSessionSnapshot（不通过 SongLibrary），所以不传 song_ids；
+    只传 theme/canvas/parameters 走 live-set 自己的 ParamSpec。
+    """
+    theme_id: str = "海洋柔光"
+    canvas_id: str = "抖音全屏 9:20"
+    parameters: dict = Field(default_factory=dict)
+
+
 # ── P4 R2 学歌练习 HTTP 模型 ───────────────────────────────────
 
 class PracticeLogRequest(StrictRequest):

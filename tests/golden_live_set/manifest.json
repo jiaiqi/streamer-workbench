@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "engine": "live-set-r25",
+  "theme": "海洋柔光",
+  "canvas": "抖音全屏 9:20",
+  "generated_at": "2026-08-01T09:54:24",
+  "entries": [
+    {
+      "path": "tests/golden_live_set/海洋柔光-抖音全屏 9:20-01-empty.png",
+      "sha256": "90437e5c6412a6f6cc1d0612afd487dcf9c3198ea3b2ed941f8e50a85678132e",
+      "size": 1662970
+    },
+    {
+      "path": "tests/golden_live_set/海洋柔光-抖音全屏 9:20-02-single.png",
+      "sha256": "15d63b6b3bef405df368c1320029d33728a8368a7f11775417f31c0a2d4ad875",
+      "size": 1647177
+    },
+    {
+      "path": "tests/golden_live_set/海洋柔光-抖音全屏 9:20-03-multi.png",
+      "sha256": "f834773e64fcf00ce0dc157527a30da42a1f0c46cbb021cb1bc316f4ea181e0b",
+      "size": 1678339
+    },
+    {
+      "path": "tests/golden_live_set/海洋柔光-抖音全屏 9:20-04-large.png",
+      "sha256": "aafd08cd5a052d99f976dbbdf2dc0322949b886b8aa1b93be555c2f169aa81f8",
+      "size": 1735149
+    },
+    {
+      "path": "tests/golden_live_set/海洋柔光-抖音全屏 9:20-05-mixed.png",
+      "sha256": "6e63eb21642f9421419c67d6a9a58ad6407ffd742c9fd0a00314cb175c64d507",
+      "size": 1670018
+    }
+  ]
+}

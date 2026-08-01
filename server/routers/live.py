@@ -8,12 +8,15 @@
 - POST   /api/live-sessions/{id}/record      记录演唱结果
 - POST   /api/live-sessions/{id}/close       关闭
 - POST   /api/live-sessions/{id}/entitlements 授予权益
+- POST   /api/live-sessions/{id}/poster      R2.5 live-set 直播复盘海报
 """
 from __future__ import annotations
 
+import io
 from dataclasses import asdict
 
 from fastapi import APIRouter, Request
+from fastapi.responses import Response
 
 from server.api.errors import ApiError
 from server.api.handlers import api_error_response
@@ -24,6 +27,7 @@ from server.api.secondary_models import (
     LiveSessionEntitlementResponse,
     LiveSessionQueueRequest,
     LiveSessionQueueResponse,
+    LiveSessionPosterRequest,
     LiveSessionRecordRequest,
     LiveSessionRecordResponse,
     LiveSessionSummary,
@@ -33,6 +37,7 @@ from server.services.live import LiveServiceError
 from server.services.live_persistence import (
     LiveSessionPersistenceService,
 )
+from server.services.live_poster import build_live_session_snapshot
 from server.services.entitlements import EntitlementServiceError
 
 
@@ -258,3 +263,93 @@ def api_live_sessions_grant(
         granted_at=grant.granted_at,
         expires_at=grant.expires_at,
     )
+
+
+# ── R2.5 live-set 直播复盘海报 ──
+
+@router.post(
+    "/api/live-sessions/{session_id}/poster",
+    responses={200: {"content": {"image/png": {}}}},
+)
+def api_live_sessions_poster(
+    session_id: str, payload: LiveSessionPosterRequest, req: Request,
+):
+    """R2.5: 渲染 live-set 直播复盘海报，返回 PNG。
+
+    数据流：LiveService 状态 → LiveSessionSnapshot → engine.render_page
+    关键：library 是 LiveSessionSnapshot（不是 SongLibrary），
+    live-set layout 通过 duck-typing 识别并直接读 library 字段。
+    """
+    from core.engine import render_page
+    from core.layouts import get_layout
+    from core.spec import get_canvas_spec
+    from core.themes.loader import load_themes
+
+    persistence = _service(req)
+    live = persistence.get_live(session_id)
+    if live is None:
+        return api_error_response(
+            req, 404, ApiError("live_session_not_found",
+                                f"会话不存在：{session_id}"),
+        )
+
+    ctx = get_app_context(req)
+    themes = load_themes(str(ctx.paths.themes_dir))
+    if payload.theme_id not in themes:
+        return api_error_response(
+            req, 404, ApiError("theme_not_found",
+                                f"未知主题：{payload.theme_id}"),
+        )
+    theme = themes[payload.theme_id]
+    try:
+        spec = get_canvas_spec(payload.canvas_id, avoid=True)
+    except (ValueError, KeyError) as exc:
+        return api_error_response(
+            req, 404, ApiError("canvas_not_found", str(exc)),
+        )
+
+    snapshot = build_live_session_snapshot(
+        live, song_repository=ctx.song_repository,
+    )
+    plugin = get_layout("live-set")
+    # 严格校验画布（live-set 只支持 9:20/9:16）
+    supported = plugin.capabilities().get("supported_canvas_ids", [])
+    if payload.canvas_id not in supported:
+        return api_error_response(
+            req, 400, ApiError("canvas_not_supported",
+                                f"live-set 不支持画布 {payload.canvas_id}；"
+                                f"可选：{supported}"),
+        )
+    font_path = str(ctx.paths.fonts_dir / "MaokenAssortedSans.ttf")
+    img = render_page(theme, plugin, snapshot, spec, 1, font_path)
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return Response(buf.getvalue(), media_type="image/png")
+
+
+@router.get(
+    "/api/live-sessions/{session_id}/poster/analyze",
+)
+def api_live_sessions_poster_analyze(session_id: str, req: Request):
+    """R2.5: 报告 live-set 海报的元数据（页数 / 数量 / 桶分布）。"""
+    from core.layouts import get_layout
+
+    persistence = _service(req)
+    live = persistence.get_live(session_id)
+    if live is None:
+        return api_error_response(
+            req, 404, ApiError("live_session_not_found",
+                                f"会话不存在：{session_id}"),
+        )
+    ctx = get_app_context(req)
+    snapshot = build_live_session_snapshot(
+        live, song_repository=ctx.song_repository,
+    )
+    plugin = get_layout("live-set")
+    # 临时 canvas 给 analyze 用
+    from core.spec import CanvasSpec
+    canvas = CanvasSpec(width=1080, height=2400, margin=58)
+    report = plugin.analyze(snapshot, canvas)
+    report["session_id"] = session_id
+    report["session_title"] = live.session.title
+    return report

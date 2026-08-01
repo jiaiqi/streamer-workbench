@@ -25,7 +25,8 @@
 6. **Palette v1 只包含 5 个颜色角色**（text/label/pill/line/mist）+ font_roles（title/label/song/note）。不把 UI token（surface/border/accent）混入海报 Palette。
 7. **Anchors/subjects 使用 0–1 归一化坐标**。像素输入仅作为兼容层。
 8. **`halo` 和 `vinyl-rings` 已统一为 `subject-orbit`**，不重复实现。
-9. **编辑器（R7）只在 3 套新布局上线并被真实使用后启动**，不提前造完整图片编辑器。
+9. **R2.5 live-set 走 `LiveSessionSnapshot` 数据通道**，不与 grid-wrap / magazine-flow 共享 SongLibrary 路径。live-set 的 library 是事件驱动快照，不是曲库快照。
+10. **编辑器（R7）只在 3 套新布局上线并被真实使用后启动**，不提前造完整图片编辑器。
 10. **`design/archive/` 中的文档已退役**。只允许追溯历史，不得据此判断当前状态或执行顺序；当前真相以主规格、路线图、数据路线图和 ADR 为准。
 
 ---
@@ -55,10 +56,11 @@
               R1a ✅ 海报闭环（领域/仓储/服务/API/样例/能力/RenderDocument/UI 接入 + 自动保存）
               R1b ✅ magazine-flow 自动分页（6 分类轴 + analyze HTTP + 新金标准 6 PNG + LayoutPicker）
               R2     ✅ 直播核心纵切（领域 + 核销 + 决策 + LiveService + 持久化 + 7 端点）
+              R2.5 ✅ live-set 直播复盘海报（LiveSessionSnapshot 数据通道 + 5 PNG 金标准 + 复盘海报按钮）
                           Electron 壳与置顶速查窗口 ⬜（P3-Electron 冲刺）
               R3-R7  ⬜ 学歌/统计/编辑器（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
 桌面壳    spike 已过  正式壳 ⬜
-UI        ~85%       工作台/歌曲库/学歌/速查/海报/直播会话均可用
+UI        ~88%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报 均可用
 ```
 
 ### 技术栈
