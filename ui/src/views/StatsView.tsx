@@ -13,6 +13,9 @@ import type {
 import { toRequestFailure, type RequestFailure, useLatestRequest } from "../async/requestState";
 import { Icon } from "../icons";
 import { openLearningReportPoster } from "../electron-bridge";
+import Spinner from "../components/Spinner";
+import ErrorBanner from "../components/ErrorBanner";
+import EmptyState from "../components/EmptyState";
 
 type Tab = "overview" | "feed" | "top" | "difficulty" | "key";
 type TopMetric = "request" | "perform" | "practice";
@@ -143,9 +146,21 @@ function OverviewPanel({ dark }: { dark: boolean }) {
       .catch(reason => setError(toRequestFailure(reason)));
   }, []); // eslint-disable-line
 
-  if (error) return <ErrorNotice message={error.message} dark={dark} />;
-  if (!data) return <LoadingCard dark={dark} />;
-  if (data.note) return <EmptyNotice note={data.note} dark={dark} />;
+  if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
+  if (!data) return (
+    <div className={`h-40 rounded-2xl flex items-center justify-center ${dark ? "bg-zinc-800/60" : "bg-muted/70"}`}>
+      <Spinner size="lg" tone="primary" label="加载统计" />
+    </div>
+  );
+  if (data.note) return <EmptyState
+    icon={Icon.barChart}
+    title="数据开始积累中"
+    description={data.note}
+    secondaryLabel="重试"
+    onSecondary={retry}
+    dark={dark}
+    data-testid="stats-empty"
+  />;
 
   const cards = [
     { label: "总事件", value: data.total_events, color: "primary" },
@@ -205,9 +220,21 @@ function FeedPanel({ dark }: { dark: boolean }) {
 
   useEffect(() => { load(limit); /* eslint-disable-next-line */ }, [limit]);
 
-  if (error) return <ErrorNotice message={error.message} dark={dark} />;
-  if (!data) return <LoadingCard dark={dark} />;
-  if (data.note) return <EmptyNotice note={data.note} dark={dark} />;
+  if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
+  if (!data) return (
+    <div className={`h-40 rounded-2xl flex items-center justify-center ${dark ? "bg-zinc-800/60" : "bg-muted/70"}`}>
+      <Spinner size="lg" tone="primary" label="加载统计" />
+    </div>
+  );
+  if (data.note) return <EmptyState
+    icon={Icon.barChart}
+    title="数据开始积累中"
+    description={data.note}
+    secondaryLabel="重试"
+    onSecondary={retry}
+    dark={dark}
+    data-testid="stats-empty"
+  />;
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -269,9 +296,21 @@ function TopPanel({ dark }: { dark: boolean }) {
       .catch(reason => setError(toRequestFailure(reason)));
   }, [metric]); // eslint-disable-line
 
-  if (error) return <ErrorNotice message={error.message} dark={dark} />;
-  if (!data) return <LoadingCard dark={dark} />;
-  if (data.note) return <EmptyNotice note={data.note} dark={dark} />;
+  if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
+  if (!data) return (
+    <div className={`h-40 rounded-2xl flex items-center justify-center ${dark ? "bg-zinc-800/60" : "bg-muted/70"}`}>
+      <Spinner size="lg" tone="primary" label="加载统计" />
+    </div>
+  );
+  if (data.note) return <EmptyState
+    icon={Icon.barChart}
+    title="数据开始积累中"
+    description={data.note}
+    secondaryLabel="重试"
+    onSecondary={retry}
+    dark={dark}
+    data-testid="stats-empty"
+  />;
 
   const max = data.items[0]?.count || 1;
   return (
@@ -363,9 +402,21 @@ function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficult
       .catch(reason => setError(toRequestFailure(reason)));
   }, [metric]); // eslint-disable-line
 
-  if (error) return <ErrorNotice message={error.message} dark={dark} />;
-  if (!data) return <LoadingCard dark={dark} />;
-  if (data.note) return <EmptyNotice note={data.note} dark={dark} />;
+  if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
+  if (!data) return (
+    <div className={`h-40 rounded-2xl flex items-center justify-center ${dark ? "bg-zinc-800/60" : "bg-muted/70"}`}>
+      <Spinner size="lg" tone="primary" label="加载统计" />
+    </div>
+  );
+  if (data.note) return <EmptyState
+    icon={Icon.barChart}
+    title="数据开始积累中"
+    description={data.note}
+    secondaryLabel="重试"
+    onSecondary={retry}
+    dark={dark}
+    data-testid="stats-empty"
+  />;
   const max = data.buckets.reduce((m, b) => Math.max(m, b.count), 1);
   return (
     <div className="space-y-2 stagger-list" role="list">
@@ -390,33 +441,5 @@ function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficult
         </div>
       ))}
     </div>
-  );
-}
-
-function ErrorNotice({ message, dark }: { message: string; dark: boolean }) {
-  return (
-    <div className={`text-sm px-4 py-6 text-center rounded-xl ${
-      dark ? "bg-rose-500/10 text-rose-400" : "bg-rose-50 text-rose-700"
-    }`}>
-      {message}
-    </div>
-  );
-}
-
-function EmptyNotice({ note, dark }: { note: string; dark: boolean }) {
-  return (
-    <div className={`text-sm px-4 py-12 text-center rounded-xl ${
-      dark ? "bg-zinc-800/40 text-zinc-400" : "bg-muted text-muted-foreground"
-    }`}>
-      <div className="mb-2 opacity-70 inline-block">{Icon.barChart}</div>
-      <p>{note}</p>
-      <p className="mt-2 text-xs opacity-60">标记学会 / 启动直播 / 打卡 让数据开始积累</p>
-    </div>
-  );
-}
-
-function LoadingCard({ dark }: { dark: boolean }) {
-  return (
-    <div className={`h-40 rounded-2xl animate-pulse ${dark ? "bg-zinc-800/60" : "bg-muted/70"}`} />
   );
 }
