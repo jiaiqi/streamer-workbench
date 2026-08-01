@@ -190,6 +190,59 @@ class LearningReportApiTests(unittest.TestCase):
                     self.assertGreaterEqual(data["total_practice_minutes"], 30)
         asyncio.run(scenario())
 
+    # ── R4.0: days / top_n_artists 范围校验 ──
+
+    def test_analyze_days_out_of_range_rejected(self):
+        """R4.0: days=0/366/1000 必须被 FastAPI Query 校验为 422。"""
+        async def scenario():
+            with tempfile.TemporaryDirectory() as raw:
+                app = _boot_app(Path(raw))
+                async with app.router.lifespan_context(app):
+                    for bad in (0, -1, 366, 1000):
+                        st, _, _ = await _raw_request(
+                            app, "GET", f"/api/learning-report/analyze?days={bad}",
+                        )
+                        self.assertEqual(
+                            st, 422,
+                            f"days={bad} 应被 422 拒绝，实际 {st}",
+                        )
+        asyncio.run(scenario())
+
+    def test_analyze_top_n_out_of_range_rejected(self):
+        """R4.0: top_n_artists=0/21 必须被 FastAPI Query 校验为 422。"""
+        async def scenario():
+            with tempfile.TemporaryDirectory() as raw:
+                app = _boot_app(Path(raw))
+                async with app.router.lifespan_context(app):
+                    for bad in (0, -3, 21, 999):
+                        st, _, _ = await _raw_request(
+                            app, "GET",
+                            f"/api/learning-report/analyze?top_n_artists={bad}",
+                        )
+                        self.assertEqual(
+                            st, 422,
+                            f"top_n_artists={bad} 应被 422 拒绝，实际 {st}",
+                        )
+        asyncio.run(scenario())
+
+    def test_poster_days_out_of_range_rejected(self):
+        """R4.0: POST 端点 days=0/366 由 Pydantic 422 拒绝。"""
+        async def scenario():
+            with tempfile.TemporaryDirectory() as raw:
+                app = _boot_app(Path(raw))
+                async with app.router.lifespan_context(app):
+                    for bad in (0, 400):
+                        st, _, _ = await _raw_request(
+                            app, "POST", "/api/learning-report/poster",
+                            {"theme_id": "海洋柔光", "canvas_id": "抖音全屏 9:20",
+                             "days": bad},
+                        )
+                        self.assertEqual(
+                            st, 422,
+                            f"days={bad} 应被 422 拒绝，实际 {st}",
+                        )
+        asyncio.run(scenario())
+
 
 if __name__ == "__main__":
     unittest.main()

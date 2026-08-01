@@ -17,6 +17,7 @@ from datetime import date, datetime
 from typing import Any, List, Optional
 
 from server.ports.repositories import EventQuery
+from core.data.events import compute_streaks  # R4.0: 共享 streak 算法
 
 
 # ===== DTO =====
@@ -163,30 +164,10 @@ class StatsApplicationService:
         )
 
     def _compute_streaks(self, dates: set[str]) -> tuple[int, int]:
-        if not dates:
-            return (0, 0)
-        from datetime import date as _date
-        from datetime import timedelta
-        sorted_dates = sorted(dates)
-        # longest
-        longest = 1
-        cur = 1
-        for i in range(1, len(sorted_dates)):
-            d_prev = _date.fromisoformat(sorted_dates[i - 1])
-            d_cur = _date.fromisoformat(sorted_dates[i])
-            if (d_cur - d_prev).days == 1:
-                cur += 1
-                longest = max(longest, cur)
-            else:
-                cur = 1
-        # current: 从今天往回数
-        today = _date.today()
-        current = 0
-        d = today
-        while d.isoformat() in dates:
-            current += 1
-            d -= timedelta(days=1)
-        return (current, longest)
+        """R4.0: 抽到 core.data.events.compute_streaks 公共实现。
+        保留方法名仅为最小化调用点改动，行为完全等价。
+        """
+        return compute_streaks(dates)
 
     # ---- feed (timeline) ----
     def feed(self, *, limit: int = 50) -> FeedResult:

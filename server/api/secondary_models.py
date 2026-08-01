@@ -433,12 +433,15 @@ class LearningReportPosterRequest(StrictRequest):
     走 StatsApplicationService 事件聚合 + LearningReportSnapshot 数据通道，
     跟 live-set 一样绕开 SongLibrary 路径（learning-report 输入是事件流，
     不是曲库快照）。
+
+    R4.0 收紧范围：days ∈ [1, 365]，top_n_artists ∈ [1, 20]，
+    越界由 Pydantic 422 直接拒绝，避免服务内部被异常值拖死。
     """
     theme_id: str = "海洋柔光"
     canvas_id: str = "抖音全屏 9:20"
     period_label: str = ""           # "2026 年 7 月"；空 → 自动 "近 N 天"
-    days: int = 30                   # 时间窗口
-    top_n_artists: int = 5           # 歌手 Top N
+    days: int = Field(30, ge=1, le=365)            # 时间窗口 (1 天 ~ 1 年)
+    top_n_artists: int = Field(5, ge=1, le=20)     # 歌手 Top N (1 ~ 20)
 
 
 # ── P4 R2 学歌练习 HTTP 模型 ───────────────────────────────────

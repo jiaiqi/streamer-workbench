@@ -121,13 +121,17 @@ class PracticeStatsApiTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as raw:
                 app = _boot_app(Path(raw))
                 async with app.router.lifespan_context(app):
-                    # 连续 2 天
+                    # R4.0: 用相对日期生成 fixture，避免跨日漂移
+                    # 连续 2 天：今天 + 昨天。streak 算法从 today 往回数
+                    from datetime import date, timedelta
+                    today = date.today()
+                    yesterday = today - timedelta(days=1)
                     await _request(app, "POST", "/api/practice/log",
                                     {"minutes": 10, "note": "x",
-                                      "occurred_at": "2026-07-29T08:00:00+08:00"})
+                                      "occurred_at": f"{yesterday.isoformat()}T08:00:00+08:00"})
                     await _request(app, "POST", "/api/practice/log",
                                     {"minutes": 20, "note": "x",
-                                      "occurred_at": "2026-07-30T08:00:00+08:00"})
+                                      "occurred_at": f"{today.isoformat()}T08:00:00+08:00"})
                     status, body, _ = await _request(
                         app, "GET", "/api/practice/streak", None,
                     )

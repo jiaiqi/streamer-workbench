@@ -28,6 +28,7 @@ from typing import Any, List, Mapping, Optional
 
 from .base import LayoutPlugin, PageSections, ParamSpec
 from ..context import DrawContext
+from . import _common
 
 
 # ── LiveSessionSnapshot：live-set 专用数据通道 ──
@@ -116,33 +117,15 @@ class LiveSessionSnapshot:
         }
 
 
-# ── 状态图标映射（已唱结果用） ──
-_RESULT_GLYPH = {
-    "sung": "✓",
-    "skipped": "⏭",
-    "cancelled": "✗",
-    "postponed": "⏸",
-    "unknown": "?",
-    "duplicate_merged": "⊕",
-}
-
-
-def _format_date(iso: str) -> str:
-    """把 ISO 时间压成 'MM-DD HH:MM'，失败原样返回。"""
-    if not iso or "T" not in iso:
-        return iso or ""
-    # 取日期 + 时间
-    date_part, _, time_part = iso.partition("T")
-    mm_dd = date_part[5:] if len(date_part) >= 10 else date_part
-    hh_mm = time_part[:5] if len(time_part) >= 5 else time_part
-    return f"{mm_dd} {hh_mm}"
-
-
-def _safe(song_title: str, requester_name: str) -> str:
-    """拼接「歌名 · 点歌人」标签；空点歌人返回单歌名。"""
-    t = song_title.strip() or "（无题）"
-    r = requester_name.strip()
-    return f"{t} · {r}" if r else t
+# 状态字符、日期格式、歌名标签等公共 helper 全部从 ._common 导入（R4.0 抽出）；
+# 旧 _format_date / _safe / _RESULT_GLYPH 模块级函数已在 R4.0 删除，调用点
+# 保持原名以最小化 render_page 内 diff，行为完全等价。
+from ._common import (  # noqa: E402  - 紧贴 LiveSetLayout 之前方便阅读
+    format_date_long as _format_date,
+    safe_label as _safe,
+    RESULT_GLYPH as _RESULT_GLYPH,
+    EMPTY_TITLE_FALLBACK as _EMPTY_TITLE,
+)
 
 
 class LiveSetLayout(LayoutPlugin):
@@ -272,15 +255,15 @@ class LiveSetLayout(LayoutPlugin):
         d.text((M, y), title_text, font=font_title, fill=st.text)
         # 状态徽章（右上角 pill）
         badge_text = "● 进行中" if library.session_state == "active" else "■ 已结束"
+        is_active = library.session_state == "active"
         badge_w = d.textlength(badge_text, font=ctx.font_label) + 36
         badge_x = W - M - badge_w
         badge_y = y - 6
-        d.rounded_rectangle((badge_x, badge_y, badge_x + badge_w, badge_y + 44),
-                            radius=22,
-                            fill=st.pill if library.session_state == "active" else st.mist)
-        badge_color = st.label if library.session_state == "active" else st.text
-        d.text((badge_x + 18, badge_y + 4), badge_text,
-               font=ctx.font_label, fill=badge_color)
+        _common.draw_pill(
+            d, badge_x, badge_y, badge_text, ctx.font_label,
+            st.pill if is_active else st.mist,
+            st.label if is_active else st.text,
+        )
         y += 70
 
         # ── ② 副标题：日期 + 规则版本 ──
@@ -312,15 +295,12 @@ class LiveSetLayout(LayoutPlugin):
             stats.append((f"演唱中 {current}", st.pill, st.label))
         stat_x = M
         for txt, bg, fg in stats:
-            tw = d.textlength(txt, font=ctx.font_label) + 36
-            d.rounded_rectangle((stat_x, y, stat_x + tw, y + 44),
-                                radius=22, fill=bg)
-            d.text((stat_x + 18, y + 4), txt, font=ctx.font_label, fill=fg)
+            tw = _common.draw_pill(d, stat_x, y, txt, ctx.font_label, bg, fg)
             stat_x += tw + 12
         y += 60
 
         # 分隔线
-        d.line((M, y, W - M, y), fill=st.line, width=2)
+        _common.horizontal_rule(d, M, W - M, y, st.line)
         y += 16
 
         # ── 空场降级 ──
@@ -444,11 +424,8 @@ class LiveSetLayout(LayoutPlugin):
         return y
 
     def _draw_section_label(self, ctx: DrawContext, x: int, y: int, text: str) -> int:
-        """复用 ctx.draw_label 画分节标签。返回新的 y。
+        """画分节标签，返回新 y。R4.0 起内部走 _common.draw_section_label。
 
-        draw_label 内部会画 (label rounded rect) + (下划线)，
-        下划线底端约在 y + font_label.size + 39 (pad_y=8, +3 underline)。
-        返回 y = 原 y + font_label.size + 56 (下划线 + 17px 间距)。
+        保留方法签名仅为 render_page 调用点不变，行为与原实现完全等价。
         """
-        ctx.draw_label(x, y, text)
-        return y + ctx.font_label.size + 56
+        return _common.draw_section_label(ctx, x, y, text)

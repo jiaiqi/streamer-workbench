@@ -142,6 +142,8 @@ export default function LiveView({ dark }: { dark: boolean }) {
   const [actionError, setActionError] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [manualPickerOpen, setManualPickerOpen] = useState(false);
+  // R4.0: 导出复盘海报的 loading 状态（避免重复点击 + spinner 反馈）
+  const [posterLoading, setPosterLoading] = useState(false);
 
   const listRequest = useLatestRequest<LiveSessionSummary[]>({
     isEmpty: data => data.length === 0,
@@ -275,6 +277,21 @@ export default function LiveView({ dark }: { dark: boolean }) {
     }
   };
 
+  /* ---- R4.0: 导出复盘海报（带 loading 反馈） ---- */
+  const handleExportPoster = useCallback(async (sessionId: string) => {
+    if (posterLoading) return;
+    setPosterLoading(true);
+    setActionError("");
+    try {
+      await openLivePoster(sessionId);
+    } catch (err) {
+      console.error("导出复盘海报失败", err);
+      setActionError(err instanceof Error ? err.message : "导出失败");
+    } finally {
+      setPosterLoading(false);
+    }
+  }, [posterLoading]);
+
   const activeSession = useMemo(
     () => sessions?.find(s => s.id === activeId) ?? null,
     [sessions, activeId],
@@ -370,7 +387,8 @@ export default function LiveView({ dark }: { dark: boolean }) {
               onRecord={handleRecord}
               onRefresh={() => loadDetail(activeSession.id)}
               onOpenManualPicker={() => setManualPickerOpen(true)}
-              onExportPosterError={setActionError}
+              onExportPoster={() => handleExportPoster(activeSession.id)}
+              posterLoading={posterLoading}
             />
           )}
 
@@ -426,7 +444,8 @@ function SessionCard({ session, active, onSelect }: {
 function SessionDetail({
   session, detail, queue, performances, isActive, songTitle,
   songs, onClose, onRecord, onRefresh, onOpenManualPicker,
-  onExportPosterError,
+  onExportPoster,
+  posterLoading,
 }: {
   session: LiveSessionSummary;
   detail: LiveSessionDetail | null;
@@ -439,7 +458,10 @@ function SessionDetail({
   onRecord: (requestId: string, result: string) => void;
   onRefresh: () => void;
   onOpenManualPicker: () => void;
-  onExportPosterError: (msg: string) => void;
+  /** R4.0: 触发复盘海报导出；loading 状态由父组件管理。 */
+  onExportPoster: () => Promise<void> | void;
+  /** R4.0: 导出进行中（用于 disable 按钮 + 显示 spinner）。 */
+  posterLoading: boolean;
 }) {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -455,22 +477,23 @@ function SessionDetail({
           <button type="button" className="secondary-action" onClick={onRefresh}>
             刷新
           </button>
-          {/* R2.5: 导出直播复盘海报（live-set 布局） */}
+          {/* R2.5: 导出直播复盘海报（live-set 布局）R4.0 加 loading 反馈 */}
           <button
             type="button"
             className="secondary-action"
             data-testid="live-export-poster"
+            data-loading={posterLoading ? "true" : "false"}
+            disabled={posterLoading}
+            aria-busy={posterLoading}
             title="把这场直播生成 live-set 复盘海报"
-            onClick={async () => {
-              try {
-                await openLivePoster(session.id);
-              } catch (err) {
-                console.error("导出复盘海报失败", err);
-                onExportPosterError(err instanceof Error ? err.message : "导出失败");
-              }
-            }}
+            onClick={() => { void onExportPoster(); }}
           >
-            复盘海报
+            {posterLoading ? (
+              <>
+                <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin align-middle" />
+                <span className="ml-1.5">渲染中…</span>
+              </>
+            ) : "复盘海报"}
           </button>
           <a
             href={`/quick?session=${session.id}`}

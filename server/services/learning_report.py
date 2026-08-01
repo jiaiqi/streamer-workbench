@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from core.layouts.learning_report import LearningReportSnapshot
+from core.data.events import compute_streaks  # R4.0: 共享 streak 算法
 from server.services.stats import StatsApplicationService
 
 
@@ -125,8 +126,8 @@ def build_learning_report_snapshot(
         reverse=True,
     )
 
-    # 连续天数（复用 stats 算法的同款）
-    current_streak, longest_streak = _compute_streaks(practice_dates)
+    # 连续天数 (R4.0 抽到 core.data.events.compute_streaks，与 StatsService 同源)
+    current_streak, longest_streak = compute_streaks(practice_dates)
 
     return LearningReportSnapshot(
         report_title="学歌报告",
@@ -143,29 +144,3 @@ def build_learning_report_snapshot(
         difficulty_buckets=difficulty_buckets,
         key_buckets=key_buckets,
     )
-
-
-def _compute_streaks(dates: set[str]) -> tuple[int, int]:
-    """从一堆 ISO 日期算最长 + 当前连续天数。"""
-    if not dates:
-        return (0, 0)
-    from datetime import date as _date
-    from datetime import timedelta
-    sorted_dates = sorted(dates)
-    longest = 1
-    cur = 1
-    for i in range(1, len(sorted_dates)):
-        d_prev = _date.fromisoformat(sorted_dates[i - 1])
-        d_cur = _date.fromisoformat(sorted_dates[i])
-        if (d_cur - d_prev).days == 1:
-            cur += 1
-            longest = max(longest, cur)
-        else:
-            cur = 1
-    today = _date.today()
-    current = 0
-    d = today
-    while d.isoformat() in dates:
-        current += 1
-        d -= timedelta(days=1)
-    return (current, longest)

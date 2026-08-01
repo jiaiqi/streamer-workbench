@@ -3,12 +3,15 @@
 端点:
 - GET  /api/learning-report/analyze     元数据（桶摘要）
 - POST /api/learning-report/poster      渲染 PNG（image/png）
+
+R4.0 收紧：analyze 端点的 days / top_n_artists 由 FastAPI Query 限制范围，
+越界返回 422。
 """
 from __future__ import annotations
 
 import io
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
 from server.api.errors import ApiError
@@ -30,6 +33,8 @@ def api_learning_report_poster(payload: LearningReportPosterRequest, req: Reques
 
     数据流：StatsApplicationService 事件聚合 → LearningReportSnapshot
     → engine.render_page(layout=learning-report)
+
+    days / top_n_artists 范围由 Pydantic 422 拒绝；theme/canvas 范围由本函数 400/404 拒绝。
     """
     from core.engine import render_page
     from core.layouts import get_layout
@@ -76,11 +81,14 @@ def api_learning_report_poster(payload: LearningReportPosterRequest, req: Reques
 @router.get("/api/learning-report/analyze")
 def api_learning_report_analyze(
     req: Request,
-    days: int = 30,
-    period_label: str = "",
-    top_n_artists: int = 5,
+    days: int = Query(30, ge=1, le=365, description="时间窗口天数，1 ~ 365"),
+    period_label: str = Query("", description="报告副标题；空则自动生成"),
+    top_n_artists: int = Query(5, ge=1, le=20, description="Top 歌手显示数量"),
 ):
-    """R3.5: 报告 learning-report 海报的元数据（桶摘要）。"""
+    """R3.5: 报告 learning-report 海报的元数据（桶摘要）。
+
+    R4.0: days / top_n_artists 范围由 FastAPI Query 校验，越界 422。
+    """
     from core.layouts import get_layout
     from core.spec import CanvasSpec
 

@@ -142,3 +142,43 @@ def tail(path: str, n: int = 50, type: Optional[str] = None) -> list:
     """最近 n 条事件（倒序，最新在前）。更新记录 feed 用。"""
     events = list(iter_events(path, type=type))
     return events[::-1][:n]
+
+
+# ── 聚合工具：连续天数 (R4.0 抽出，原 server/services/stats + learning_report 各实现一次) ──
+
+
+def compute_streaks(dates: set[str]) -> tuple[int, int]:
+    """从一组 ISO 日期（'YYYY-MM-DD' 或 ISO 时间前 10 字符）算连续打卡。
+
+    返回 (current_streak, longest_streak)：
+    - current_streak: 从今天往回数，最长连续多少天有打卡；今天没打卡则 = 0
+    - longest_streak: 历史最长连续天数
+
+    空集 → (0, 0)。
+
+    R4.0 抽出：原 server/services/stats.py:_compute_streaks 和
+    server/services/learning_report.py:_compute_streaks 各自实现一份，行为一致。
+    抽到 core/data/events.py 后两边 import，确保学习报告和统计页 streak 一致。
+    """
+    if not dates:
+        return (0, 0)
+    from datetime import date as _date
+    from datetime import timedelta
+    sorted_dates = sorted(dates)
+    longest = 1
+    cur = 1
+    for i in range(1, len(sorted_dates)):
+        d_prev = _date.fromisoformat(sorted_dates[i - 1])
+        d_cur = _date.fromisoformat(sorted_dates[i])
+        if (d_cur - d_prev).days == 1:
+            cur += 1
+            longest = max(longest, cur)
+        else:
+            cur = 1
+    today = _date.today()
+    current = 0
+    d = today
+    while d.isoformat() in dates:
+        current += 1
+        d -= timedelta(days=1)
+    return (current, longest)

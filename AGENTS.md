@@ -64,7 +64,8 @@
               R3.5 ✅ learning-report 学歌报告海报（LearningReportSnapshot 数据通道 + 5 PNG 金标准 + 导出学习报告按钮）
               R4     ✅ 数据统计 4 端点 + 5 tab UI
               R5     ✅ 工作台系统化（focus-visible / stagger / aria / 响应式）
-              R6-R7  ⬜ 可选布局扩展 + 桌面发布门（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
+              R4.0 🟡  v3 新增：三套新布局凑齐后的减债与新布局接入（P0 进行中：抽 _common.py / 导出反馈 / streak 修相对时间 / settings.json 写 .gitignore）
+              R4-R7 ⬜  Layout Runtime v1 抽象 + 数据反哺 + 桌面发布门（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
 桌面壳    spike 已过  正式壳 ⬜
 UI        ~92%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告 均可用
 ```

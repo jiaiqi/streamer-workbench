@@ -24,6 +24,8 @@ interface StatsViewProps {
 export default function StatsView({ dark }: StatsViewProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const [posterError, setPosterError] = useState<string | null>(null);
+  // R4.0: 导出进度反馈（避免重复点击 + spinner 可见）
+  const [posterLoading, setPosterLoading] = useState(false);
   return (
     <main className="flex-1 flex flex-col overflow-hidden">
       <header className="flex shrink-0 items-end justify-between px-8 pt-7 pb-5">
@@ -45,23 +47,35 @@ export default function StatsView({ dark }: StatsViewProps) {
               {posterError}
             </div>
           )}
-          {/* R3.5 learning-report 海报导出 */}
+          {/* R3.5 learning-report 海报导出 + R4.0 loading 反馈 */}
           <button
             type="button"
             className="secondary-action"
             data-testid="stats-export-poster"
+            data-loading={posterLoading ? "true" : "false"}
+            disabled={posterLoading}
+            aria-busy={posterLoading}
             title="把当前数据生成为 learning-report 海报"
             onClick={async () => {
+              if (posterLoading) return;
               setPosterError(null);
+              setPosterLoading(true);
               try {
                 await openLearningReportPoster();
               } catch (err) {
                 console.error("导出学习报告失败", err);
                 setPosterError(err instanceof Error ? err.message : "导出失败");
+              } finally {
+                setPosterLoading(false);
               }
             }}
           >
-            导出学习报告
+            {posterLoading ? (
+              <>
+                <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin align-middle" />
+                <span className="ml-1.5">渲染中…</span>
+              </>
+            ) : "导出学习报告"}
           </button>
         </div>
       </header>

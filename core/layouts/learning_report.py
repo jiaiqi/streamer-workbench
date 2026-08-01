@@ -26,6 +26,7 @@ from typing import Any, List, Mapping, Optional, Tuple
 
 from .base import LayoutPlugin, PageSections, ParamSpec
 from ..context import DrawContext
+from . import _common
 
 
 # ── LearningReportSnapshot：learning-report 专用数据通道 ──
@@ -89,30 +90,14 @@ class LearningReportSnapshot:
         }
 
 
-# ── 工具函数 ──
-
-def _format_date(iso: str) -> str:
-    """ISO 时间压成 'MM-DD'，失败原样返回。"""
-    if not iso or "T" not in iso:
-        return iso or ""
-    date_part = iso[:10]
-    return date_part[5:] if len(date_part) >= 10 else date_part
-
-
-def _format_date_range(start: str, end: str) -> str:
-    if start and end:
-        return f"{_format_date(start)} → {_format_date(end)}"
-    if start:
-        return f"自 {_format_date(start)}"
-    return ""
-
-
-def _truncate(s: str, max_w: int, d, font) -> str:
-    if d.textlength(s, font=font) <= max_w:
-        return s
-    while len(s) > 2 and d.textlength(s + "…", font=font) > max_w:
-        s = s[:-1]
-    return s + "…"
+# 文本/绘制 helper 全部从 ._common 导入（R4.0 抽出）。
+# 旧 _format_date / _format_date_range / _truncate 模块级函数已删除，调用点
+# 保持原名（as 别名）以最小化 render_page 内 diff，行为完全等价。
+from ._common import (  # noqa: E402  - 紧贴 LearningReportLayout 之前方便阅读
+    format_date_short as _format_date,
+    format_date_range as _format_date_range,
+    truncate as _truncate,
+)
 
 
 class LearningReportLayout(LayoutPlugin):
@@ -239,15 +224,12 @@ class LearningReportLayout(LayoutPlugin):
             stats.append((f"最长 {library.longest_streak_days} 天", st.mist, st.text))
         stat_x = M
         for txt, bg, fg in stats:
-            tw = d.textlength(txt, font=ctx.font_label) + 36
-            d.rounded_rectangle((stat_x, y, stat_x + tw, y + 44),
-                                radius=22, fill=bg)
-            d.text((stat_x + 18, y + 4), txt, font=ctx.font_label, fill=fg)
+            tw = _common.draw_pill(d, stat_x, y, txt, ctx.font_label, bg, fg)
             stat_x += tw + 12
         y += 60
 
         # 分隔线
-        d.line((M, y, W - M, y), fill=st.line, width=2)
+        _common.horizontal_rule(d, M, W - M, y, st.line)
         y += 16
 
         # ── ③ 本月新学列表 ──
@@ -409,6 +391,8 @@ class LearningReportLayout(LayoutPlugin):
         return y
 
     def _draw_section_label(self, ctx: DrawContext, x: int, y: int, text: str) -> int:
-        """复用 ctx.draw_label 画分节标签。返回新的 y。"""
-        ctx.draw_label(x, y, text)
-        return y + ctx.font_label.size + 56
+        """画分节标签，返回新 y。R4.0 起内部走 _common.draw_section_label。
+
+        保留方法签名仅为 render_page 调用点不变，行为与原实现完全等价。
+        """
+        return _common.draw_section_label(ctx, x, y, text)

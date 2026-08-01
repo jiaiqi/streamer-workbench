@@ -5,12 +5,16 @@ __pycache__/
 .venv/
 
 # 输出与原数据备份（可重新生成）
+# data/settings.json 启动期自动写入, 含项目根绝对路径, 不可 commit
 output/
 data/backups/
 data/events.jsonl
-data/settings.json     # 启动期自动写入, 含项目根绝对路径, 不可 commit
+data/settings.json
 data/tabs/
 data/posters/
+data/live-sessions/
+data/presets/
+data/songs.json
 *.tmp
 
 # PyInstaller 打包产物（可重新生成）
