@@ -6,11 +6,20 @@ import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import type { PosterStore } from "./usePosterStore";
 import LayoutPicker from "./LayoutPicker";
+import StatusBadge from "@/components/StatusBadge";
 
 interface PostersSidebarProps {
   store: PosterStore;
   dark: boolean;
 }
+
+const STATUS_KIND: Record<PosterStore["status"], Parameters<typeof StatusBadge>[0]["kind"]> = {
+  idle: "neutral",
+  dirty: "dirty",
+  saving: "saving",
+  saved: "saved",
+  error: "error",
+};
 
 const STATUS_LABEL: Record<PosterStore["status"], string> = {
   idle: "就绪",
@@ -18,14 +27,6 @@ const STATUS_LABEL: Record<PosterStore["status"], string> = {
   saving: "保存中…",
   saved: "已保存",
   error: "保存失败",
-};
-
-const STATUS_COLOR: Record<PosterStore["status"], string> = {
-  idle: "var(--color-muted-foreground)",
-  dirty: "var(--color-primary)",
-  saving: "var(--color-primary)",
-  saved: "var(--color-muted-foreground)",
-  error: "var(--destructive, #c0392b)",
 };
 
 function formatTime(ts: number | null): string {
@@ -107,13 +108,12 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
       <LayoutPicker store={store} />
 
       <div className="flex items-center gap-2 mt-1">
-        <span
-          aria-live="polite"
-          className="text-[11px] tabular-nums"
-          style={{ color: STATUS_COLOR[store.status] }}
-        >
-          {STATUS_LABEL[store.status]}
-        </span>
+        <StatusBadge
+          kind={STATUS_KIND[store.status]}
+          label={STATUS_LABEL[store.status]}
+          compact
+          dark={dark}
+        />
         {store.status === "saved" && store.lastSavedAt && (
           <span className={`text-[11px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
             {formatTime(store.lastSavedAt)}
