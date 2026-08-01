@@ -1,6 +1,7 @@
 /// R4 数据统计视图 — 5 tab: 总览 / 时间线 / Top 歌曲 / 难度 / Key 分布。
 ///
 /// 数据从 /api/stats/* 现算, 冷启动空态友好 (note 提示用户开始积累数据)。
+/// R3.5 learning-report: header 右上角「导出学习报告」按钮 → 渲染 learning-report 海报。
 import { useEffect, useState } from "react";
 import { apiRequest } from "../api/client";
 import type {
@@ -11,6 +12,7 @@ import type {
 } from "../api/generated";
 import { toRequestFailure, type RequestFailure, useLatestRequest } from "../async/requestState";
 import { Icon } from "../icons";
+import { openLearningReportPoster } from "../electron-bridge";
 
 type Tab = "overview" | "feed" | "top" | "difficulty" | "key";
 type TopMetric = "request" | "perform" | "practice";
@@ -21,6 +23,7 @@ interface StatsViewProps {
 
 export default function StatsView({ dark }: StatsViewProps) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [posterError, setPosterError] = useState<string | null>(null);
   return (
     <main className="flex-1 flex flex-col overflow-hidden">
       <header className="flex shrink-0 items-end justify-between px-8 pt-7 pb-5">
@@ -31,6 +34,35 @@ export default function StatsView({ dark }: StatsViewProps) {
           <p className="mt-1 text-[13px] text-muted-foreground">
             全部从 events.jsonl + 曲库现算 · 冷启动友好
           </p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          {posterError && (
+            <div
+              className="rounded-lg bg-red-500/10 px-3 py-1 text-xs text-red-500"
+              role="alert"
+              data-testid="stats-poster-error"
+            >
+              {posterError}
+            </div>
+          )}
+          {/* R3.5 learning-report 海报导出 */}
+          <button
+            type="button"
+            className="secondary-action"
+            data-testid="stats-export-poster"
+            title="把当前数据生成为 learning-report 海报"
+            onClick={async () => {
+              setPosterError(null);
+              try {
+                await openLearningReportPoster();
+              } catch (err) {
+                console.error("导出学习报告失败", err);
+                setPosterError(err instanceof Error ? err.message : "导出失败");
+              }
+            }}
+          >
+            导出学习报告
+          </button>
         </div>
       </header>
       <div className="flex-1 overflow-y-auto px-8 pb-10">

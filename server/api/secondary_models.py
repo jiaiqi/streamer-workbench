@@ -427,6 +427,20 @@ class LiveSessionPosterRequest(StrictRequest):
     parameters: dict = Field(default_factory=dict)
 
 
+class LearningReportPosterRequest(StrictRequest):
+    """R3.5: POST /api/learning-report/poster - 渲染学歌报告海报。
+
+    走 StatsApplicationService 事件聚合 + LearningReportSnapshot 数据通道，
+    跟 live-set 一样绕开 SongLibrary 路径（learning-report 输入是事件流，
+    不是曲库快照）。
+    """
+    theme_id: str = "海洋柔光"
+    canvas_id: str = "抖音全屏 9:20"
+    period_label: str = ""           # "2026 年 7 月"；空 → 自动 "近 N 天"
+    days: int = 30                   # 时间窗口
+    top_n_artists: int = 5           # 歌手 Top N
+
+
 # ── P4 R2 学歌练习 HTTP 模型 ───────────────────────────────────
 
 class PracticeLogRequest(StrictRequest):

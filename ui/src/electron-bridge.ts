@@ -70,3 +70,42 @@ export async function openLivePoster(
   // 30 秒后释放 blob URL（足够用户操作）
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
+
+/**
+ * R3.5: 渲染并打开学歌报告海报 PNG。
+ * @param options days / period_label / top_n_artists
+ * @param baseUrl API 根
+ * @param authToken 会话令牌（packaged 模式需要）
+ */
+export async function openLearningReportPoster(
+  options: { days?: number; period_label?: string; top_n_artists?: number } = {},
+  baseUrl: string = window.location.origin,
+  authToken: string = "",
+): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (authToken) headers["X-Session-Token"] = authToken;
+  const res = await fetch(
+    `${baseUrl}/api/learning-report/poster`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({
+        theme_id: "海洋柔光",
+        canvas_id: "抖音全屏 9:20",
+        days: options.days ?? 30,
+        period_label: options.period_label ?? "",
+        top_n_artists: options.top_n_artists ?? 5,
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`learning-report 海报渲染失败：HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  if (!w) {
+    console.warn("openLearningReportPoster: 浏览器拦截了新窗口打开");
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}

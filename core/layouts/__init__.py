@@ -2,11 +2,13 @@
 from .grid_wrap import GridWrapLayout
 from .magazine_flow import MagazineFlowLayout
 from .live_set import LiveSetLayout
+from .learning_report import LearningReportLayout
 
 REGISTRY = {
     "grid-wrap": GridWrapLayout(),
     "magazine-flow": MagazineFlowLayout(),
     "live-set": LiveSetLayout(),
+    "learning-report": LearningReportLayout(),
 }
 
 

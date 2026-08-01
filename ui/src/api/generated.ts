@@ -191,6 +191,14 @@ export interface HTTPValidationError {
   [key: string]: unknown;
 }
 
+export interface LearningReportPosterRequest {
+  "canvas_id"?: string;
+  "days"?: number;
+  "period_label"?: string;
+  "theme_id"?: string;
+  "top_n_artists"?: number;
+}
+
 export interface LiveSessionCreateRequest {
   "poster_id"?: string | null;
   "rule_version"?: string;

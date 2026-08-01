@@ -25,9 +25,12 @@
 6. **Palette v1 只包含 5 个颜色角色**（text/label/pill/line/mist）+ font_roles（title/label/song/note）。不把 UI token（surface/border/accent）混入海报 Palette。
 7. **Anchors/subjects 使用 0–1 归一化坐标**。像素输入仅作为兼容层。
 8. **`halo` 和 `vinyl-rings` 已统一为 `subject-orbit`**，不重复实现。
-9. **R2.5 live-set 走 `LiveSessionSnapshot` 数据通道**，不与 grid-wrap / magazine-flow 共享 SongLibrary 路径。live-set 的 library 是事件驱动快照，不是曲库快照。
+9. **三套新布局各走独立数据通道**：
+   - `live-set`（R2.5）→ `LiveSessionSnapshot`（一场直播的事件流）
+   - `learning-report`（R3.5）→ `LearningReportSnapshot`（一段时间窗口的事件聚合）
+   - 不与 grid-wrap / magazine-flow 共享 `SongLibrary` 路径
 10. **编辑器（R7）只在 3 套新布局上线并被真实使用后启动**，不提前造完整图片编辑器。
-10. **`design/archive/` 中的文档已退役**。只允许追溯历史，不得据此判断当前状态或执行顺序；当前真相以主规格、路线图、数据路线图和 ADR 为准。
+11. **`design/archive/` 中的文档已退役**。只允许追溯历史，不得据此判断当前状态或执行顺序；当前真相以主规格、路线图、数据路线图和 ADR 为准。
 
 ---
 
@@ -51,16 +54,19 @@
 ```
 引擎兼容  ✅          avoid/cache 正确性已修复，金标准 16/16 diff=0；环境复现待 R0 收口
 数据层    S1-S3.5 ✅ Song v5/Event v2、Tabs/Queue/Preset song_id 关系迁移完成
-              S4     ⬜ 打卡 + 统计 + 乐理辅助（R4 启动时按 roadmap 接入）
+              S4     ✅ 打卡 + 统计 + 乐理辅助（接入 R3 学歌闭环 + R4 数据统计）
 产品主线  R0 ✅      R0.1-R0.12 全部收口
               R1a ✅ 海报闭环（领域/仓储/服务/API/样例/能力/RenderDocument/UI 接入 + 自动保存）
               R1b ✅ magazine-flow 自动分页（6 分类轴 + analyze HTTP + 新金标准 6 PNG + LayoutPicker）
               R2     ✅ 直播核心纵切（领域 + 核销 + 决策 + LiveService + 持久化 + 7 端点）
               R2.5 ✅ live-set 直播复盘海报（LiveSessionSnapshot 数据通道 + 5 PNG 金标准 + 复盘海报按钮）
-                          Electron 壳与置顶速查窗口 ⬜（P3-Electron 冲刺）
-              R3-R7  ⬜ 学歌/统计/编辑器（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
+              R3     ✅ 学歌发现 + 智能推荐 + 乐理辅助
+              R3.5 ✅ learning-report 学歌报告海报（LearningReportSnapshot 数据通道 + 5 PNG 金标准 + 导出学习报告按钮）
+              R4     ✅ 数据统计 4 端点 + 5 tab UI
+              R5     ✅ 工作台系统化（focus-visible / stagger / aria / 响应式）
+              R6-R7  ⬜ 可选布局扩展 + 桌面发布门（参见 [`HANDOFF.md`](HANDOFF.md) §8.3）
 桌面壳    spike 已过  正式壳 ⬜
-UI        ~88%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报 均可用
+UI        ~92%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告 均可用
 ```
 
 ### 技术栈
