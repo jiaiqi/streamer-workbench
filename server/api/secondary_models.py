@@ -632,3 +632,58 @@ class DistributionResponse(BaseModel):
     metric: str
     buckets: list[DistributionBucketResponse] = Field(default_factory=list)
     note: str = ""
+
+
+# ── R8.1 弹唱：音频 + 播放事件 ──
+
+
+class AudioUploadResponse(BaseModel):
+    """POST /api/songs/{id}/audio 响应。"""
+    ok: bool = True
+    song_id: str
+    role: str                                  # "vocal" | "instrumental"
+    filename: str
+    path: str                                  # 相对 data/ 的路径（"audio/.../vocal.mp3"）
+
+
+class AudioItemResponse(BaseModel):
+    """GET /api/songs/{id}/audio/list 单条。"""
+    role: str                                  # "vocal" | "instrumental" | "unknown"
+    filename: str
+    path: str
+    mime: str = "application/octet-stream"
+
+
+class AudioListResponse(BaseModel):
+    """GET/DELETE /api/songs/{id}/audio/list 响应。"""
+    song_id: str
+    items: list[AudioItemResponse] = Field(default_factory=list)
+
+
+class AudioStreamInfo(BaseModel):
+    """GET /api/songs/{id}/audio/{role} 元信息响应。"""
+    song_id: str
+    role: str
+    filename: str
+    path: str
+    size: int = 0
+    mime: str = "application/octet-stream"
+
+
+class PlaybackEventRequest(StrictRequest):
+    """POST /api/playback/events — 上报播放事件。
+
+    复用 events.jsonl：type=playback_started/paused/completed，
+    写到 meta 字段里携带业务数据。
+    """
+    type: str                                  # "playback_started" | "playback_paused" | "playback_completed"
+    song_id: str
+    source: str | None = None                 # "vocal" | "instrumental" | None
+    position_ms: int = 0
+    duration_ms: int = 0
+    occurred_at: str = ""                     # ISO；空则用服务端 now
+
+
+class PlaybackEventResponse(BaseModel):
+    ok: bool = True
+    type: str

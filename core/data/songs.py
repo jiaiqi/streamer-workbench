@@ -144,6 +144,9 @@ class SongLibrary:
     EDITABLE_FIELDS: ClassVar[tuple] = (
         "title", "artists", "lyricist", "composer", "key", "capo",
         "difficulty", "tabs", "tags", "pinyin", "notes", "section",
+        # R8 弹唱字段：可编辑（前端编辑弹窗 + 音频上传后端会写 audio_*_path）
+        "lyrics_lrc", "lyrics_plain",
+        "audio_vocal_path", "audio_instrumental_path", "audio_duration_ms",
     )
 
     def update(self, title: str, fields: dict) -> bool:

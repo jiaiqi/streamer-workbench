@@ -24,6 +24,12 @@ class SongEditableFields(StrictRequest):
     pinyin: Any | None = None
     notes: Any | None = None
     section: Any | None = None
+    # R8 弹唱字段（v8.0+）：可创建时填；后续 audio 上传会自动回写 audio_*_path
+    lyrics_lrc: Any | None = None
+    lyrics_plain: Any | None = None
+    audio_vocal_path: Any | None = None
+    audio_instrumental_path: Any | None = None
+    audio_duration_ms: Any | None = None
 
 
 class SongCreateRequest(SongEditableFields):
@@ -65,6 +71,12 @@ class SongResponse(BaseModel):
     notes: str
     learned_at: str
     tab_files: list[str]
+    # R8 弹唱字段（v8.0+）
+    lyrics_lrc: str = ""
+    lyrics_plain: str = ""
+    audio_vocal_path: str = ""
+    audio_instrumental_path: str = ""
+    audio_duration_ms: int = 0
 
 
 class SongCounts(BaseModel):

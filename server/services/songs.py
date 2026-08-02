@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -210,10 +211,126 @@ class SongApplicationService:
         return SongDeletion(
             song.id, song.title, library.count_active(), library.count_draft())
 
+    # ── R8.1 弹唱：音频附件助手方法 ──
+
+    def resolve_id(self, identity: str) -> str:
+        """把 identity（id 或 title）解析为 song_id；找不到抛 SongNotFound。"""
+        snapshot = self._songs.load()
+        library = snapshot.value
+        # 优先按 id 解析
+        song = library.get_by_id(identity)
+        if song is not None:
+            return song.id
+        # 兜底按 title
+        song = library.get(identity)
+        if song is not None:
+            return song.id
+        raise SongNotFound(f"未找到歌曲：{identity}")
+
+    def resolve_audio_upload(
+        self, identity: str, role: str, filename: str, data: bytes
+    ) -> Song:
+        """R8.1: 保存音频到 data/audio/{song_id}/ + 回写 Song 字段。
+
+        role="vocal" → Song.audio_vocal_path
+        role="instrumental" → Song.audio_instrumental_path
+        """
+        from core import audio as audio_storage  # 局部 import 避免循环
+        snapshot = self._songs.load()
+        library = snapshot.value
+        song = self._find(library, "id_or_title", identity)
+        audio_root = str(self._songs._path.parent)  # data 根
+        relpath = audio_storage.save_audio(audio_root, song.id, role, filename, data)
+        # 回写 Song 字段
+        fields = {f"audio_{role}_path": relpath}
+        library.update_by_id(song.id, fields)
+        # 不触发 _save_and_report 事件（音频上传是文件操作，不算业务变更）
+        self._songs.save(library, expected_revision=snapshot.revision)
+        # 重新 load 获取更新后的 Song
+        updated = library.get_by_id(song.id)
+        return updated if updated is not None else song
+
+    def list_audio(self, identity: str) -> list[dict[str, Any]]:
+        """R8.1: 列出该歌的所有音频文件（带 role 识别）。"""
+        from core import audio as audio_storage
+        song_id = self.resolve_id(identity)
+        audio_root = str(self._songs._path.parent)
+        files = audio_storage.list_audio(audio_root, song_id)
+        items: list[dict[str, Any]] = []
+        for filename in files:
+            role = audio_storage.parse_role_from_filename(filename) or "unknown"
+            ext = os.path.splitext(filename)[1].lower()
+            items.append({
+                "role": role,
+                "filename": filename,
+                "path": f"audio/{song_id}/{filename}",
+                "mime": _audio_mime(ext),
+            })
+        return items
+
+    def delete_audio(self, identity: str, role: str) -> list[dict[str, Any]]:
+        """R8.1: 删除指定 role 的音频 + 清空 Song 字段。"""
+        from core import audio as audio_storage
+        song_id = self.resolve_id(identity)
+        audio_root = str(self._songs._path.parent)
+        song_field = f"audio_{role}_path"
+        # 找到当前 relpath 才能删除
+        snapshot = self._songs.load()
+        library = snapshot.value
+        song = library.get_by_id(song_id)
+        if song is None:
+            raise SongNotFound(f"未找到歌曲：{song_id}")
+        relpath = getattr(song, song_field, "")
+        if relpath:
+            audio_storage.delete_audio(audio_root, song_id, relpath)
+            # 清空 Song 字段
+            library.update_by_id(song_id, {song_field: ""})
+            self._songs.save(library, expected_revision=snapshot.revision)
+        return self.list_audio(song_id)
+
+    def audio_info(self, identity: str, role: str) -> dict[str, Any] | None:
+        """R8.1: 音频文件元信息（不返回 FileResponse，仅 JSON）。"""
+        from core import audio as audio_storage
+        song_id = self.resolve_id(identity)
+        audio_root = str(self._songs._path.parent)
+        files = audio_storage.list_audio(audio_root, song_id)
+        # 按 role 匹配第一个
+        for filename in files:
+            r = audio_storage.parse_role_from_filename(filename)
+            if r == role:
+                ext = os.path.splitext(filename)[1].lower()
+                abs_path = os.path.join(audio_root, "audio", song_id, filename)
+                size = os.path.getsize(abs_path) if os.path.isfile(abs_path) else 0
+                return {
+                    "song_id": song_id,
+                    "role": role,
+                    "filename": filename,
+                    "path": f"audio/{song_id}/{filename}",
+                    "size": size,
+                    "mime": _audio_mime(ext),
+                }
+        return None
+
+    def audio_abs_path(self, identity: str, role: str) -> str | None:
+        """R8.1: 返回音频文件绝对路径（流式 FileResponse 用）。"""
+        from core import audio as audio_storage
+        song_id = self.resolve_id(identity)
+        audio_root = str(self._songs._path.parent)
+        files = audio_storage.list_audio(audio_root, song_id)
+        for filename in files:
+            r = audio_storage.parse_role_from_filename(filename)
+            if r == role:
+                return os.path.join(audio_root, "audio", song_id, filename)
+        return None
+
     @staticmethod
     def _find(library: SongLibrary, identity_kind: str, identity: str) -> Song:
-        song = (library.get_by_id(identity)
-                if identity_kind == "id" else library.get(identity))
+        # R8.1: id_or_title 模式兼容老 title 路由 + 新 song_id 路由
+        if identity_kind == "id_or_title":
+            song = library.get_by_id(identity) or library.get(identity)
+        else:
+            song = (library.get_by_id(identity)
+                    if identity_kind == "id" else library.get(identity))
         if song is None:
             label = "歌曲 ID" if identity_kind == "id" else "歌曲"
             raise SongNotFound(f"未找到{label}：{identity}")
@@ -308,4 +425,26 @@ def song_values(song: Song) -> dict[str, Any]:
         "tags": song.tags, "pinyin": song.pinyin,
         "added_at": song.added_at, "notes": song.notes,
         "learned_at": song.learned_at, "tab_files": song.tab_files,
+        # R8 弹唱字段
+        "lyrics_lrc": song.lyrics_lrc,
+        "lyrics_plain": song.lyrics_plain,
+        "audio_vocal_path": song.audio_vocal_path,
+        "audio_instrumental_path": song.audio_instrumental_path,
+        "audio_duration_ms": song.audio_duration_ms,
     }
+
+
+# ── R8.1 辅助 ──
+
+_AUDIO_MIME_BY_EXT = {
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".wav": "audio/wav",
+    ".webm": "audio/webm",
+}
+
+
+def _audio_mime(ext: str) -> str:
+    """扩展名 → MIME；未知返 application/octet-stream。"""
+    return _AUDIO_MIME_BY_EXT.get(ext.lower(), "application/octet-stream")
