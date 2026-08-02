@@ -2,9 +2,9 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-08-02 早晨）**：R0（数据/应用/服务契约）、R1a（海报闭环）、R1b（magazine-flow 自动分页）、R2（直播闭环 + 桌面壳 dev）、R2.5（live-set 复盘海报）、R3（学歌闭环）、R3.5（learning-report 学歌海报）、R4（数据统计）、R5（工作台系统化）、R4.0 Phase 1+2（layout helper + god 拆解 + 专用海报 + 真保存 + 暗色 hardcode 收口）、R4.1（4 统一组件 + Cmd+K + narrow helper）、R4.2（Top/时间线 → 海报/Preset + 导出历史）、R4 Runtime v1（DataChannel 契约 + supported_channels 声明）、R8 弹唱播放器 R8.0（数据 + 解析 + 4 组件 + PlayView + 歌曲库 ▶ 入口，模拟时间无 audio）+ R8.1（音频后端 5 端点 + PlayView 接 <audio> + vocal/instrumental 切轨 + playback 事件上报）全部收口；R8.2 直播联动 + 录屏待推。
+> **进度快照（2026-08-02 中午）**：R0（数据/应用/服务契约）、R1a（海报闭环）、R1b（magazine-flow 自动分页）、R2（直播闭环 + 桌面壳 dev）、R2.5（live-set 复盘海报）、R3（学歌闭环）、R3.5（learning-report 学歌海报）、R4（数据统计）、R5（工作台系统化）、R4.0 Phase 1+2（layout helper + god 拆解 + 专用海报 + 真保存 + 暗色 hardcode 收口）、R4.1（4 统一组件 + Cmd+K + narrow helper）、R4.2（Top/时间线 → 海报/Preset + 导出历史）、R4 Runtime v1（DataChannel 契约 + supported_channels 声明）、R8 弹唱播放器 R8.0（数据 + 解析 + 4 组件 + PlayView + 歌曲库 ▶ 入口，模拟时间无 audio）+ R8.1（音频后端 5 端点 + PlayView 接 <audio> + vocal/instrumental 切轨 + playback 事件上报）+ R8.2 联动（LiveView 弹唱按钮 + PlayView 联动模式 + audio ended 自动 mark sung 回到 LiveView）全部收口；R8.2.x 录屏（Electron `desktopCapturer` + MediaRecorder + SRT 字幕）待推。
 >
-> **测试基线**：Python 720 passed / 1 skipped（52 个测试文件）+ vitest 295/295（28 个测试文件）+ node:test 16/16 + 4 套金标准 31/31（grid-wrap 16 + magazine-flow 5 + live-set 5 + learning-report 5）；TSC 干净。
+> **测试基线**：Python 720 passed / 1 skipped（52 个测试文件）+ vitest 303/303（28 个测试文件）+ node:test 16/16 + 4 套金标准 31/31（grid-wrap 16 + magazine-flow 5 + live-set 5 + learning-report 5）；TSC 干净。
 >
 > **已上线能力**：
 > - **R1a 海报闭环** — PosterDocument 领域 + 仓储 + 服务 + HTTP `/api/posters*` + 样例曲库 + 能力声明 + RenderDocument；`usePosterStore` 状态机 + 自动保存 + 撤销重做（Cmd+Z）+ Bridge；最近海报 3 动作内可导出。
@@ -19,10 +19,10 @@
 > - **R4.1 视觉与体验统一** — 4 个统一组件（`EmptyState` / `Spinner` / `StatusBadge` / `ErrorBanner`）；`CommandPalette` Cmd+K 跨 5 视图命令面板；`lib/narrow.ts` 公共 narrow helper 取代散落的 `asXxx` 函数；`localStorage` key 改 `sw-workspace`（兼容读 `gp-workspace`）。
 > - **R4.2 数据反哺创作补全** — StatsView Top tab「据此创建海报」/Feed tab「据此创建 Preset」；导出历史：live.py / learning_report.py 完成后写 `type=poster_exported` 事件，3 种 kind（`grid-export` / `live-poster` / `learning-report`）走同一 `GET /api/exports/recent`；`ExportLogPanel` 嵌入 4 处（SpecialPostersPanel / ExportDialog / LiveView SessionDetail / StatsView），含 30 秒静默轮询 + kind 过滤 + 相对时间。
 > - **R4 Runtime v1 抽象** — `DataChannel` Literal 枚举（`song_library` / `live_session` / `learning_report`）；4 套 layout 显式声明 `supported_channels`，engine 不再 duck-typing；`get_layout(id, channel=...)` / `list_layouts(channel=...)` 按 channel 过滤；30 项测试 + 31/31 金标准复跑。**v2 待做**：统一 `LayoutPlan` / `Palette-Skin` 接线 / Path 排文。
-> - **R8 弹唱播放器 R8.0 + R8.1** — R8.0：Song 增量 5 字段（`lyrics_lrc` / `lyrics_plain` / `audio_vocal_path` / `audio_instrumental_path` / `audio_duration_ms`）；`core/lrc.py` + `core/chordpro.py` + `core/audio.py` 3 个核心模块；`LyricsPanel` + `TabsPanel` + `PlayerBar` + `PlayView` 4 个组件；歌曲库 ▶ 弹唱按钮；LRC 时间滚动 + chordpro chord 高亮。R8.1：5 个音频端点（POST 上传 / GET 列出 / DELETE 删除 / GET 元信息 / GET 流式 `/file`）+ HTML5 `<audio>` 接入 PlayView + vocal/instrumental 切轨（仅当两轨都有时显示）+ `POST /api/playback/events` 上报 `playback_started/paused/completed`。
+> - **R8 弹唱播放器 R8.0 + R8.1 + R8.2 联动** — R8.0：Song 增量 5 字段（`lyrics_lrc` / `lyrics_plain` / `audio_vocal_path` / `audio_instrumental_path` / `audio_duration_ms`）；`core/lrc.py` + `core/chordpro.py` + `core/audio.py` 3 个核心模块；`LyricsPanel` + `TabsPanel` + `PlayerBar` + `PlayView` 4 个组件；歌曲库 ▶ 弹唱按钮；LRC 时间滚动 + chordpro chord 高亮。R8.1：5 个音频端点（POST 上传 / GET 列出 / DELETE 删除 / GET 元信息 / GET 流式 `/file`）+ HTML5 `<audio>` 接入 PlayView + vocal/instrumental 切轨（仅当两轨都有时显示）+ `POST /api/playback/events` 上报 `playback_started/paused/completed`。R8.2 联动：LiveView 队列项行尾 ▶ 弹唱按钮 → 调 `onPlaySong(songId, { sessionId, requestId, requesterName })` → App.tsx 进 PlayView 联动模式；顶栏显示「联播 · {name}」标签 + 「已唱 ✓」按钮；`audio.ended` 或按钮 → 自动 `POST /api/live-sessions/{sid}/record (result=sung)` + 切回 live 视图。
 > - **R2.5+Electron** — 桌面壳（macOS arm64）+ PyInstaller 后端单文件 + electron-builder 打包 + 置顶速查窗 (Cmd/Ctrl+Shift+U)。
 >
-> **下一步**：R8.2 直播联动（弹完自动点已唱、播完上报 live_session）+ 录屏（Electron `desktopCapturer` + MediaRecorder，存 `data/recordings/{session_id}/`，可拖入学习报告）；R4 Runtime v2 抽象（统一 `LayoutPlan` + `Palette/Skin` + `Path 排文`）；R5c 高级体验；R7 桌面正式发布门。
+> **下一步**：R8.2.x 录屏（Electron `desktopCapturer` + MediaRecorder，存 `data/recordings/{session_id}/`，SRT 字幕导出）；R4 Runtime v2 抽象（统一 `LayoutPlan` + `Palette/Skin` + `Path 排文`）；R5c 高级体验；R7 桌面正式发布门。
 >
 > 文档入口见 [`AGENTS.md`](AGENTS.md)、[`HANDOFF.md`](HANDOFF.md) 与 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >

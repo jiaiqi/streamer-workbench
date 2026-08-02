@@ -70,7 +70,7 @@
               R4.1 ✅  视觉与体验统一（4 组件 + Cmd+K + narrow helper + selLayout 已删）
               R4.2 ✅  数据反哺创作补全（R4.2.1+2 收口：Top 歌曲/时间线 → 创建海报/Preset；R4.2.3 导出历史：复用 events.jsonl + ExportLogPanel 嵌入 4 处）
               R4-R7 🟡  Layout Runtime v1 抽象已交付（最小化：DataChannel 契约 + supported_channels 声明 + 30 项测试 + 32/32 金标准）；v2 待做（统一 LayoutPlan / Palette-Skin 接线 / 桌面发布门）
-              R8     🟡  弹唱播放器 R8.0/R8.1 收口（R8.0：Song 字段 + LRC/chordpro/audio 解析 + 4 组件 + PlayView + 歌曲库入口；R8.1：音频后端 5 端点 + PlayView 接 <audio> + vocal/instrumental 切轨 + playback 事件上报）；R8.2 直播联动 + 录屏 待推
+              R8     🟡  弹唱播放器 R8.0/R8.1/R8.2 联动收口（R8.0 数据/解析/4 组件/PlayView/歌曲库入口；R8.1 音频后端 5 端点 + PlayView 接 <audio> + 切轨 + playback 事件；R8.2 联动：LiveView 弹唱按钮 + PlayView 联动模式 + audio ended 自动 mark sung）；R8.2.x 录屏 待推
 桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
 UI        ~99%       工作台/歌曲库/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 + 4 嵌入点导出历史 + 弹唱视图（PlayView：v8.1 接入 <audio> + vocal/instrumental 切轨 + 进度联动） 均可用
 ```
@@ -85,7 +85,7 @@ UI        ~99%       工作台/歌曲库/学歌/速查/海报/直播会话/复�
 | 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量）、data/tabs/{song_id}/（曲谱附件）、data/audio/{song_id}/（R8 音频，v8.1+） |
 | 桌面壳 | Electron（spike） | Python 作 child_process；正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 52 项 Python 测试文件（720 passed / 1 skipped） + 28 项 vitest（295/295） + 16 项 node:test + 16/16 grid 金标准 + 5/5 magazine PNG + 5/5 live-set PNG + 5/5 learning-report PNG + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
+| 测试 | 52 项 Python 测试文件（720 passed / 1 skipped） + 28 项 vitest（303/303） + 16 项 node:test + 16/16 grid 金标准 + 5/5 magazine PNG + 5/5 live-set PNG + 5/5 learning-report PNG + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
 
 ---
 
