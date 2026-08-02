@@ -1,13 +1,15 @@
-"""M0.4 蓝图 v0.1：加密备份包 MVP。
+"""M0.4 蓝图 v0.1：加密备份包 MVP → M2.1 升级 AES-256 真加密。
 
-设计要点（M0.4 MVP 阶段）：
+设计要点：
 - 备份 streamer-workbench 的 data/ 目录（songs.json / events.jsonl / settings.json / preset.json / live-sessions/ / ...）
 - 输出 .songworkbench 文件（zip 格式）
 - 包含 manifest.json（版本 / 时间 / 文件清单 / SHA-256 / HMAC-SHA256 校验）
-- 密码模式（MVP 警告）：用 zipfile.setpassword 套 stdlib ZipCrypto
-  ⚠️ 已知问题：Python 3 的 zipfile 错密码也会"读出原文"（CRC 校验不严），
-     所以密码模式在 MVP 阶段**仅作"防误打开"轻防护**，不是真加密。
-     生产前必须接 pyzipper（WinZip AES-256）或 cryptography（AES-GCM）。
+- M2.1 加密：password 模式下用 pyzipper.WZ_AES（WinZip AES-256）；错密码真拒绝
+  - 旧 M0.4 备份（无密码，stdlib zip）仍可读取（向后兼容）
+  - 无密码导出走 stdlib zipfile（与 M0.4 一致；不加 AES 避免无谓依赖）
+- 密码模式 + HMAC-SHA256 双层防护：
+  - HMAC：防篡改（任何人改了文件 verify 必失败）
+  - AES-256：防偷看（错密码根本解不开；实测 pyzipper 会 raise RuntimeError）
 - export/import/verify/list 四个命令
 - 导入前自动创建本地快照（data/backups/snapshot-*.json）
 
@@ -30,15 +32,55 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pyzipper
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_ROOT = ROOT / "data"
 
 MANIFEST_NAME = "manifest.json"
 HMAC_FILE = "manifest.hmac"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # M2.1 升级到 2（旧 v1 仍可读）
 APP_NAME = "streamer-workbench"
 BACKUP_EXT = ".songworkbench"
+
+
+def _open_zip_for_write(buf, password: str | None):
+    """根据是否有密码选择 zip 容器。
+    - password 不为空：pyzipper AES-256（WinZip 兼容；错密码真拒绝）
+    - password 为空：stdlib zipfile（向后兼容 M0.4 无密码备份）"""
+    if password:
+        zf = pyzipper.AESZipFile(
+            buf, "w",
+            compression=pyzipper.ZIP_DEFLATED,
+            encryption=pyzipper.WZ_AES,
+        )
+        zf.setpassword(password.encode("utf-8"))
+        zf.setencryption(pyzipper.WZ_AES, nbits=256)
+        return zf
+    return zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6)
+
+
+def _open_zip_for_read(input, password: str | None):
+    """根据是否有密码选择 zip 读取容器；统一抛 ValueError。"""
+    try:
+        if password:
+            zf = pyzipper.AESZipFile(input, "r")
+            zf.setpassword(password.encode("utf-8"))
+        else:
+            zf = zipfile.ZipFile(input, "r")
+    except (zipfile.BadZipFile, RuntimeError) as exc:
+        raise ValueError(f"备份文件损坏或不是有效的 .songworkbench: {exc}") from exc
+    return zf
+
+
+def _zip_read(zf, name: str) -> bytes:
+    """统一 zf.read，捕获 pyzipper 错密码的 RuntimeError 包装为 ValueError。"""
+    try:
+        return zf.read(name)
+    except RuntimeError as exc:
+        # pyzipper 错密码会在这里 raise RuntimeError("Bad password for file ...")
+        raise ValueError(f"密码错误或备份已损坏: {exc}") from exc
 
 
 def _collect_files(data_root: Path) -> list[Path]:
@@ -116,11 +158,14 @@ def _build_manifest(data_root: Path, files: list[Path]) -> dict:
 
 
 def _make_zip_bytes(data_root: Path, files: list[Path], manifest: dict, password: str | None) -> bytes:
-    """在内存里构建 zip（含 manifest.json + manifest.hmac + data 文件）。"""
+    """在内存里构建 zip（含 manifest.json + manifest.hmac + data 文件）。
+
+    M2.1：password 不为空时走 pyzipper AES-256（WinZip 兼容）；空密码保持 stdlib zipfile。
+    """
     buf = io.BytesIO()
     manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
     hmac_sig = _sign_manifest(manifest_bytes, password)
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+    with _open_zip_for_write(buf, password) as zf:
         # 放最前：manifest + hmac 签名
         zf.writestr(MANIFEST_NAME, manifest_bytes)
         zf.writestr(HMAC_FILE, hmac_sig)
@@ -134,9 +179,8 @@ def _make_zip_bytes(data_root: Path, files: list[Path], manifest: dict, password
 def export_backup(output: Path, data_root: Path, password: str | None) -> dict:
     """导出备份：data_root → output（.songworkbench）。
 
-    M0.4 MVP：MVP 阶段无强加密；HMAC-SHA256 签名防篡改。
-    错密码/篡改下 verify 必失败（HMAC mismatch）。
-    生产前必须接 pyzipper（WinZip AES-256）或 cryptography（AES-GCM）。
+    M2.1：password 模式下用 pyzipper AES-256 真加密；空密码保持向后兼容的明文 zip。
+    错密码下 import/verify 必拒绝（pyzipper 抛 RuntimeError 包装为 ValueError）。
     """
     if not data_root.exists():
         raise FileNotFoundError(f"data 目录不存在: {data_root}")
@@ -150,21 +194,24 @@ def export_backup(output: Path, data_root: Path, password: str | None) -> dict:
     return manifest
 
 
-def _read_zip(input: Path, password: str | None) -> tuple[zipfile.ZipFile, dict, list, bool]:
-    """读 zip 文件并验证 manifest。返回 (zip, manifest, 内部文件列表, hmac_ok)。"""
+def _read_zip(input: Path, password: str | None) -> tuple:
+    """读 zip 文件并验证 manifest。返回 (zip, manifest, 内部文件列表, hmac_ok)。
+
+    M2.1：password 不为空时用 pyzipper 读；错密码抛 ValueError 包装后的 RuntimeError。
+    """
+    zf = _open_zip_for_read(input, password)
     try:
-        zf = zipfile.ZipFile(input, "r")
-    except zipfile.BadZipFile as exc:
-        raise ValueError(f"备份文件损坏: {exc}") from exc
-    try:
-        manifest_data = zf.read(MANIFEST_NAME)
+        manifest_data = _zip_read(zf, MANIFEST_NAME)
     except KeyError as exc:
         zf.close()
         raise ValueError(f"备份文件缺失 manifest.json: {exc}") from exc
     try:
-        hmac_str = zf.read(HMAC_FILE).decode("utf-8")
+        hmac_str = _zip_read(zf, HMAC_FILE).decode("utf-8")
     except KeyError:
         hmac_str = "missing:unsigned"
+    except ValueError as exc:
+        zf.close()
+        raise
     hmac_ok = _verify_manifest(manifest_data, hmac_str, password)
     if not hmac_ok:
         zf.close()
@@ -174,10 +221,12 @@ def _read_zip(input: Path, password: str | None) -> tuple[zipfile.ZipFile, dict,
     except json.JSONDecodeError as exc:
         zf.close()
         raise ValueError(f"manifest.json 格式错误: {exc}") from exc
-    if manifest.get("schema_version") != SCHEMA_VERSION:
+    # M2.1：SCHEMA_VERSION=2 兼容旧 v1（M0.4 备份）
+    sv = manifest.get("schema_version")
+    if sv not in (SCHEMA_VERSION, 1):
         zf.close()
         raise ValueError(
-            f"备份版本不匹配：当前支持 v{SCHEMA_VERSION}, 备份为 v{manifest.get('schema_version')}"
+            f"备份版本不匹配：当前支持 v{SCHEMA_VERSION}/v1，备份为 v{sv}"
         )
     return zf, manifest, zf.namelist(), hmac_ok
 
