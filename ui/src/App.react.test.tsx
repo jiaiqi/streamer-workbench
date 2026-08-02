@@ -18,7 +18,9 @@ const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     });
   }
   if (url.endsWith("/api/themes")) {
-    return new Response(JSON.stringify([]), {
+    return new Response(JSON.stringify([
+      { name: "海洋柔光", prefix: "海洋柔光", watermark_fix: false, backgrounds: {}, notes: "" },
+    ]), {
       status: 200, headers: { "content-type": "application/json" },
     });
   }
@@ -64,5 +66,22 @@ describe("App workspace 视图", () => {
     });
     // workspace 默认视图，左栏有桥接
     expect(screen.getByTestId("workspace-bridge")).toBeTruthy();
+  });
+
+  // ---- M1.7 渐进式海报：相邻页预加载 ----
+  it("workspace 渲染时挂载 next-preload img（grid-wrap 默认 page=1 → 只有 next）", async () => {
+    const App = (await import("./App")).default;
+    await act(async () => {
+      render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    const next = screen.queryByTestId("poster-next-preload") as HTMLImageElement | null;
+    const prev = screen.queryByTestId("poster-prev-preload");
+    expect(next).toBeTruthy();
+    expect(prev).toBeNull();  // page=1 → 没有 prev
+    expect(next!.getAttribute("src")).toContain("/api/render?");
+    expect(next!.getAttribute("src")).toContain("page=2");
+    // hidden img 不会进 a11y tree
+    expect(next!.getAttribute("aria-hidden")).toBe("true");
   });
 });

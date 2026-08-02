@@ -147,6 +147,72 @@ describe("useWorkspaceState 派生", () => {
     expect(result.current.maxPage).toBe(2);
   });
 
+  // ---- M1.7 渐进式海报：相邻页预加载 ----
+  it("page=1 时 prevPreviewSrc 为空，nextPreviewSrc 指向 page=2", async () => {
+    globalThis.fetch = makeFetchSpy() as unknown as typeof fetch;
+    const { result } = renderHook(() => useWorkspaceState());
+    await act(async () => { await vi.runAllTimersAsync(); });
+    expect(result.current.page).toBe(1);
+    expect(result.current.prevPreviewSrc).toBe("");
+    expect(result.current.nextPreviewSrc).toContain("page=2");
+    // nextPreviewSrc 与 previewSrc 同 theme/canvas/avoid，只差 page
+    const next = new URL(result.current.nextPreviewSrc, "http://x");
+    const cur = new URL(result.current.previewSrc, "http://x");
+    expect(next.searchParams.get("theme")).toBe(cur.searchParams.get("theme"));
+    expect(next.searchParams.get("canvas")).toBe(cur.searchParams.get("canvas"));
+    expect(next.searchParams.get("avoid")).toBe(cur.searchParams.get("avoid"));
+  });
+
+  it("page=maxPage 时 nextPreviewSrc 为空，prevPreviewSrc 指向 page=maxPage-1", async () => {
+    globalThis.fetch = makeFetchSpy() as unknown as typeof fetch;
+    const { result } = renderHook(() => useWorkspaceState());
+    await act(async () => { await vi.runAllTimersAsync(); });
+    act(() => { result.current.setPage(2); });
+    expect(result.current.page).toBe(2);
+    expect(result.current.maxPage).toBe(2);
+    expect(result.current.nextPreviewSrc).toBe("");
+    expect(result.current.prevPreviewSrc).toContain("page=1");
+  });
+
+  it("page=中间页时 next/prev 都有", async () => {
+    // 用 3 页 layout 测试
+    const layouts3 = [
+      { id: "grid-wrap", name: "全行网格", pages: 3, supports_avoidance: true },
+    ];
+    globalThis.fetch = makeFetchSpy({ layouts: layouts3 }) as unknown as typeof fetch;
+    const { result } = renderHook(() => useWorkspaceState());
+    await act(async () => { await vi.runAllTimersAsync(); });
+    act(() => { result.current.setPage(2); });
+    expect(result.current.maxPage).toBe(3);
+    expect(result.current.prevPreviewSrc).toContain("page=1");
+    expect(result.current.nextPreviewSrc).toContain("page=3");
+  });
+
+  it("selTheme 为空时 next/prev 都为空", async () => {
+    globalThis.fetch = makeFetchSpy() as unknown as typeof fetch;
+    const { result } = renderHook(() => useWorkspaceState({ layoutId: "nonexistent" }));
+    // 即使没资源，也用空 selTheme 试
+    await act(async () => { await vi.runAllTimersAsync(); });
+    // 实际上 selTheme 仍会被设成 default_theme；测试用 selectTheme(null) 走边界
+    act(() => { result.current.selectTheme(""); });
+    expect(result.current.selTheme).toBeFalsy();
+    expect(result.current.nextPreviewSrc).toBe("");
+    expect(result.current.prevPreviewSrc).toBe("");
+  });
+
+  it("params 变化 → next/prev 跟着变化（paramsQuery 同步）", async () => {
+    globalThis.fetch = makeFetchSpy() as unknown as typeof fetch;
+    const { result } = renderHook(() => useWorkspaceState());
+    await act(async () => { await vi.runAllTimersAsync(); });
+    const nextBefore = result.current.nextPreviewSrc;
+    act(() => { result.current.setParam("margin", 100); });
+    // 防抖 200ms 后 debouncedParams 才更新；推进 fake timers
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    const nextAfter = result.current.nextPreviewSrc;
+    expect(nextAfter).not.toBe(nextBefore);
+    expect(nextAfter).toContain("margin=100");
+  });
+
   it("previewKey 默认 stable；renderKey++ 后变 kN", async () => {
     globalThis.fetch = makeFetchSpy() as unknown as typeof fetch;
     const { result } = renderHook(() => useWorkspaceState());

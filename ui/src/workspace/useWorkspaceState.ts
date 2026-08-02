@@ -132,6 +132,10 @@ export interface UseWorkspaceStateResult {
   activeTheme: Theme | undefined;
   maxPage: number;
   paramsQuery: string;
+
+  // M1.7 渐进式海报：相邻页预加载 src（边界外为空串）
+  nextPreviewSrc: string;
+  prevPreviewSrc: string;
 }
 
 const INITIAL_PARAMS: Record<string, unknown> = {
@@ -313,6 +317,19 @@ export function useWorkspaceState(options: UseWorkspaceStateOptions = {}): UseWo
     [layouts],
   );
 
+  /* ---- M1.7 渐进式海报：相邻页预加载 ----
+     - nextPreviewSrc / prevPreviewSrc：与 previewSrc 同结构（theme/canvas/avoid/params）但 page+1 / page-1
+     - 边界：page=1 时 prevPreviewSrc=""；page=maxPage 时 nextPreviewSrc=""
+     - 用 hidden <img src=...> 触发浏览器预取；用户翻页时缓存命中 → 0ms 切换
+     - 留空字符串让调用方跳过 img 渲染 */
+  const adjacentPreviewSrc = (targetPage: number): string => {
+    if (!selTheme) return "";
+    if (targetPage < 1 || targetPage > maxPage) return "";
+    return `/api/render?theme=${encodeURIComponent(selTheme)}&page=${targetPage}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`;
+  };
+  const nextPreviewSrc = useMemo(() => adjacentPreviewSrc(page + 1), [selTheme, page, maxPage, canvas, avoid, paramsQuery]);
+  const prevPreviewSrc = useMemo(() => adjacentPreviewSrc(page - 1), [selTheme, page, maxPage, canvas, avoid, paramsQuery]);
+
   return {
     // 资源
     themes, layouts, resourceError, setResourceError, clearResourceError, resourcesReady,
@@ -324,5 +341,7 @@ export function useWorkspaceState(options: UseWorkspaceStateOptions = {}): UseWo
     previewError, hasFrame, markLoaded, markFailed,
     // 派生
     previewSrc, previewKey, activeTheme, maxPage, paramsQuery,
+    // M1.7 相邻页预加载
+    nextPreviewSrc, prevPreviewSrc,
   };
 }

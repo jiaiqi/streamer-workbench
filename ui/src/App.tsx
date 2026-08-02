@@ -515,6 +515,25 @@ function AppInner() {
                       onLoaded={ws.markLoaded}
                       onFailed={ws.markFailed} />
                   )}
+                  {/* M1.7 渐进式海报：相邻页预加载（hidden img 触发浏览器预取；翻页时缓存命中 → 0ms 切换） */}
+                  {ws.prevPreviewSrc && (
+                    <img
+                      src={ws.prevPreviewSrc}
+                      alt=""
+                      aria-hidden="true"
+                      data-testid="poster-prev-preload"
+                      className="hidden"
+                    />
+                  )}
+                  {ws.nextPreviewSrc && (
+                    <img
+                      src={ws.nextPreviewSrc}
+                      alt=""
+                      aria-hidden="true"
+                      data-testid="poster-next-preload"
+                      className="hidden"
+                    />
+                  )}
                   {ws.loading && !ws.previewError && !ws.hasFrame && (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2.5 ${dark ? "bg-zinc-800/60" : "bg-background/60"}`}>
                       <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
