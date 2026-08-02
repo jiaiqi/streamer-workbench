@@ -39,6 +39,9 @@ class Song:
     composer: str = ""
     key: str = ""
     capo: Optional[int] = None   # None=未填；0=不夹变调夹（v1→v2 迁移：0→None）
+    # R9.4 个人 Capo 库：同一首歌在不同嗓音/状态下可用不同 Capo
+    capo_options: List[int] = field(default_factory=list)  # 可选 Capo 列表（去重 + 排序），如 [0, 2, 4]
+    capo_default: int = 0  # 习惯 Capo（= capo 字段值；R9.4 之前取 capo，R9.4 之后取 capo_default）
     difficulty: str = ""
     tabs: str = ""
     status: str = "active"     # active（已会，上海报）/ draft（未会，不上海报）
@@ -143,6 +146,8 @@ class SongLibrary:
     # 允许编辑的字段（status 走 mark_active/mark_draft；id 不可编辑，title 是显示字段）
     EDITABLE_FIELDS: ClassVar[tuple] = (
         "title", "artists", "lyricist", "composer", "key", "capo",
+        # R9.4 个人 Capo 库字段
+        "capo_options", "capo_default",
         "difficulty", "tabs", "tags", "pinyin", "notes", "section",
         # R8 弹唱字段：可编辑（前端编辑弹窗 + 音频上传后端会写 audio_*_path）
         "lyrics_lrc", "lyrics_plain",
@@ -198,7 +203,7 @@ class SongLibrary:
         return sum(1 for s in self.songs if s.status == "draft")
 
     # ---- JSON 持久化 ----
-    CURRENT_VERSION: ClassVar[int] = 5
+    CURRENT_VERSION: ClassVar[int] = 7
 
     @staticmethod
     def _migrate_v1_to_v2(data: dict) -> dict:
@@ -263,6 +268,30 @@ class SongLibrary:
                 item["audio_instrumental_path"] = ""
             if not isinstance(item.get("audio_duration_ms"), int) or item["audio_duration_ms"] < 0:
                 item["audio_duration_ms"] = 0
+        return data
+
+    @staticmethod
+    def _migrate_v6_to_v7(data: dict) -> dict:
+        """v6→v7：R9.4 个人 Capo 库字段增量。
+
+        capo_options: list[int] 默认 []
+        capo_default: int 默认取 capo 字段值（None→0）
+        """
+        for item in data.get("songs", []):
+            item.setdefault("capo_options", [])
+            item.setdefault("capo_default", item.get("capo") or 0)
+            # 防御：capo_options 不是 list[int] → 清空
+            opts = item.get("capo_options")
+            if not isinstance(opts, list):
+                item["capo_options"] = []
+            else:
+                # 过滤：保留 0-12 整数，去重，排序
+                clean = sorted({int(x) for x in opts if isinstance(x, int) and 0 <= x <= 12})
+                item["capo_options"] = clean
+            # 防御：capo_default 不是 0-12 int → 用 capo 字段
+            default = item.get("capo_default")
+            if not isinstance(default, int) or default < 0 or default > 12:
+                item["capo_default"] = item.get("capo") or 0
         return data
 
     @staticmethod
@@ -379,7 +408,7 @@ class SongLibrary:
 # 注册版本迁移链（类外注册，避免类体内方法引用顺序问题）
 SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2, 2: SongLibrary._migrate_v2_to_v3,
                                3: SongLibrary._migrate_v3_to_v4, 4: SongLibrary._migrate_v4_to_v5,
-                               5: SongLibrary._migrate_v5_to_v6})
+                               5: SongLibrary._migrate_v5_to_v6, 6: SongLibrary._migrate_v6_to_v7})
 
 
 def pinyin_initials(title: str) -> str:

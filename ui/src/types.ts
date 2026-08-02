@@ -22,6 +22,9 @@ export interface Song {
   composer: string;
   key: string;
   capo: number | null;
+  // R9.4 个人 Capo 库
+  capo_options?: number[];
+  capo_default?: number;
   difficulty: string;
   tabs: string;
   tags: string[];

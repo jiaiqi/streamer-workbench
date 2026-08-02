@@ -18,6 +18,9 @@ class SongEditableFields(StrictRequest):
     composer: Any | None = None
     key: Any | None = None
     capo: Any | None = None
+    # R9.4 个人 Capo 库字段
+    capo_options: list[int] | None = None
+    capo_default: int | None = None
     difficulty: Any | None = None
     tabs: Any | None = None
     tags: list[Any] | None = None
@@ -63,6 +66,9 @@ class SongResponse(BaseModel):
     composer: str
     key: str
     capo: int | None
+    # R9.4 个人 Capo 库字段
+    capo_options: list[int] = Field(default_factory=list)
+    capo_default: int = 0
     difficulty: str
     tabs: str
     tags: list[str]

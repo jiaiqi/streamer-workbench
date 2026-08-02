@@ -433,3 +433,64 @@ describe("PlayView - R9.3 Capo 标识", () => {
     expect(getByTestId("play-view-capo").getAttribute("data-capo")).toBe("0");
   });
 });
+
+/* ================== R9.4 个人 Capo 库 ================== */
+
+describe("PlayView - R9.4 个人 Capo 库", () => {
+  it("「+ 习惯」按钮存在，初始状态 idle", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    const btn = getByTestId("play-view-save-capo");
+    expect(btn).toBeTruthy();
+    expect(btn.getAttribute("data-save-state")).toBe("idle");
+    expect(btn.textContent).toBe("+ 习惯");
+  });
+
+  it("点击「+ 习惯」→ 调 PATCH /api/songs/{id}（带 capo_options + capo_default）", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    // 升 Capo 到 3（模拟主播想用 Capo 3）
+    fireEvent.click(getByTestId("play-view-capo-up"));
+    fireEvent.click(getByTestId("play-view-capo-up"));
+    fireEvent.click(getByTestId("play-view-capo-up"));
+    expect(getByTestId("play-view-capo").getAttribute("data-capo")).toBe("3");
+    // 点 + 习惯 — 这次响应 mock 一次
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValueOnce({});
+    fireEvent.click(getByTestId("play-view-save-capo"));
+    await waitFor(() => {
+      const patchCall = apiRequest.mock.calls.find(c =>
+        String(c[0]) === `/api/songs/${SAMPLE_SONG_WITH_KEY.id}`
+        && (c[1] as { method?: string } | undefined)?.method === "PATCH");
+      expect(patchCall).toBeTruthy();
+    });
+    const patchCall = apiRequest.mock.calls.find(c =>
+      String(c[0]) === `/api/songs/${SAMPLE_SONG_WITH_KEY.id}`)!;
+    const body = (patchCall[1] as { body: { capo_options: number[]; capo_default: number } }).body;
+    expect(body.capo_options).toEqual([3]);  // 空 options + 3 = [3]
+    expect(body.capo_default).toBe(3);
+  });
+
+  it("成功保存 → 按钮变「✓ 已加入」", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    apiRequest.mockResolvedValueOnce({});
+    fireEvent.click(getByTestId("play-view-save-capo"));
+    await waitFor(() => {
+      expect(getByTestId("play-view-save-capo").getAttribute("data-save-state")).toBe("saved");
+    });
+    expect(getByTestId("play-view-save-capo").textContent).toBe("✓ 已加入");
+  });
+});

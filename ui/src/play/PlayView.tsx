@@ -32,6 +32,10 @@
 ///   - 顶栏大字「Capo X / 实际 Key: Y」（基于 song.key + currentCapo 反推）
 ///   - 升降 Capo 大按钮（− / +）；快捷键 ↑ ↓ 升降
 ///   - 仅影响显示 + 联动 mark sung 时把 Capo 写到 note；不真的改 audio 音高
+///
+/// R9.4 个人 Capo 库：
+///   - 顶栏「+ 习惯」按钮：把当前 Capo 加到 song.capo_options + 设 capo_default
+///   - 持久化：PATCH /api/songs/{id} 调 EDITABLE_FIELDS 白名单（capo_options/capo_default）
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { Song, SongsData } from "../types";
@@ -124,13 +128,41 @@ export default function PlayView({
   const [audioRole, setAudioRole] = useState<"vocal" | "instrumental">("vocal");
   // R9.2: 远观模式字号档位（1 / 1.3 / 1.6）；影响 LyricsPanel + TabsPanel 字号
   const [sizeScale, setSizeScale] = useState<1 | 1.3 | 1.6>(1);
-  // R9.3: 当前 Capo（0-12）；初值取 song.capo（v6 后会有 capo_default；v1 暂用单 capo 字段）
-  const [currentCapo, setCurrentCapo] = useState<number>(() => clampCapo(song?.capo ?? 0));
+  // R9.3: 当前 Capo（0-12）；初值取 song.capo_default ?? song.capo ?? 0
+  const [currentCapo, setCurrentCapo] = useState<number>(() => clampCapo(song?.capo_default ?? song?.capo ?? 0));
+  // R9.4: 「+ 习惯」按钮状态
+  const [saveCapoState, setSaveCapoState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  // 歌曲变更时重置 Capo（从 song.capo 取；v6 之后会从 capo_default 取）
+  // 歌曲变更时重置 Capo（从 song.capo_default 取；fallback 到 song.capo）
   useEffect(() => {
-    setCurrentCapo(clampCapo(song?.capo ?? 0));
+    setCurrentCapo(clampCapo(song?.capo_default ?? song?.capo ?? 0));
+    setSaveCapoState("idle");
   }, [song?.id]);
+
+  // R9.4: 「+ 习惯 Capo」— 把当前 Capo 加入 options + 设 default
+  const handleSaveCapo = useCallback(async () => {
+    if (!song || saveCapoState === "saving") return;
+    setSaveCapoState("saving");
+    const existing = Array.isArray(song.capo_options) ? song.capo_options : [];
+    const nextOptions = Array.from(new Set([...existing, currentCapo])).sort((a, b) => a - b);
+    try {
+      await apiRequest(`/api/songs/${encodeURIComponent(song.id)}`, {
+        method: "PATCH",
+        body: {
+          capo_options: nextOptions,
+          capo_default: currentCapo,
+        },
+      });
+      // 乐观更新本地 song（不重拉列表）
+      setSong(prev => prev ? { ...prev, capo_options: nextOptions, capo_default: currentCapo } : prev);
+      setSaveCapoState("saved");
+      // 3 秒后回到 idle
+      setTimeout(() => setSaveCapoState(s => s === "saved" ? "idle" : s), 3000);
+    } catch {
+      setSaveCapoState("error");
+      setTimeout(() => setSaveCapoState(s => s === "error" ? "idle" : s), 3000);
+    }
+  }, [song, currentCapo, saveCapoState]);
 
   // R9.3: 当前 Capo 下的实际 Key（C + Capo 2 = D）
   const actualKey = useMemo(
@@ -385,6 +417,27 @@ export default function PlayView({
                 → {actualKey}
               </span>
             )}
+            {/* R9.4: 「+ 习惯 Capo」按钮 — 把当前 Capo 加入 options + 设 default */}
+            <button
+              type="button"
+              data-testid="play-view-save-capo"
+              data-save-state={saveCapoState}
+              onClick={() => { void handleSaveCapo(); }}
+              disabled={saveCapoState === "saving"}
+              className={`ml-1 h-7 px-2 text-[11px] font-medium rounded-md transition-colors ${
+                saveCapoState === "saved"
+                  ? dark ? "bg-emerald-500/20 text-emerald-300" : "bg-emerald-100 text-emerald-700"
+                  : saveCapoState === "error"
+                    ? dark ? "bg-red-500/20 text-red-300" : "bg-red-100 text-red-700"
+                    : dark ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700" : "bg-muted text-foreground hover:bg-border"
+              }`}
+              title="把当前 Capo 加入个人习惯库（capo_options + capo_default）"
+            >
+              {saveCapoState === "idle" && "+ 习惯"}
+              {saveCapoState === "saving" && "保存中…"}
+              {saveCapoState === "saved" && "✓ 已加入"}
+              {saveCapoState === "error" && "失败"}
+            </button>
           </div>
         )}
         {/* R9.2: 远观模式字号档位按钮 */}

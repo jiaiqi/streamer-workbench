@@ -210,7 +210,8 @@ def test_migration_chain_v1_to_v5():
     assert s["capo"] is None and s["pinyin"] == "zz"
     assert s["learned_at"] == "" and s["tab_files"] == []
     assert s["id"].startswith("song_")
-    assert out["version"] == 5
+    # R8/R9 升级：version 升到 CURRENT_VERSION（链迁移到当前）
+    assert out["version"] == SongLibrary.CURRENT_VERSION
 
 def test_migration_v4_to_v5_is_deterministic():
     source = {"version": 4, "songs": [{"title": "知足"}, {"title": "枫"}]}
@@ -234,6 +235,44 @@ def test_migration_v5_rejects_invalid_identity():
         except ValueError:
             pass
 
+def test_migration_v6_to_v7_capo_library():
+    """R9.4 迁移：补 capo_options/capo_default 字段。"""
+    data = {"version": 6, "songs": [
+        # 没 capo 字段（旧数据）→ capo_options=[], capo_default=0
+        {"id": "song_a", "title": "a"},
+        # capo=2 → capo_options=[], capo_default=2
+        {"id": "song_b", "title": "b", "capo": 2},
+        # capo=None → capo_options=[], capo_default=0
+        {"id": "song_c", "title": "c", "capo": None},
+        # 已有 capo_options（脏数据：含 100/-1/string）→ 清洗为 0-12 整数
+        {"id": "song_d", "title": "d", "capo": 4,
+         "capo_options": [2, 4, 100, -1, "x", 4, 0]},
+        # 已有 capo_default 越界 → 用 capo 字段
+        {"id": "song_e", "title": "e", "capo": 3, "capo_default": 99},
+    ]}
+    out = SongLibrary._migrate(data)
+    assert out["version"] == 7
+    a, b, c, d, e = out["songs"]
+    assert a["capo_options"] == [] and a["capo_default"] == 0
+    assert b["capo_options"] == [] and b["capo_default"] == 2
+    assert c["capo_options"] == [] and c["capo_default"] == 0
+    # 清洗后：[0, 2, 4]（去重 + 排序 + 过滤 100/-1/"x"）
+    assert d["capo_options"] == [0, 2, 4] and d["capo_default"] == 4
+    # 越界 default 回退到 capo=3
+    assert e["capo_default"] == 3
+
+def test_migration_chain_v1_to_v7():
+    """整链：v1 旧数据 → v7 应补全 capo 库字段。"""
+    data = {"version": 1, "songs": [{"title": "知足", "capo": 5, "pinyin": ""}]}
+    out = SongLibrary._migrate(data)
+    s = out["songs"][0]
+    assert out["version"] == 7
+    assert s["capo"] == 5
+    assert s["capo_options"] == []
+    assert s["capo_default"] == 5
+    # 旧 R8 字段也应被 v5→v6 补全
+    assert s["lyrics_lrc"] == "" and s["audio_vocal_path"] == ""
+
 def test_save_load_roundtrip_v5():
     import json, tempfile
     with tempfile.TemporaryDirectory() as d:
@@ -242,7 +281,7 @@ def test_save_load_roundtrip_v5():
         p = os.path.join(d, "songs.json")
         lib.save(p)
         with open(p, encoding="utf-8") as f:
-            assert json.load(f)["version"] == 5
+            assert json.load(f)["version"] == SongLibrary.CURRENT_VERSION
         loaded = SongLibrary.load_from_json(p)
         s = loaded.get("知足")
         assert s.id == lib.get("知足").id
@@ -265,7 +304,7 @@ def test_first_v5_save_backs_up_v4_file():
             assert json.load(f)["version"] == 4
         with open(path, encoding="utf-8") as f:
             saved = json.load(f)
-        assert saved["version"] == 5
+        assert saved["version"] == SongLibrary.CURRENT_VERSION
         assert saved["songs"][0]["id"] == lib.songs[0].id
 
 
@@ -1162,7 +1201,7 @@ def test_r05_migrator_end_to_end():
         assert os.path.isfile(os.path.join(data_root, "tabs", sid, "主歌.png"))
         assert not os.path.isdir(os.path.join(data_root, "tabs", "知足"))
         saved = _json.load(open(os.path.join(data_root, "songs.json"), encoding="utf-8"))
-        assert saved["version"] == 5                                 # v4→v5 持久化
+        assert saved["version"] == SongLibrary.CURRENT_VERSION       # 升到当前
         assert saved["songs"][0]["id"] == sid                        # 确定性 ID
         assert saved["songs"][0]["tab_files"] == [f"tabs/{sid}/主歌.png"]
         migrated = _json.load(open(os.path.join(pdir, "preset.json"), encoding="utf-8"))

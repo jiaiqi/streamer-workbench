@@ -135,7 +135,7 @@ class FileSongRepositoryTests(unittest.TestCase):
             self.assertTrue(snapshot.value.songs[0].id.startswith("song_"))
 
             saved = repository.save(snapshot.value, expected_revision=snapshot.revision)
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["version"], 5)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["version"], SongLibrary.CURRENT_VERSION)
             backups = list((root / "backups").glob("songs-*.json"))
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0].read_bytes(), original_bytes)

@@ -421,6 +421,9 @@ def song_values(song: Song) -> dict[str, Any]:
         "section": song.section, "artists": song.artists,
         "lyricist": song.lyricist, "composer": song.composer,
         "key": song.key, "capo": song.capo,
+        # R9.4 个人 Capo 库
+        "capo_options": list(song.capo_options),
+        "capo_default": song.capo_default,
         "difficulty": song.difficulty, "tabs": song.tabs,
         "tags": song.tags, "pinyin": song.pinyin,
         "added_at": song.added_at, "notes": song.notes,
