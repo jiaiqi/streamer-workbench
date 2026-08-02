@@ -3,6 +3,7 @@ import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
+import TrashView from "../components/TrashView";
 import { apiRequest } from "../api/client";
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
 
@@ -43,7 +44,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
 }) {
   const [songsData, setSongsData] = useState<SongsData | null>(null);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft" | "trash">("all");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Song | "new" | null>(null);
@@ -192,7 +193,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   };
 
   const deleteSong = async (song: Song) => {
-    if (!window.confirm(`确定删除「${song.title}」？此操作会立即写入 songs.json（有自动备份）。`)) return;
+    if (!window.confirm(`确定删除「${song.title}」？R9.6 软删除：30 天内可在垃圾桶恢复。`)) return;
     if (actionSong) return;
     setActionSong(song.id); setActionError("");
     try {
@@ -258,21 +259,37 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
 
       {/* ===== 第二层：状态筛选条 ===== */}
       <div className={`shrink-0 flex items-center gap-1 px-6 h-10 border-b ${hairline} ${dark ? "bg-zinc-800/40" : "bg-muted/40"}`}>
-        {([["all", "全部"], ["active", "已会"], ["draft", "未会"]] as const).map(([id, text]) => (
-          <button key={id} onClick={() => setStatusFilter(id)}
+        {([
+          ["all", "全部"],
+          ["active", "已会"],
+          ["draft", "未会"],
+          ["trash", "垃圾桶"],
+        ] as const).map(([id, text]) => (
+          <button
+            key={id}
+            data-testid={`library-tab-${id}`}
+            onClick={() => setStatusFilter(id)}
             className={`rounded-md px-3 h-6.5 py-1 text-xs font-medium transition-all duration-300 ease-out cursor-pointer ${statusFilter === id
               ? (dark ? "bg-emerald-500/20 text-emerald-300" : "bg-primary-soft text-primary")
-              : (dark ? "text-zinc-500 hover:text-zinc-300" : "text-muted-foreground hover:text-foreground")}`}>
+              : (dark ? "text-zinc-500 hover:text-zinc-300" : "text-muted-foreground hover:text-foreground")}`}
+          >
             {text}
-            <span className="ml-1 tabular-nums opacity-60">
-              {id === "all" ? songsData?.total ?? "" : id === "active" ? songsData?.active ?? "" : songsData?.draft ?? ""}
-            </span>
+            {id !== "trash" && (
+              <span className="ml-1 tabular-nums opacity-60">
+                {id === "all" ? songsData?.total ?? "" : id === "active" ? songsData?.active ?? "" : songsData?.draft ?? ""}
+              </span>
+            )}
           </button>
         ))}
         <span className={`ml-auto text-[11px] ${dark ? "text-zinc-600" : "text-muted-foreground/70"}`}>
           ←→↑↓ 移动 · Enter 展开 · X 学会了 · / 搜索
         </span>
       </div>
+
+      {/* ===== 垃圾桶视图（R9.6） ===== */}
+      {statusFilter === "trash" && (
+        <TrashView dark={dark} onChanged={() => { void refresh(); }} />
+      )}
 
       {actionError && <div className="mx-6 mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500" role="alert">{actionError}</div>}
 
