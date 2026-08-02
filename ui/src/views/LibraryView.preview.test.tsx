@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import LibraryView from "./LibraryView";
+import { ToastProvider } from "../components/Toast";
 
 const apiRequest = vi.fn();
 vi.mock("../api/client", () => ({
@@ -32,10 +33,14 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+function renderWithToast(ui: React.ReactNode) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
+
 describe("LibraryView 试听入口（M1.5）", () => {
   it("网格卡片右上角 ▶ 图标渲染，aria-label 包含歌名", async () => {
     const onPlaySong = vi.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = renderWithToast(
       <LibraryView dark={false} onStatsChange={() => {}} onPlaySong={onPlaySong} />,
     );
     await waitFor(() => expect(getByTestId("library-play-song_1")).toBeTruthy());
@@ -45,7 +50,7 @@ describe("LibraryView 试听入口（M1.5）", () => {
 
   it("点 ▶ 图标调 onPlaySong(songId) — 不传 link（M1.5 browse 模式）", async () => {
     const onPlaySong = vi.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = renderWithToast(
       <LibraryView dark={false} onStatsChange={() => {}} onPlaySong={onPlaySong} />,
     );
     await waitFor(() => expect(getByTestId("library-play-song_2")).toBeTruthy());
@@ -58,7 +63,7 @@ describe("LibraryView 试听入口（M1.5）", () => {
 
   it("点 ▶ 不触发卡片展开（事件 stopPropagation）", async () => {
     const onPlaySong = vi.fn();
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = renderWithToast(
       <LibraryView dark={false} onStatsChange={() => {}} onPlaySong={onPlaySong} />,
     );
     await waitFor(() => expect(getByTestId("library-play-song_1")).toBeTruthy());
@@ -70,7 +75,7 @@ describe("LibraryView 试听入口（M1.5）", () => {
 
   it("展开卡片后操作列出现「试听」按钮（library-preview-）", async () => {
     const onPlaySong = vi.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = renderWithToast(
       <LibraryView dark={false} onStatsChange={() => {}} onPlaySong={onPlaySong} />,
     );
     await waitFor(() => expect(getByTestId("library-play-song_1")).toBeTruthy());
@@ -85,7 +90,7 @@ describe("LibraryView 试听入口（M1.5）", () => {
 
   it("点「试听」按钮调 onPlaySong(songId)", async () => {
     const onPlaySong = vi.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = renderWithToast(
       <LibraryView dark={false} onStatsChange={() => {}} onPlaySong={onPlaySong} />,
     );
     await waitFor(() => expect(getByTestId("library-play-song_1")).toBeTruthy());
@@ -103,11 +108,96 @@ describe("LibraryView 试听入口（M1.5）", () => {
   });
 
   it("onPlaySong 缺失时 ▶ 与「试听」按钮都不渲染（不影响原有库）", async () => {
-    const { queryByTestId, getByTestId } = render(
+    const { queryByTestId, getByTestId } = renderWithToast(
       <LibraryView dark={false} onStatsChange={() => {}} />,
     );
     await waitFor(() => expect(getByTestId("library-tab-all")).toBeTruthy());
     expect(queryByTestId("library-play-song_1")).toBeNull();
     expect(queryByTestId("library-preview-song_1")).toBeNull();
+  });
+});
+
+describe("LibraryView - M9.6b 删除 5s 撤销", () => {
+  it("删除歌曲 → 显示 toast「已删除《X》」+ 撤销按钮（默认 5s）", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockImplementation((path: string) => {
+      if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
+      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
+      return Promise.resolve({});
+    });
+    // 简化流程，跳过 window.confirm
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { getByTestId, getByText } = renderWithToast(
+      <LibraryView dark={false} onStatsChange={() => {}} />,
+    );
+    await waitFor(() => expect(getByTestId("library-tab-all")).toBeTruthy());
+    // 展开 song_1 → 找「删除」按钮（展开面板操作列里）
+    const card = document.querySelectorAll("div.h-full")[0]!;
+    fireEvent.click(card);
+    await waitFor(() => expect(getByText("删除")).toBeTruthy());
+    fireEvent.click(getByText("删除"));
+    // 等待 toast 出现
+    await waitFor(() => {
+      expect(getByTestId("toast-item")).toBeTruthy();
+      expect(getByTestId("toast-message").textContent).toBe("已删除「江南」");
+      expect(getByTestId("toast-action").textContent).toBe("撤销");
+      expect(getByTestId("toast-remaining").textContent).toBe("5s");
+    });
+  });
+
+  it("点 toast「撤销」→ 调 POST /api/songs/{id}/restore + 显示「已恢复」toast", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockImplementation((path: string) => {
+      if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
+      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
+      if (path === "/api/songs/song_1/restore") return Promise.resolve({ ok: true });
+      return Promise.resolve({});
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { getByTestId, getByText } = renderWithToast(
+      <LibraryView dark={false} onStatsChange={() => {}} />,
+    );
+    await waitFor(() => expect(getByTestId("library-tab-all")).toBeTruthy());
+    const card = document.querySelectorAll("div.h-full")[0]!;
+    fireEvent.click(card);
+    await waitFor(() => expect(getByText("删除")).toBeTruthy());
+    fireEvent.click(getByText("删除"));
+    await waitFor(() => expect(getByTestId("toast-action")).toBeTruthy());
+    apiRequest.mockClear();
+    fireEvent.click(getByTestId("toast-action"));
+    await waitFor(() => {
+      // restore API 被调
+      const calls = apiRequest.mock.calls.map(c => c[0]);
+      expect(calls).toContain("/api/songs/song_1/restore");
+    });
+    // 撤销 toast 消失 + 新 toast「已恢复」
+    await waitFor(() => {
+      const toasts = document.querySelectorAll('[data-testid="toast-item"]');
+      expect(toasts.length).toBe(1);
+      expect(getByTestId("toast-message").textContent).toBe("已恢复「江南」");
+    });
+  });
+
+  it("点 toast ✕ 立即消失（不调 restore）", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockImplementation((path: string) => {
+      if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
+      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
+      return Promise.resolve({});
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { getByTestId, getByText } = renderWithToast(
+      <LibraryView dark={false} onStatsChange={() => {}} />,
+    );
+    await waitFor(() => expect(getByTestId("library-tab-all")).toBeTruthy());
+    const card = document.querySelectorAll("div.h-full")[0]!;
+    fireEvent.click(card);
+    await waitFor(() => expect(getByText("删除")).toBeTruthy());
+    fireEvent.click(getByText("删除"));
+    await waitFor(() => expect(getByTestId("toast-close")).toBeTruthy());
+    apiRequest.mockClear();
+    fireEvent.click(getByTestId("toast-close"));
+    expect(document.querySelectorAll('[data-testid="toast-item"]').length).toBe(0);
+    expect(apiRequest).not.toHaveBeenCalledWith("/api/songs/song_1/restore", expect.anything());
   });
 });

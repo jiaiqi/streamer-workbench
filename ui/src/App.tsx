@@ -36,6 +36,7 @@ import { openQuickView, isElectron } from "./electron-bridge";
 import { useWorkspaceState } from "./workspace/useWorkspaceState";
 import { PlayerProvider, usePlayer, type PlayerMode } from "./player/PlayerContext";
 import MiniPlayer from "./components/MiniPlayer";
+import { ToastProvider } from "./components/Toast";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -48,11 +49,14 @@ const navItems = [
 
 /* ==================== App ==================== */
 // M1.3: 外层组件 — 顶层包 PlayerProvider，让 usePlayer() 在整个 App 树可用。
+// M9.6b: 同层包 ToastProvider，让 useToast() 全树可用（撤销 / 通知 / 错误提示）。
 // QuickView 独立窗口有自己的 store，不包 Provider（它不需要跨场景播放器状态）。
 export default function App() {
   return (
     <PlayerProvider>
-      <AppInner />
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
     </PlayerProvider>
   );
 }

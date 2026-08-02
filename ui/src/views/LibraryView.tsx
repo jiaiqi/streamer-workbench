@@ -4,6 +4,7 @@ import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
 import TrashView from "../components/TrashView";
+import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
 import { toRequestFailure, useLatestRequest } from "../async/requestState";
 
@@ -56,6 +57,8 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
   const probeRef = useRef<HTMLDivElement>(null);
+  // M9.6b 全局 toast — 删除成功显示 5s 撤销按钮
+  const toast = useToast();
 
   const refresh = async () => {
     const d = await listRequest.run(signal => apiRequest<SongsData>("/api/songs/list", { signal }));
@@ -200,6 +203,19 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
       await apiRequest("/api/songs/delete", { method: "POST", body: { title: song.title } });
       if (expanded === song.title) setExpanded(null);
       await refresh();
+      // M9.6b: 5s 撤销窗口 — 点撤销调 POST /api/songs/{id}/restore
+      toast.show({
+        message: `已删除「${song.title}」`,
+        action: {
+          label: "撤销",
+          onClick: async () => {
+            await apiRequest(`/api/songs/${song.id}/restore`, { method: "POST" });
+            await refresh();
+            toast.show({ message: `已恢复「${song.title}」`, durationMs: 3000 });
+          },
+        },
+        durationMs: 5000,
+      });
     } catch (reason) { setActionError(toRequestFailure(reason, "删除失败").message); }
     finally { setActionSong(null); }
   };
