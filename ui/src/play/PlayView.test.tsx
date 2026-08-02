@@ -347,3 +347,89 @@ describe("PlayView - R9.2 远观模式", () => {
     });
   });
 });
+
+/* ================== R9.3 Capo 标识 ================== */
+
+const SAMPLE_SONG_WITH_KEY = {
+  ...SAMPLE_SONG,
+  key: "C",  // 原调 C
+  capo: 0,
+};
+
+describe("PlayView - R9.3 Capo 标识", () => {
+  it("Capo 组件渲染，初始取 song.capo=0 → 显示「无 Capo」", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    const capoBox = getByTestId("play-view-capo");
+    expect(capoBox.getAttribute("data-capo")).toBe("0");
+    expect(getByTestId("play-view-capo-value").textContent).toBe("无 Capo");
+    // C + 0 = C，没有 → 实际 Key
+    expect(capoBox.querySelector('[data-testid="play-view-actual-key"]')).toBeNull();
+  });
+
+  it("点击 + 按钮 → Capo 升 1 → 显示「Capo 1」+ 实际 Key=C#", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    fireEvent.click(getByTestId("play-view-capo-up"));
+    const capoBox = getByTestId("play-view-capo");
+    expect(capoBox.getAttribute("data-capo")).toBe("1");
+    expect(capoBox.getAttribute("data-actual-key")).toBe("C#");
+    expect(getByTestId("play-view-capo-value").textContent).toBe("Capo 1");
+    expect(getByTestId("play-view-actual-key").textContent).toContain("→ C#");
+  });
+
+  it("Capo 0 时 − 按钮 disabled；Capo 12 时 + 按钮 disabled", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    expect((getByTestId("play-view-capo-down") as HTMLButtonElement).disabled).toBe(true);
+    // 升到 12
+    for (let i = 0; i < 12; i++) fireEvent.click(getByTestId("play-view-capo-up"));
+    expect(getByTestId("play-view-capo").getAttribute("data-capo")).toBe("12");
+    expect((getByTestId("play-view-capo-up") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("按 ↓↓↑↑ 快捷键 → Capo 跟着变", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    // Capo 0 → 1（↑）→ 2（↑）→ 1（↓）→ 2（↑）
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    expect(getByTestId("play-view-capo").getAttribute("data-capo")).toBe("2");
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(getByTestId("play-view-capo").getAttribute("data-capo")).toBe("1");
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    expect(getByTestId("play-view-capo").getAttribute("data-capo")).toBe("2");
+  });
+
+  it("INPUT 元素聚焦时快捷键不触发", async () => {
+    const { getByTestId, container } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG_WITH_KEY.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    // 模拟 input 元素聚焦：jsdom 中 input 元素无进度条 input，但可以 dispatch
+    const input = document.createElement("input");
+    container.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    // Capo 应该是 0 没变
+    expect(getByTestId("play-view-capo").getAttribute("data-capo")).toBe("0");
+  });
+});

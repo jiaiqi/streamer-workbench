@@ -27,11 +27,17 @@
 /// R9.2 远观模式：
 ///   - 顶栏字号档位按钮 1× / 1.3× / 1.6×（影响 LyricsPanel + TabsPanel 字号）
 ///   - 弹唱时屏幕 1-2m 远，普通字号看不清
+///
+/// R9.3 Capo 标识：
+///   - 顶栏大字「Capo X / 实际 Key: Y」（基于 song.key + currentCapo 反推）
+///   - 升降 Capo 大按钮（− / +）；快捷键 ↑ ↓ 升降
+///   - 仅影响显示 + 联动 mark sung 时把 Capo 写到 note；不真的改 audio 音高
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { Song, SongsData } from "../types";
 import { parseLrc, distributePlainLyrics } from "./lrc";
 import { parseChordpro } from "./chordpro";
+import { transposeKey, clampCapo } from "./capo";
 import LyricsPanel from "./LyricsPanel";
 import TabsPanel from "./TabsPanel";
 import PlayerBar from "./PlayerBar";
@@ -118,6 +124,38 @@ export default function PlayView({
   const [audioRole, setAudioRole] = useState<"vocal" | "instrumental">("vocal");
   // R9.2: 远观模式字号档位（1 / 1.3 / 1.6）；影响 LyricsPanel + TabsPanel 字号
   const [sizeScale, setSizeScale] = useState<1 | 1.3 | 1.6>(1);
+  // R9.3: 当前 Capo（0-12）；初值取 song.capo（v6 后会有 capo_default；v1 暂用单 capo 字段）
+  const [currentCapo, setCurrentCapo] = useState<number>(() => clampCapo(song?.capo ?? 0));
+
+  // 歌曲变更时重置 Capo（从 song.capo 取；v6 之后会从 capo_default 取）
+  useEffect(() => {
+    setCurrentCapo(clampCapo(song?.capo ?? 0));
+  }, [song?.id]);
+
+  // R9.3: 当前 Capo 下的实际 Key（C + Capo 2 = D）
+  const actualKey = useMemo(
+    () => transposeKey(song?.key ?? "", currentCapo),
+    [song?.key, currentCapo],
+  );
+
+  // R9.3: 升降 Capo 快捷键 ↑ ↓（顶栏聚焦时跳过避免重复触发）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setCurrentCapo(c => clampCapo(c + 1));
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setCurrentCapo(c => clampCapo(c - 1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // R8.1: 该歌可用 audio 列表（从 song 字段推断，避免额外请求）
   const hasVocal = !!song?.audio_vocal_path;
@@ -289,6 +327,66 @@ export default function PlayView({
             </p>
           )}
         </div>
+        {/* R9.3: Capo 大字标识 + 升降按钮 + 实际 Key 显示 */}
+        {song && (
+          <div
+            className="flex shrink-0 items-center gap-1 rounded-lg border px-1.5 py-0.5"
+            data-testid="play-view-capo"
+            data-capo={currentCapo}
+            data-actual-key={actualKey}
+            title="变调夹位置（↑ 升 / ↓ 降）"
+          >
+            <button
+              type="button"
+              data-testid="play-view-capo-down"
+              onClick={() => setCurrentCapo(c => clampCapo(c - 1))}
+              disabled={currentCapo <= 0}
+              className={`h-7 w-7 inline-flex items-center justify-center rounded-md text-base font-bold transition-colors ${
+                currentCapo <= 0
+                  ? "cursor-not-allowed opacity-30"
+                  : dark ? "hover:bg-zinc-700" : "hover:bg-muted"
+              }`}
+              aria-label="降 Capo"
+            >
+              −
+            </button>
+            <span
+              data-testid="play-view-capo-value"
+              className={`min-w-[58px] text-center text-sm font-bold tabular-nums ${
+                currentCapo === 0
+                  ? dark ? "text-zinc-500" : "text-muted-foreground"
+                  : dark ? "text-amber-300" : "text-amber-700"
+              }`}
+            >
+              {currentCapo === 0 ? "无 Capo" : `Capo ${currentCapo}`}
+            </span>
+            <button
+              type="button"
+              data-testid="play-view-capo-up"
+              onClick={() => setCurrentCapo(c => clampCapo(c + 1))}
+              disabled={currentCapo >= 12}
+              className={`h-7 w-7 inline-flex items-center justify-center rounded-md text-base font-bold transition-colors ${
+                currentCapo >= 12
+                  ? "cursor-not-allowed opacity-30"
+                  : dark ? "hover:bg-zinc-700" : "hover:bg-muted"
+              }`}
+              aria-label="升 Capo"
+            >
+              +
+            </button>
+            {song.key && actualKey && actualKey !== song.key && (
+              <span
+                className={`ml-1 text-[11px] tabular-nums ${
+                  dark ? "text-zinc-400" : "text-muted-foreground"
+                }`}
+                data-testid="play-view-actual-key"
+                title={`原 Key ${song.key} + Capo ${currentCapo} = 实际 ${actualKey}`}
+              >
+                → {actualKey}
+              </span>
+            )}
+          </div>
+        )}
         {/* R9.2: 远观模式字号档位按钮 */}
         <div
           className="flex shrink-0 items-center rounded-full border px-1 py-0.5 text-[10px]"
