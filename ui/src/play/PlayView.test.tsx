@@ -494,3 +494,88 @@ describe("PlayView - R9.4 个人 Capo 库", () => {
     expect(getByTestId("play-view-save-capo").textContent).toBe("✓ 已加入");
   });
 });
+
+describe("PlayView - M1.6 LRC 同步（timeupdate → LyricsPanel）", () => {
+  // M1.6a: 验证 audio timeupdate 事件 → currentTimeMs → LyricsPanel 切当前行
+  // 旧 R8 链路是「currentTimeMs state 上推 → 子组件响应」；这里直接测链路是否通
+  const SONG_WITH_AUDIO = {
+    ...SAMPLE_SONG,
+    id: "song_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    title: "测试歌-带音频",
+    audio_vocal_path: "vocal.mp3",
+    audio_instrumental_path: "",
+    audio_duration_ms: 30000,
+    lyrics_lrc: "[00:00.00]前奏\n[00:10.00]第一句\n[00:20.00]第二句",
+  };
+
+  it("audio timeupdate → LyricsPanel 当前行切换（第一行 → 第二行）", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ songs: [SONG_WITH_AUDIO], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SONG_WITH_AUDIO.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+
+    // 初始 currentTimeMs=0 → 第一行（"前奏"）active
+    const audio = getByTestId("play-view-audio") as HTMLAudioElement;
+    expect(audio).toBeTruthy();
+
+    // 模拟 timeupdate：currentTime=15s → 第二行（"第一句"）
+    Object.defineProperty(audio, "currentTime", { configurable: true, value: 15, writable: true });
+    audio.dispatchEvent(new Event("timeupdate"));
+
+    await waitFor(() => {
+      const lines = document.querySelectorAll('[data-testid="lyrics-panel-line"]');
+      const activeLine = Array.from(lines).find(ln => ln.getAttribute("data-active") === "true");
+      expect(activeLine).toBeTruthy();
+      expect(activeLine!.getAttribute("data-time-ms")).toBe("10000");
+      expect(activeLine!.textContent).toBe("第一句");
+    });
+  });
+
+  it("timeupdate 推 22s → LyricsPanel 当前行切到「第二句」", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ songs: [SONG_WITH_AUDIO], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SONG_WITH_AUDIO.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    const audio = getByTestId("play-view-audio") as HTMLAudioElement;
+    Object.defineProperty(audio, "currentTime", { configurable: true, value: 22, writable: true });
+    audio.dispatchEvent(new Event("timeupdate"));
+    await waitFor(() => {
+      const lines = document.querySelectorAll('[data-testid="lyrics-panel-line"]');
+      const activeLine = Array.from(lines).find(ln => ln.getAttribute("data-active") === "true");
+      expect(activeLine!.textContent).toBe("第二句");
+    });
+  });
+
+  it("拖动进度条（onSeek）→ LyricsPanel 当前行同步切", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ songs: [SONG_WITH_AUDIO], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SONG_WITH_AUDIO.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    // PlayerBar 进度条 range input — 设 value=50 → 50% of totalMs
+    // totalMs 来自 audio_duration_ms=30000 或 audio.duration；我们 mock 一下
+    const audio = getByTestId("play-view-audio") as HTMLAudioElement;
+    Object.defineProperty(audio, "duration", { configurable: true, value: 30, writable: true });
+    audio.dispatchEvent(new Event("durationchange"));
+    const progress = getByTestId("player-bar-progress") as HTMLInputElement;
+    Object.defineProperty(progress, "value", { configurable: true, value: "50", writable: true });
+    fireEvent.change(progress);
+    await waitFor(() => {
+      const lines = document.querySelectorAll('[data-testid="lyrics-panel-line"]');
+      const activeLine = Array.from(lines).find(ln => ln.getAttribute("data-active") === "true");
+      // 50% * 30000ms = 15000ms → "第一句" (10-20s)
+      expect(activeLine!.textContent).toBe("第一句");
+    });
+  });
+});
