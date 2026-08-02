@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { Song } from "../types";
 import { apiRequest } from "../api/client";
 import { toRequestFailure } from "../async/requestState";
@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import ConfirmDialog from "./ConfirmDialog";
 
 /* ---- 歌曲编辑对话框（增删改全字段，弹唱信息独立分组）----
    基于 shadcn/ui Dialog：自带焦点锁定、Escape、遮罩关闭与 aria 属性。
@@ -42,8 +43,22 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
       tags: (target.tags ?? []).join("，"), pinyin: target.pinyin ?? "", notes: target.notes ?? "",
     };
   });
+  // L1.4 草稿保护：useRef 锁定初始 form（不随 re-render 变化），JSON 对比检测 dirty
+  const originalFormRef = useRef<Record<string, string>>(form);
+  const isDirty = JSON.stringify(form) !== JSON.stringify(originalFormRef.current);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  /** 尝试关闭：未改动直接关；改动先弹确认 */
+  const tryClose = () => {
+    if (saving) return;  // 保存中禁止
+    if (isDirty) {
+      setConfirmCloseOpen(true);
+    } else {
+      onClose();
+    }
+  };
 
   const save = async () => {
     if (saving) return;
@@ -80,7 +95,8 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
   );
 
   return (
-    <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}>
+    <>
+    <Dialog open onOpenChange={open => { if (!open) tryClose(); }}>
       <DialogContent className="sm:max-w-[460px] max-h-[85vh] overflow-y-auto"
         onInteractOutside={e => { if (saving) e.preventDefault(); }}
         onEscapeKeyDown={e => { if (saving) e.preventDefault(); }}>
@@ -170,7 +186,7 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
         {error && <p className="mt-3 text-sm text-destructive" role="alert" aria-live="polite">{error}</p>}
 
         <DialogFooter>
-          <Button type="button" variant="ghost" onClick={() => !saving && onClose()} disabled={saving}>
+          <Button type="button" variant="ghost" onClick={tryClose} disabled={saving}>
             取消
           </Button>
           <Button type="button" onClick={save} disabled={saving}>
@@ -179,5 +195,17 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* L1.4 草稿保护：有改动时尝试关闭 → 二次确认 */}
+    <ConfirmDialog
+      open={confirmCloseOpen}
+      onClose={() => setConfirmCloseOpen(false)}
+      onConfirm={() => onClose()}
+      title="放弃未保存的改动？"
+      description="关闭后已修改的内容将丢失，且无法恢复。"
+      confirmLabel="放弃改动"
+      confirmVariant="destructive"
+    />
+    </>
   );
 }
