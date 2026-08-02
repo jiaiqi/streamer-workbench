@@ -1,14 +1,19 @@
 /// R8.0 弹唱：PlayView — 弹唱主视图
 ///
-/// 整合 LyricsPanel + TabsPanel + PlayerBar；v8.0 用"模拟时间"驱动（用 setInterval 模拟播放）。
-/// 父组件传入 song 数据（包含 lyrics_lrc / lyrics_plain / tabs 字段）。
+/// 整合 LyricsPanel + TabsPanel + PlayerBar；R8.1 接 HTML5 audio 元素。
+/// 父组件传入 song 数据（包含 lyrics_lrc / lyrics_plain / tabs / audio_vocal_path / audio_instrumental_path）。
 ///
 /// 设计：
-///   - 顶栏：返回按钮 + 歌名 - 歌手 + 状态标签
+///   - 顶栏：返回按钮 + 歌名 - 歌手 + vocal/instrumental 切换 + 状态标签
 ///   - 中央：左歌词（60%宽）+ 右曲谱（40%宽）
-///   - 底部：PlayerBar
+///   - 底部：PlayerBar（实际 audio 元素）
 ///   - 数据缺失：显示 EmptyState 提示"这首歌还没歌词/曲谱"
-import { useEffect, useMemo, useRef, useState } from "react";
+///
+/// R8.1 audio 集成：
+///   - <audio ref> 真实播放；timeupdate 推 currentTimeMs → LyricsPanel/TabsPanel
+///   - 切 vocal/instrumental：换 audio.src
+///   - play/pause/ended 事件：本地 state + 上报 POST /api/playback/events
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { Song, SongsData } from "../types";
 import { parseLrc, distributePlainLyrics } from "./lrc";
@@ -83,39 +88,98 @@ export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
     return parseChordpro(song.tabs);
   }, [song]);
 
-  // 估算总时长：优先 audio_duration_ms；否则用歌词行数 × 8 秒（每行约 8 秒经验值）
+  // R8.1: 当前选中的 audio role（vocal / instrumental）
+  const [audioRole, setAudioRole] = useState<"vocal" | "instrumental">("vocal");
+
+  // R8.1: 该歌可用 audio 列表（从 song 字段推断，避免额外请求）
+  const hasVocal = !!song?.audio_vocal_path;
+  const hasInstrumental = !!song?.audio_instrumental_path;
+  const hasAudio = hasVocal || hasInstrumental;
+
+  // R8.1: 当前选中的 audio 路径（决定 audio src）
+  const audioSrc = useMemo(() => {
+    if (!song || !hasAudio) return "";
+    const relpath = audioRole === "vocal" ? song.audio_vocal_path : song.audio_instrumental_path;
+    if (!relpath) return "";
+    // relpath 是 "audio/song_xxx/vocal.mp3"，转为 /api/songs/{id}/audio/{role}/file
+    const rolePath = audioRole;  // url 段
+    // songId 已经在 props 里
+    return `/api/songs/${encodeURIComponent(song.id)}/audio/${rolePath}/file`;
+  }, [song, audioRole, hasAudio]);
+
+  // R8.1: audio 元素引用
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // R8.1: 上报 playback 事件的辅助（fire-and-forget；失败静默）
+  const reportEvent = useCallback((type: string, positionMs: number, durationMs: number = 0) => {
+    if (!song) return;
+    void apiRequest("/api/playback/events", {
+      method: "POST",
+      body: {
+        type,
+        song_id: song.id,
+        source: audioRole,
+        position_ms: Math.max(0, Math.floor(positionMs)),
+        duration_ms: Math.max(0, Math.floor(durationMs)),
+      },
+    }).catch(() => { /* 静默：上报失败不阻塞播放 */ });
+  }, [song, audioRole]);
+
+  // R8.1: 实际 audio 元素的事件 → state
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onTimeUpdate = () => setCurrentTimeMs(Math.floor(el.currentTime * 1000));
+    const onDurationChange = () => {
+      if (Number.isFinite(el.duration) && el.duration > 0) {
+        setDurationMs(Math.floor(el.duration * 1000));
+      }
+    };
+    const onPlay = () => {
+      setIsPlaying(true);
+      reportEvent("playback_started", 0);
+    };
+    const onPause = () => {
+      setIsPlaying(false);
+      reportEvent("playback_paused", el.currentTime * 1000);
+    };
+    const onEnded = () => {
+      setIsPlaying(false);
+      reportEvent("playback_completed", el.duration * 1000, el.duration * 1000);
+    };
+    el.addEventListener("timeupdate", onTimeUpdate);
+    el.addEventListener("durationchange", onDurationChange);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    el.addEventListener("ended", onEnded);
+    return () => {
+      el.removeEventListener("timeupdate", onTimeUpdate);
+      el.removeEventListener("durationchange", onDurationChange);
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
+      el.removeEventListener("ended", onEnded);
+    };
+  }, [reportEvent]);
+
+  // 估算总时长：优先 song.audio_duration_ms；否则用 audio 实际 duration；否则歌词行数 × 8 秒
+  const [durationMs, setDurationMs] = useState(0);
   const totalMs = useMemo(() => {
+    if (durationMs > 0) return durationMs;
     if (song?.audio_duration_ms && song.audio_duration_ms > 0) return song.audio_duration_ms;
     if (lyricsLines.length > 0) return lyricsLines.length * 8_000;
     return DEFAULT_TOTAL_MS;
-  }, [song, lyricsLines]);
+  }, [durationMs, song, lyricsLines]);
 
-  // 模拟播放：isPlaying 时每秒推 1000ms
+  // 切 role 时（src 变）—— 如果在播放，先暂停（让用户手动重播以避免 auto-play 阻塞）
+  const lastRoleRef = useRef(audioRole);
   useEffect(() => {
-    if (!isPlaying) {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
+    if (lastRoleRef.current !== audioRole) {
+      lastRoleRef.current = audioRole;
+      // 切 role 时清空 currentTime（audio 会重新 loadedmetadata）
+      setCurrentTimeMs(0);
+      setIsPlaying(false);
     }
-    timerRef.current = window.setInterval(() => {
-      setCurrentTimeMs(prev => {
-        const next = prev + 1000;
-        if (next >= totalMs) {
-          setIsPlaying(false);
-          return totalMs;
-        }
-        return next;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [isPlaying, totalMs]);
+  }, [audioRole]);
 
   if (loading) {
     return (
@@ -169,6 +233,27 @@ export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
             </p>
           )}
         </div>
+        {/* R8.1: vocal / instrumental 切换（仅当两轨都有时显示） */}
+        {hasVocal && hasInstrumental && (
+          <div className="flex shrink-0 items-center rounded-full border px-1 py-0.5 text-[10px]">
+            {(["vocal", "instrumental"] as const).map(role => (
+              <button
+                key={role}
+                type="button"
+                data-testid={`play-view-role-${role}`}
+                data-active={audioRole === role ? "true" : "false"}
+                onClick={() => setAudioRole(role)}
+                className={`rounded-full px-2 py-0.5 transition-colors ${
+                  audioRole === role
+                    ? dark ? "bg-emerald-500/20 text-emerald-300" : "bg-emerald-100 text-emerald-700"
+                    : dark ? "text-zinc-400 hover:text-zinc-200" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {role === "vocal" ? "原声" : "伴奏"}
+              </button>
+            ))}
+          </div>
+        )}
         <span
           data-testid="play-view-state"
           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${
@@ -196,16 +281,38 @@ export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
         </section>
       </main>
 
+      {/* 实际 audio 元素（R8.1） */}
+      {hasAudio && (
+        <audio
+          ref={audioRef}
+          src={audioSrc}
+          preload="metadata"
+          data-testid="play-view-audio"
+          data-role={audioRole}
+          className="hidden"
+        />
+      )}
+
       {/* 底部播放器 */}
       <PlayerBar
         dark={dark}
         isPlaying={isPlaying}
         currentTimeMs={currentTimeMs}
         totalMs={totalMs}
-        hasAudio={false /* v8.0 暂不接 audio */}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onSeek={setCurrentTimeMs}
+        hasAudio={hasAudio}
+        onPlay={() => {
+          const el = audioRef.current;
+          if (el) void el.play().catch(() => { /* 浏览器 auto-play 限制或加载失败 */ });
+        }}
+        onPause={() => {
+          const el = audioRef.current;
+          if (el) el.pause();
+        }}
+        onSeek={(ms) => {
+          const el = audioRef.current;
+          if (el) el.currentTime = ms / 1000;
+          setCurrentTimeMs(ms);
+        }}
       />
     </div>
   );
