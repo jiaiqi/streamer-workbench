@@ -7,12 +7,17 @@
 ///   - ↑↓ 选中，Enter 执行
 ///   - 跨视图通用：工作台、歌曲库、学歌、直播、统计、设置都可用
 ///
+/// M1.2 蓝图 v0.1：扩展为「全局找歌 + 命令」混合面板
+///   - songResults 存在时，歌曲搜索结果显示在 commands 之前
+///   - 选中歌曲 → onPickSong(song) 回调（默认进 PlayView）
+///   - 歌曲分组标签 "歌曲"
+///
 /// 命令格式：
 ///   { id, title, group, shortcut?, action: () => void }
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../icons";
 
-export type CommandGroup = "视图" | "操作" | "海报" | "速查";
+export type CommandGroup = "视图" | "操作" | "海报" | "速查" | "歌曲";
 
 export interface Command {
   id: string;
@@ -30,23 +35,51 @@ export interface CommandPaletteProps {
   onClose: () => void;
   commands: Command[];
   dark?: boolean;
+  /** M1.2: 歌曲搜索结果（来自 App.tsx 的 searchSongs）— 显示在 commands 之前 */
+  songResults?: Array<{ id: string; title: string; artists: string[]; key?: string; status?: string }>;
+  /** M1.2: 选中歌曲回调（默认进 PlayView） */
+  onPickSong?: (songId: string) => void;
+  /** M1.2: 当前 query（受控）— App.tsx 用它跑 searchSongs */
+  query?: string;
+  onQueryChange?: (q: string) => void;
 }
 
-export default function CommandPalette({ open, onClose, commands, dark }: CommandPaletteProps) {
-  const [query, setQuery] = useState("");
+export default function CommandPalette({ open, onClose, commands, dark, songResults, onPickSong, query: controlledQuery, onQueryChange }: CommandPaletteProps) {
+  const [internalQuery, setInternalQuery] = useState("");
+  // 受控/非受控：若传 query+onQueryChange 则受控
+  const isControlled = controlledQuery !== undefined;
+  const query = isControlled ? controlledQuery : internalQuery;
+  const setQuery = (q: string) => {
+    if (isControlled) onQueryChange?.(q);
+    else setInternalQuery(q);
+  };
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // M1.2: 把 songResults 转成"虚拟 Command"放在 commands 之前
+  const songCommands = useMemo<Command[]>(() => {
+    if (!songResults || songResults.length === 0) return [];
+    return songResults.map(s => ({
+      id: `song-${s.id}`,
+      title: s.title,
+      group: "歌曲" as CommandGroup,
+      keywords: [...(s.artists || []), s.key ?? ""].filter(Boolean),
+      description: s.artists?.length ? s.artists.join(" · ") + (s.key ? ` · ${s.key}` : "") : s.key,
+      action: () => onPickSong?.(s.id),
+    }));
+  }, [songResults, onPickSong]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return commands;
-    return commands.filter(cmd => {
+    const allCmds = [...songCommands, ...commands];
+    if (!q) return allCmds;
+    return allCmds.filter(cmd => {
       if (cmd.title.toLowerCase().includes(q)) return true;
       if (cmd.keywords?.some(k => k.toLowerCase().includes(q))) return true;
       if (cmd.description?.toLowerCase().includes(q)) return true;
       return false;
     });
-  }, [commands, query]);
+  }, [commands, query, songCommands]);
 
   const grouped = useMemo(() => {
     const map = new Map<CommandGroup, Command[]>();

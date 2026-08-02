@@ -22,6 +22,8 @@ import PreviewCrossfade from "./components/PreviewCrossfade";
 import ParamInspector from "./components/ParamInspector";
 import ColumnTemplatePicker from "./components/ColumnTemplatePicker";
 import CommandPalette, { type Command } from "./components/CommandPalette";
+import { searchSongs } from "./search/globalSongSearch";
+import type { Song } from "./types";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
 import { savePoster } from "./api/posters";
@@ -182,6 +184,27 @@ export default function App() {
   const maxPage = ws.maxPage;
   /* ---- R4.1.5 命令面板：Cmd+K 跨视图 ---- */
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /* ---- M1.2 全局找歌：所有 songs（搜索用）---- */
+  const [allSongs, setAllSongs] = useState<Song[]>([]);
+  useEffect(() => {
+    let active = true;
+    apiRequest<SongsData | Song[]>("/api/songs/list", {})
+      .then(data => {
+        if (!active) return;
+        const list: Song[] = Array.isArray(data) ? data
+          : (data && typeof data === "object" && "songs" in data && Array.isArray((data as SongsData).songs))
+            ? (data as SongsData).songs : [];
+        setAllSongs(list);
+      })
+      .catch(() => { /* 静默 — CommandPalette 仍能用命令 */ });
+    return () => { active = false; };
+  }, []);
+  /* M1.2 实时计算搜歌结果（query 来自 CommandPalette 内部，这里只暴露 songResults） */
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const songResults = useMemo(
+    () => paletteQuery.trim() ? searchSongs(paletteQuery, allSongs, { limit: 5 }) : [],
+    [paletteQuery, allSongs],
+  );
 
   const commands: Command[] = useMemo(() => [
     { id: "view-workspace", title: "切换到海报工作台", group: "视图", shortcut: "1", keywords: ["poster", "海报"], action: () => setView("workspace") },
@@ -694,12 +717,16 @@ export default function App() {
         lastRenderMs={ws.lastRenderMs}
         onRendered={ws.setLastRenderMs}
       />
-      {/* R4.1.5 Cmd+K 命令面板 */}
+      {/* R4.1.5 Cmd+K 命令面板 + M1.2 全局找歌 */}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         commands={commands}
         dark={dark}
+        songResults={songResults}
+        onPickSong={(id) => { handlePlaySong(id); setPaletteOpen(false); }}
+        query={paletteQuery}
+        onQueryChange={setPaletteQuery}
       />
     </div>
   );
