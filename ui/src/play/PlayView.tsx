@@ -19,6 +19,10 @@
 ///   - 顶栏显示「联播 · {requester_name}」标签 + 「已唱」按钮（联动模式显示）
 ///   - audio ended → 自动调 POST /api/live-sessions/{linkedSessionId}/record (result=sung) + 触发 onBack
 ///   - 联动模式下 onBack 切回 live 视图；非联动模式切回 library 视图（由 App.tsx 决定）
+///
+/// R9.1 联动增强：
+///   - 顶栏「↻ 再唱一遍」按钮：重置 audio.currentTime + 重新 play + 重置 recordSubmittedRef
+///   - 用于主播临时想从头再唱一次（间奏太长 / 观众想再听副歌）
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { Song, SongsData } from "../types";
@@ -313,6 +317,31 @@ export default function PlayView({
           >
             联播 · {linkedRequesterName || "主播"}
           </span>
+        )}
+        {/* R9.1: 联动模式下「再唱一遍」按钮 — 重置 audio + 重置 recordSubmittedRef + 重新 play */}
+        {linkedSessionId && linkedRequestId && (
+          <button
+            type="button"
+            data-testid="play-view-replay"
+            onClick={() => {
+              const el = audioRef.current;
+              if (el) {
+                el.currentTime = 0;
+                void el.play().catch(() => { /* auto-play 限制或加载失败 */ });
+              }
+              setCurrentTimeMs(0);
+              // 允许再次点「已唱」（如果已经 sung 过一次）
+              recordSubmittedRef.current = false;
+            }}
+            className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              dark
+                ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                : "bg-muted text-foreground hover:bg-border"
+            }`}
+            title="从头重新弹唱（重置进度 + 重新播放）"
+          >
+            ↻ 再唱一遍
+          </button>
         )}
         {/* R8.2: 联播模式下显示「已唱」按钮 — 手动标记 sung（不等 ended） */}
         {linkedSessionId && linkedRequestId && (

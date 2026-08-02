@@ -228,3 +228,71 @@ describe("PlayView - R8.2 联动模式", () => {
     });
   });
 });
+
+/* ================== R9.1 再唱一遍 ================== */
+
+describe("PlayView - R9.1 再唱一遍", () => {
+  it("联动模式：「再唱一遍」按钮存在", async () => {
+    const { getByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_SONG.id}
+        onBack={() => {}}
+        linkedSessionId="sess_r1"
+        linkedRequestId="req_r1"
+        linkedRequesterName="小刚"
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    expect(getByTestId("play-view-replay")).toBeTruthy();
+  });
+
+  it("非联动模式：不显示「再唱一遍」按钮", async () => {
+    const { queryByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(queryByTestId("play-view")?.getAttribute("data-state")).toBe("ready");
+    });
+    expect(queryByTestId("play-view-replay")).toBeNull();
+  });
+
+  it("联动模式：先「已唱」再「再唱一遍」+ 再「已唱」→ record API 可被再次调用", async () => {
+    const onBack = vi.fn();
+    const { getByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_SONG.id}
+        onBack={onBack}
+        linkedSessionId="sess_r2"
+        linkedRequestId="req_r2"
+        linkedRequesterName="小刚"
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValue({});
+    // 第一次「已唱」
+    fireEvent.click(getByTestId("play-view-mark-sung"));
+    await waitFor(() => {
+      const recordCalls = apiRequest.mock.calls.filter(c =>
+        String(c[0]) === "/api/live-sessions/sess_r2/record"
+        && (c[1] as { method?: string } | undefined)?.method === "POST");
+      expect(recordCalls).toHaveLength(1);
+    });
+    // 「再唱一遍」— 重置 recordSubmittedRef + 重置 audio（jsdom 无 audio 元素所以 currentTime 设不上，但 recordSubmittedRef 重置是关键）
+    fireEvent.click(getByTestId("play-view-replay"));
+    // 第二次「已唱」— 应该能再次 POST
+    fireEvent.click(getByTestId("play-view-mark-sung"));
+    await waitFor(() => {
+      const recordCalls = apiRequest.mock.calls.filter(c =>
+        String(c[0]) === "/api/live-sessions/sess_r2/record"
+        && (c[1] as { method?: string } | undefined)?.method === "POST");
+      expect(recordCalls).toHaveLength(2);
+    });
+  });
+});
