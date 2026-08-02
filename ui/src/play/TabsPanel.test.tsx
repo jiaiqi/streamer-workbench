@@ -83,3 +83,74 @@ describe("TabsPanel - 渲染内容", () => {
     expect(getByTestId("tabs-panel-comment").textContent).toContain("前奏");
   });
 });
+
+describe("TabsPanel - M1.6b LRC 同步（lyricsActiveIndex）", () => {
+  // 3 个 lyric 行的 chordpro + 各自不同 chord 序列
+  const TAB = `{title: 测试}
+{key: C}
+{start_of_verse}
+[C]第一行[Am]歌词
+[F]第二行[G]歌词
+{end_of_verse}
+{start_of_chorus}
+[Em]副歌行
+{end_of_chorus}`;
+
+  it("lyricsActiveIndex=1 → 第二个 lyric 行（第二行）高亮（覆盖按时间估算）", () => {
+    const parsed = parseChordpro(TAB);
+    // currentTimeMs=0 / totalMs=30000 → 按时间估算会选中第 0 行；
+    // 但传 lyricsActiveIndex=1 强制选第 1 行
+    const { container } = render(
+      <TabsPanel dark={false} parsed={parsed} currentTimeMs={0} totalMs={30000} lyricsActiveIndex={1} />
+    );
+    const activeLines = container.querySelectorAll('[data-active="true"][data-line-index]');
+    expect(activeLines.length).toBeGreaterThanOrEqual(1);
+    // 第 1 个 lyric 行的 lineIndex 应该是 6（{start_of_verse}=0, [C]...=1, [F]...=2）
+    // 因为 parsed 里 directive 也算 lineIndex；让我们直接看 data-active 落在 text=第二行 的 li 上
+    const activeText = Array.from(activeLines).map(ln => (ln.textContent || "")).join("|");
+    expect(activeText).toContain("第二行");
+    expect(activeText).not.toContain("第一行");
+  });
+
+  it("lyricsActiveIndex=2 → 第三个 lyric 行（副歌行）高亮", () => {
+    const parsed = parseChordpro(TAB);
+    const { container } = render(
+      <TabsPanel dark={false} parsed={parsed} currentTimeMs={0} totalMs={30000} lyricsActiveIndex={2} />
+    );
+    const activeLines = container.querySelectorAll('[data-active="true"][data-line-index]');
+    const activeText = Array.from(activeLines).map(ln => (ln.textContent || "")).join("|");
+    expect(activeText).toContain("副歌行");
+  });
+
+  it("lyricsActiveIndex 越界 → 自动 clamp 到末行", () => {
+    const parsed = parseChordpro(TAB);
+    const { container } = render(
+      <TabsPanel dark={false} parsed={parsed} currentTimeMs={0} totalMs={30000} lyricsActiveIndex={99} />
+    );
+    const activeLines = container.querySelectorAll('[data-active="true"][data-line-index]');
+    const activeText = Array.from(activeLines).map(ln => (ln.textContent || "")).join("|");
+    expect(activeText).toContain("副歌行");  // 末行
+  });
+
+  it("lyricsActiveIndex=-1 → 回退到按时间估算（旧行为）", () => {
+    const parsed = parseChordpro(TAB);
+    // totalMs=30000, 3 行 → perLine=10000；currentTimeMs=5000 → 仍在第 0 行
+    const { container } = render(
+      <TabsPanel dark={false} parsed={parsed} currentTimeMs={5000} totalMs={30000} lyricsActiveIndex={-1} />
+    );
+    const activeLines = container.querySelectorAll('[data-active="true"][data-line-index]');
+    const activeText = Array.from(activeLines).map(ln => (ln.textContent || "")).join("|");
+    expect(activeText).toContain("第一行");
+  });
+
+  it("chord 高亮跟随 lyricsActiveIndex（不是 chordpro 自身时间估算）", () => {
+    const parsed = parseChordpro(TAB);
+    // lyricsActiveIndex=1 → 第二行 chord 是 [F] 和 [G]
+    const { container } = render(
+      <TabsPanel dark={false} parsed={parsed} currentTimeMs={0} totalMs={30000} lyricsActiveIndex={1} />
+    );
+    const activeChordTokens = container.querySelectorAll('[data-testid="tabs-chord-token"][data-active="true"]');
+    const activeChordNames = Array.from(activeChordTokens).map(t => t.textContent).sort();
+    expect(activeChordNames).toEqual(["F", "G"]);
+  });
+});

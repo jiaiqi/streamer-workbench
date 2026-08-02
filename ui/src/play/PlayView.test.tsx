@@ -579,3 +579,91 @@ describe("PlayView - M1.6 LRC 同步（timeupdate → LyricsPanel）", () => {
     });
   });
 });
+
+describe("PlayView - M1.6b TabsPanel 跟 LRC 同步（吉他谱锚点）", () => {
+  // M1.6b: chord 高亮应该跟 LRC 当前行（不是按时间均分估算）
+  // 关键：tabs 的 lyric 行数和 LRC 不一样时，TabsPanel 仍用 LRC activeIndex
+  const SONG_LRC_HEAVY = {
+    id: "song_cccccccccccccccccccccccccccccccc",
+    title: "测试歌-LRC 主导",
+    artists: ["X"],
+    key: "C",
+    capo: null,
+    difficulty: "",
+    // 3 个 LRC 行
+    lyrics_lrc: "[00:00.00]A\n[00:10.00]B\n[00:20.00]C",
+    lyrics_plain: "",
+    audio_vocal_path: "vocal.mp3",
+    audio_instrumental_path: "",
+    audio_duration_ms: 30000,
+    // 3 个 chordpro 行（带不同 chord）
+    tabs: "{title: t}\n[C]A\n[F]B\n[G]C",
+    status: "active",
+    tags: [],
+    notes: "",
+    pinyin: "",
+    lyricist: "",
+    composer: "",
+    added_at: "",
+    learned_at: "",
+    tab_files: [],
+    section: null,
+  };
+
+  it("currentTimeMs=0（歌首）→ TabsPanel 第 0 行 [C]A 激活", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ songs: [SONG_LRC_HEAVY], total: 1, active: 1, draft: 0 });
+    render(<PlayView dark={false} songId={SONG_LRC_HEAVY.id} onBack={() => {}} />);
+    await waitFor(() => {
+      const panels = document.querySelectorAll('[data-testid="play-view"]');
+      expect(panels[0]?.getAttribute("data-state")).toBe("ready");
+    });
+    const activeLine = document.querySelector('[data-testid="tabs-panel"][data-active-line="0"]');
+    expect(activeLine).toBeTruthy();
+  });
+
+  it("audio timeupdate=15s → TabsPanel 第 1 行 [F]B 激活（不是按时间均分）", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ songs: [SONG_LRC_HEAVY], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(<PlayView dark={false} songId={SONG_LRC_HEAVY.id} onBack={() => {}} />);
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    const audio = getByTestId("play-view-audio") as HTMLAudioElement;
+    Object.defineProperty(audio, "currentTime", { configurable: true, value: 15, writable: true });
+    audio.dispatchEvent(new Event("timeupdate"));
+    await waitFor(() => {
+      // LRC 15s 落在 [00:10.00]B → activeIndex=1
+      // TabsPanel 跟 LRC → activeLineIndex=1
+      const tabsPanel = document.querySelector('[data-testid="tabs-panel"]') as HTMLElement;
+      expect(tabsPanel.getAttribute("data-active-line")).toBe("1");
+      // 当前激活行的 chord 应该是 F（[F]B 行）
+      const activeChordTokens = document.querySelectorAll(
+        '[data-testid="tabs-chord-token"][data-active="true"]'
+      );
+      const chordNames = Array.from(activeChordTokens).map(t => t.textContent).sort();
+      expect(chordNames).toEqual(["F"]);
+    });
+  });
+
+  it("audio timeupdate=22s → TabsPanel 第 2 行 [G]C 激活", async () => {
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ songs: [SONG_LRC_HEAVY], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(<PlayView dark={false} songId={SONG_LRC_HEAVY.id} onBack={() => {}} />);
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    const audio = getByTestId("play-view-audio") as HTMLAudioElement;
+    Object.defineProperty(audio, "currentTime", { configurable: true, value: 22, writable: true });
+    audio.dispatchEvent(new Event("timeupdate"));
+    await waitFor(() => {
+      const tabsPanel = document.querySelector('[data-testid="tabs-panel"]') as HTMLElement;
+      expect(tabsPanel.getAttribute("data-active-line")).toBe("2");
+      const activeChordTokens = document.querySelectorAll(
+        '[data-testid="tabs-chord-token"][data-active="true"]'
+      );
+      const chordNames = Array.from(activeChordTokens).map(t => t.textContent);
+      expect(chordNames).toEqual(["G"]);
+    });
+  });
+});

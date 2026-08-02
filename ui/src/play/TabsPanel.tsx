@@ -4,8 +4,10 @@
 ///   - 行内 chord 用 <span data-active> 标记；高亮颜色由 CSS 控制
 ///   - 当前行高亮（粗体 + 浅背景）
 ///   - section 标签（verse/chorus）作为副标题
-///   - 当前行高亮逻辑：当前时间落在 lyrics 非空行的"区间"内
-///     （基于行号与音频时间戳的简化映射——v8.0 简化版；v8.x 可加 explicit 时间戳）
+///   - 当前行高亮逻辑（M1.6b）：
+///     - 优先用外部传入的 `lyricsActiveIndex`（LRC 时间戳计算的当前歌词行索引）
+///     - 若 LRC 不可用（lyricsActiveIndex < 0），回退到 currentTimeMs/totalMs 按行均分估算
+///     - 这样 chord 高亮和 LyricsPanel 真正同步（而不是两个独立时间估算）
 import { useMemo } from "react";
 import type { ChordProLine, ParsedChordPro } from "./chordpro";
 
@@ -14,12 +16,16 @@ export interface TabsPanelProps {
   parsed: ParsedChordPro;    // 已解析的 chordpro
   currentTimeMs: number;
   totalMs: number;           // 音频总时长（用于估算当前行号）
+  /** M1.6b: 外部 LyricsPanel 算出的当前歌词行索引（按歌词行序）；
+   *  - >= 0: 直接用作 chordpro 当前歌词行索引（假设 LRC 与 chordpro 歌词行对齐）
+   *  - < 0: 回退到 currentTimeMs/totalMs 按行均分估算（旧行为） */
+  lyricsActiveIndex?: number;
   /** R9.2: 字号倍数（1 / 1.3 / 1.6），远观模式用 */
   sizeScale?: 1 | 1.3 | 1.6;
   "data-testid"?: string;
 }
 
-/** 简化版：根据 currentTimeMs / totalMs 估算当前行号（按行均分）。v8.1 接 audio 后可更准。 */
+/** 简化版：根据 currentTimeMs / totalMs 估算当前行号（按行均分）。当 LRC 不可用时回退到此。 */
 function estimateActiveLineIndex(lines: ChordProLine[], currentTimeMs: number, totalMs: number): number {
   const lyricLines = lines.filter(ln => ln.text && !ln.directive);
   if (lyricLines.length === 0 || totalMs <= 0) return -1;
@@ -30,18 +36,29 @@ function estimateActiveLineIndex(lines: ChordProLine[], currentTimeMs: number, t
   return Math.min(lyricLines.length - 1, Math.floor(currentTimeMs / perLine));
 }
 
-export default function TabsPanel({ dark, parsed, currentTimeMs, totalMs, sizeScale = 1, "data-testid": testId = "tabs-panel" }: TabsPanelProps) {
-  const activeLineIndex = useMemo(
-    () => estimateActiveLineIndex(parsed.lines, currentTimeMs, totalMs),
-    [parsed.lines, currentTimeMs, totalMs]
+export default function TabsPanel({
+  dark, parsed, currentTimeMs, totalMs,
+  lyricsActiveIndex = -1,
+  sizeScale = 1, "data-testid": testId = "tabs-panel",
+}: TabsPanelProps) {
+  const lyricLines = useMemo(
+    () => parsed.lines.filter(ln => ln.text && !ln.directive),
+    [parsed.lines],
   );
+
+  // M1.6b: 优先用 LRC active index（精确）；回退到按时间均分估算
+  const activeLineIndex = useMemo(() => {
+    if (lyricsActiveIndex >= 0 && lyricLines.length > 0) {
+      return Math.min(lyricsActiveIndex, lyricLines.length - 1);
+    }
+    return estimateActiveLineIndex(parsed.lines, currentTimeMs, totalMs);
+  }, [lyricsActiveIndex, lyricLines.length, parsed.lines, currentTimeMs, totalMs]);
 
   // 当前激活行的 chord 名集合（用于 chord 高亮）
   const activeChordNames = useMemo(() => {
-    const lyricLines = parsed.lines.filter(ln => ln.text && !ln.directive);
     if (activeLineIndex < 0 || activeLineIndex >= lyricLines.length) return new Set<string>();
     return new Set(lyricLines[activeLineIndex].chords.map(c => c.name));
-  }, [parsed.lines, activeLineIndex]);
+  }, [lyricLines, activeLineIndex]);
 
   if (parsed.lines.length === 0) {
     return (

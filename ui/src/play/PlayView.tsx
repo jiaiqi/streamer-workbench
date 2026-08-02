@@ -39,7 +39,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { Song, SongsData } from "../types";
-import { parseLrc, distributePlainLyrics } from "./lrc";
+import { parseLrc, distributePlainLyrics, findActiveLine } from "./lrc";
 import { parseChordpro } from "./chordpro";
 import { transposeKey, clampCapo } from "./capo";
 import LyricsPanel from "./LyricsPanel";
@@ -565,6 +565,7 @@ export default function PlayView({
             parsed={tabsParsed}
             currentTimeMs={currentTimeMs}
             totalMs={totalMs}
+            lyricsActiveIndex={findActiveLine(lyricsLines, currentTimeMs)}
             sizeScale={sizeScale}
           />
         </section>
