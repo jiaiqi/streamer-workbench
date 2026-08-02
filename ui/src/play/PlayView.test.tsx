@@ -125,3 +125,106 @@ describe("PlayView - 顶栏返回", () => {
     expect(onBack).toHaveBeenCalled();
   });
 });
+
+/* ================== R8.2 直播联动 ================== */
+
+describe("PlayView - R8.2 联动模式", () => {
+  it("非联动模式：不显示「联播」标签和「已唱」按钮", async () => {
+    const { getByTestId, queryByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    expect(queryByTestId("play-view-linked")).toBeNull();
+    expect(queryByTestId("play-view-mark-sung")).toBeNull();
+  });
+
+  it("联动模式：显示「联播 · {name}」标签 + 「已唱」按钮", async () => {
+    const { getByTestId, getByText } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_SONG.id}
+        onBack={() => {}}
+        linkedSessionId="sess_1"
+        linkedRequestId="req_1"
+        linkedRequesterName="小明"
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    const tag = getByTestId("play-view-linked");
+    expect(tag.getAttribute("data-session-id")).toBe("sess_1");
+    expect(tag.getAttribute("data-request-id")).toBe("req_1");
+    expect(tag.textContent).toContain("小明");
+    expect(getByTestId("play-view-mark-sung")).toBeTruthy();
+  });
+
+  it("联动模式：点「已唱」按钮 → 调 record API + 触发 onBack", async () => {
+    const onBack = vi.fn();
+    const onLinkedRecorded = vi.fn();
+    apiRequest.mockResolvedValue({ songs: [SAMPLE_SONG], total: 1, active: 1, draft: 0 });
+    apiRequest.mockResolvedValueOnce({ songs: [SAMPLE_SONG], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_SONG.id}
+        onBack={onBack}
+        linkedSessionId="sess_2"
+        linkedRequestId="req_2"
+        linkedRequesterName="小红"
+        onLinkedRecorded={onLinkedRecorded}
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    // 清掉前面 mock 调用计数
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValue({});
+    fireEvent.click(getByTestId("play-view-mark-sung"));
+    // 验证 record API
+    await waitFor(() => {
+      const recordCall = apiRequest.mock.calls.find(c =>
+        String(c[0]) === "/api/live-sessions/sess_2/record"
+        && (c[1] as { method?: string } | undefined)?.method === "POST");
+      expect(recordCall).toBeTruthy();
+    });
+    const recordCall = apiRequest.mock.calls.find(c =>
+      String(c[0]) === "/api/live-sessions/sess_2/record")!;
+    expect((recordCall[1] as { body: { result: string; request_id: string } }).body.result).toBe("sung");
+    expect((recordCall[1] as { body: { result: string; request_id: string } }).body.request_id).toBe("req_2");
+    // 验证 onBack 触发
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it("联动模式：「已唱」按钮重复点击只 POST 一次", async () => {
+    const onBack = vi.fn();
+    const { getByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_SONG.id}
+        onBack={onBack}
+        linkedSessionId="sess_3"
+        linkedRequestId="req_3"
+        linkedRequesterName=""
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValue({});
+    // 连点 3 次
+    fireEvent.click(getByTestId("play-view-mark-sung"));
+    fireEvent.click(getByTestId("play-view-mark-sung"));
+    fireEvent.click(getByTestId("play-view-mark-sung"));
+    await waitFor(() => {
+      const recordCalls = apiRequest.mock.calls.filter(c =>
+        String(c[0]) === "/api/live-sessions/sess_3/record"
+        && (c[1] as { method?: string } | undefined)?.method === "POST");
+      expect(recordCalls).toHaveLength(1);
+    });
+  });
+});

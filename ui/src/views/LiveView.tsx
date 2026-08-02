@@ -10,6 +10,9 @@
 /// - 手动覆盖 record：修正 QuickView 误操作或补录
 /// - 关闭会话
 ///
+/// R8.2 联动：队列项行尾加「弹唱」按钮 → 调 onPlaySong(songId, { sessionId, requestId, requesterName })
+///   把主播带入 PlayView 联动模式；audio ended 自动 mark sung 回到 LiveView。
+///
 /// 不在本视图做（避免职责重复）：
 /// - 搜歌入队、权益授予、断网补报 → QuickView
 /// - 整体快捷键（Space/U/P/R）→ QuickView 内做
@@ -141,7 +144,14 @@ function uuid(): string {
 
 /* ================== 视图 ================== */
 
-export default function LiveView({ dark }: { dark: boolean }) {
+export default function LiveView({
+  dark,
+  onPlaySong,
+}: {
+  dark: boolean;
+  /** R8.2: 弹唱联动 — 队列项行尾「弹唱」按钮触发；App.tsx 接管路由。 */
+  onPlaySong?: (songId: string, link: { sessionId: string; requestId: string; requesterName: string }) => void;
+}) {
   const [sessions, setSessions] = useState<LiveSessionSummary[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<LiveSessionDetail | null>(null);
@@ -405,6 +415,7 @@ export default function LiveView({ dark }: { dark: boolean }) {
               onRefresh={() => loadDetail(activeSession.id)}
               onOpenManualPicker={() => setManualPickerOpen(true)}
               onExportPoster={() => handleExportPoster(activeSession.id)}
+              onPlaySong={onPlaySong}
               posterLoading={posterLoading}
             />
           )}
@@ -463,7 +474,7 @@ function SessionCard({ session, active, dark, onSelect }: {
 function SessionDetail({
   session, detail, queue, performances, isActive, songTitle,
   songs, dark, onClose, onRecord, onRefresh, onOpenManualPicker,
-  onExportPoster,
+  onExportPoster, onPlaySong,
   posterLoading,
 }: {
   session: LiveSessionSummary;
@@ -480,6 +491,8 @@ function SessionDetail({
   onOpenManualPicker: () => void;
   /** R4.0: 触发复盘海报导出；loading 状态由父组件管理。 */
   onExportPoster: () => Promise<void> | void;
+  /** R8.2: 弹唱联动 — 队列项「弹唱」按钮触发。 */
+  onPlaySong?: (songId: string, link: { sessionId: string; requestId: string; requesterName: string }) => void;
   /** R4.0: 导出进行中（用于 disable 按钮 + 显示 spinner）。 */
   posterLoading: boolean;
 }) {
@@ -576,6 +589,8 @@ function SessionDetail({
                   entry={q}
                   songTitle={songTitle(q.song_id)}
                   onRecord={isActive ? onRecord : undefined}
+                  onPlaySong={isActive ? onPlaySong : undefined}
+                  sessionId={session.id}
                 />
               ))}
             </ul>}
@@ -612,12 +627,18 @@ function SessionDetail({
 }
 
 function QueueRow({
-  entry, songTitle, onRecord,
+  entry, songTitle, onRecord, onPlaySong, sessionId,
 }: {
   entry: QueueEntry;
   songTitle: string;
   onRecord?: (requestId: string, result: string) => void;
+  /** R8.2: 弹唱联动 — 行内 ▶ 按钮触发；传会话 id 给 PlayView 联动。 */
+  onPlaySong?: (songId: string, link: { sessionId: string; requestId: string; requesterName: string }) => void;
+  /** R8.2: 联动需要的 sessionId（父组件传入）。 */
+  sessionId: string;
 }) {
+  // R8.2: 弹唱按钮仅在未唱项上可用（sung/skipped/postponed/cancelled 都不弹）
+  const canPlay = !["sung", "skipped", "postponed", "cancelled", "duplicate_merged"].includes(entry.state);
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-2.5">
       <span className="text-sm font-mono tabular-nums w-6 text-right text-muted-foreground">
@@ -638,6 +659,23 @@ function QueueRow({
       <span className="text-[11px] text-muted-foreground">
         {QUEUE_STATE_LABEL[entry.state] ?? entry.state}
       </span>
+      {/* R8.2: 弹唱按钮 — 未唱项才有 */}
+      {onPlaySong && canPlay && (
+        <button
+          type="button"
+          title="进入弹唱联动模式（弹完自动标记「已唱」）"
+          aria-label="弹唱"
+          data-testid="live-queue-play"
+          data-request-id={entry.request_id}
+          data-song-id={entry.song_id}
+          onClick={() => onPlaySong(entry.song_id, {
+            sessionId,
+            requestId: entry.request_id,
+            requesterName: entry.requester_name,
+          })}
+          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border hover:bg-muted text-xs"
+        >▶</button>
+      )}
       {onRecord && (
         <div className="flex items-center gap-1">
           <button

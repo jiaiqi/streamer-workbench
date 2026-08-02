@@ -13,6 +13,12 @@
 ///   - <audio ref> 真实播放；timeupdate 推 currentTimeMs → LyricsPanel/TabsPanel
 ///   - 切 vocal/instrumental：换 audio.src
 ///   - play/pause/ended 事件：本地 state + 上报 POST /api/playback/events
+///
+/// R8.2 直播联动：
+///   - linkedSessionId / linkedRequestId / linkedRequesterName 来自 LiveView
+///   - 顶栏显示「联播 · {requester_name}」标签 + 「已唱」按钮（联动模式显示）
+///   - audio ended → 自动调 POST /api/live-sessions/{linkedSessionId}/record (result=sung) + 触发 onBack
+///   - 联动模式下 onBack 切回 live 视图；非联动模式切回 library 视图（由 App.tsx 决定）
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { Song, SongsData } from "../types";
@@ -27,6 +33,14 @@ export interface PlayViewProps {
   dark: boolean;
   songId: string;
   onBack: () => void;
+  /** R8.2: 联动 — 当前直播会话 id（来自 LiveView 弹唱按钮）。无值时为非联动模式。 */
+  linkedSessionId?: string;
+  /** R8.2: 联动 — 当前队列项 request id。audio ended 时调 record API。 */
+  linkedRequestId?: string;
+  /** R8.2: 联动 — 点歌人姓名（顶栏展示）。 */
+  linkedRequesterName?: string;
+  /** R8.2: 联动 — record API 返回后回调（App.tsx 用来刷新 LiveView 数据）。 */
+  onLinkedRecorded?: (requestId: string) => void;
 }
 
 const DEFAULT_TOTAL_MS = 4 * 60 * 1000; // 4 分钟默认时长（无音频时用）
@@ -36,7 +50,11 @@ function pickSong(songs: Song[] | undefined, songId: string): Song | null {
   return songs.find(s => s.id === songId) ?? null;
 }
 
-export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
+export default function PlayView({
+  dark, songId, onBack,
+  linkedSessionId, linkedRequestId, linkedRequesterName,
+  onLinkedRecorded,
+}: PlayViewProps) {
   const [song, setSong] = useState<Song | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +143,29 @@ export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
     }).catch(() => { /* 静默：上报失败不阻塞播放 */ });
   }, [song, audioRole]);
 
+  // R8.2: 联动模式 — 标记队列项为「已唱」（result=sung）。失败静默。
+  // 重复防护：linkedRequestId 在同一会话已记录过一次，API 会返回错误；我们用 recordSubmittedRef 避免重复 POST。
+  const recordSubmittedRef = useRef(false);
+  const markLinkedSung = useCallback(() => {
+    if (!linkedSessionId || !linkedRequestId) return;
+    if (recordSubmittedRef.current) return;
+    recordSubmittedRef.current = true;
+    void apiRequest(
+      `/api/live-sessions/${encodeURIComponent(linkedSessionId)}/record`,
+      {
+        method: "POST",
+        body: {
+          request_id: linkedRequestId,
+          result: "sung",
+          operator: "broadcaster",
+          reason: "PlayView 弹唱联动自动标记",
+        },
+      },
+    )
+      .then(() => onLinkedRecorded?.(linkedRequestId))
+      .catch(() => { /* 失败：用户可手动到 LiveView 改；不弹错避免弹唱中干扰 */ });
+  }, [linkedSessionId, linkedRequestId, onLinkedRecorded]);
+
   // R8.1: 实际 audio 元素的事件 → state
   useEffect(() => {
     const el = audioRef.current;
@@ -146,6 +187,11 @@ export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
     const onEnded = () => {
       setIsPlaying(false);
       reportEvent("playback_completed", el.duration * 1000, el.duration * 1000);
+      // R8.2: 联动模式 — 弹唱结束自动标记「已唱」+ 回到 LiveView
+      if (linkedSessionId && linkedRequestId) {
+        markLinkedSung();
+        onBack();
+      }
     };
     el.addEventListener("timeupdate", onTimeUpdate);
     el.addEventListener("durationchange", onDurationChange);
@@ -159,7 +205,7 @@ export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
     };
-  }, [reportEvent]);
+  }, [reportEvent, markLinkedSung, onBack, linkedSessionId, linkedRequestId]);
 
   // 估算总时长：优先 song.audio_duration_ms；否则用 audio 实际 duration；否则歌词行数 × 8 秒
   const [durationMs, setDurationMs] = useState(0);
@@ -253,6 +299,39 @@ export default function PlayView({ dark, songId, onBack }: PlayViewProps) {
               </button>
             ))}
           </div>
+        )}
+        {/* R8.2: 联播模式标签（点了 LiveView 队列项的弹唱按钮才有） */}
+        {linkedSessionId && linkedRequestId && (
+          <span
+            data-testid="play-view-linked"
+            data-session-id={linkedSessionId}
+            data-request-id={linkedRequestId}
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${
+              dark ? "bg-sky-500/15 text-sky-300" : "bg-sky-100 text-sky-700"
+            }`}
+            title={`联播会话 ${linkedSessionId} / 队列项 ${linkedRequestId}`}
+          >
+            联播 · {linkedRequesterName || "主播"}
+          </span>
+        )}
+        {/* R8.2: 联播模式下显示「已唱」按钮 — 手动标记 sung（不等 ended） */}
+        {linkedSessionId && linkedRequestId && (
+          <button
+            type="button"
+            data-testid="play-view-mark-sung"
+            onClick={() => {
+              markLinkedSung();
+              onBack();
+            }}
+            className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              dark
+                ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+            }`}
+            title="标记为「已唱」并回到直播后台"
+          >
+            已唱 ✓
+          </button>
         )}
         <span
           data-testid="play-view-state"

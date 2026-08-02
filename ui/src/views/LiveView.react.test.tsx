@@ -155,3 +155,78 @@ describe("LiveView 后台管理", () => {
     });
   });
 });
+
+/* ================== R8.2 弹唱联动 ================== */
+
+const activeQueueDetail = {
+  ...emptyDetail,
+  queue: [
+    { request_id: "req_q", song_id: "song_a", position: 1, state: "queued",
+      is_bumped: false, requester_name: "小明", entitlement_kind: "manual",
+      inserted_at: "2026-07-31T08:05:00Z" },
+    { request_id: "req_sung", song_id: "song_b", position: 2, state: "sung",
+      is_bumped: false, requester_name: "小红", entitlement_kind: "",
+      inserted_at: "2026-07-31T08:10:00Z" },
+  ],
+};
+
+describe("LiveView - R8.2 弹唱联动", () => {
+  it("活跃会话的 queued 项显示弹唱按钮，sung 项不显示", async () => {
+    mockEndpoint("GET", /\/api\/live-sessions$/, [emptySummary]);
+    mockEndpoint("GET", /\/api\/songs\/list$/, { songs: [songA, songB], active: 2, draft: 0, total: 2 });
+    mockEndpoint("GET", /\/api\/live-sessions\/s1$/, activeQueueDetail);
+    render(<LiveView dark={false} onPlaySong={vi.fn()} />);
+    await waitFor(() => screen.getByTestId("live-session-s1"));
+    fireEvent.click(screen.getByTestId("live-session-s1"));
+    await waitFor(() => {
+      const buttons = screen.getAllByTestId("live-queue-play");
+      expect(buttons).toHaveLength(1);
+    });
+    // 验证只有 queued 项有弹唱按钮
+    const playBtn = screen.getByTestId("live-queue-play");
+    expect(playBtn.getAttribute("data-request-id")).toBe("req_q");
+  });
+
+  it("已结束会话不显示弹唱按钮", async () => {
+    mockEndpoint("GET", /\/api\/live-sessions$/, [closed]);
+    mockEndpoint("GET", /\/api\/songs\/list$/, { songs: [songA], active: 1, draft: 0, total: 1 });
+    mockEndpoint("GET", /\/api\/live-sessions\/s1$/, { ...activeQueueDetail, state: "closed" });
+    render(<LiveView dark={false} onPlaySong={vi.fn()} />);
+    await waitFor(() => screen.getByTestId("live-session-s1"));
+    fireEvent.click(screen.getByTestId("live-session-s1"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("live-queue-play")).toBeNull();
+    });
+  });
+
+  it("点弹唱按钮 → 调 onPlaySong 传入完整 link（sessionId/requestId/requesterName）", async () => {
+    mockEndpoint("GET", /\/api\/live-sessions$/, [emptySummary]);
+    mockEndpoint("GET", /\/api\/songs\/list$/, { songs: [songA], active: 1, draft: 0, total: 1 });
+    mockEndpoint("GET", /\/api\/live-sessions\/s1$/, activeQueueDetail);
+    const onPlaySong = vi.fn();
+    render(<LiveView dark={false} onPlaySong={onPlaySong} />);
+    await waitFor(() => screen.getByTestId("live-session-s1"));
+    fireEvent.click(screen.getByTestId("live-session-s1"));
+    await waitFor(() => screen.getByTestId("live-queue-play"));
+    fireEvent.click(screen.getByTestId("live-queue-play"));
+    expect(onPlaySong).toHaveBeenCalledWith("song_a", {
+      sessionId: "s1",
+      requestId: "req_q",
+      requesterName: "小明",
+    });
+  });
+
+  it("未传 onPlaySong 时不渲染弹唱按钮（不报错）", async () => {
+    mockEndpoint("GET", /\/api\/live-sessions$/, [emptySummary]);
+    mockEndpoint("GET", /\/api\/songs\/list$/, { songs: [songA], active: 1, draft: 0, total: 1 });
+    mockEndpoint("GET", /\/api\/live-sessions\/s1$/, activeQueueDetail);
+    render(<LiveView dark={false} />);
+    await waitFor(() => screen.getByTestId("live-session-s1"));
+    fireEvent.click(screen.getByTestId("live-session-s1"));
+    await waitFor(() => {
+      // 队列项加载出来
+      expect(screen.getByText("江南")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("live-queue-play")).toBeNull();
+  });
+});

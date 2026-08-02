@@ -63,6 +63,28 @@ export default function App() {
   const [libDialogOpen, setLibDialogOpen] = useState(false);
   // R8.0: 弹唱视图 - 当前播放的 song_id（null 时切回 library）
   const [playSongId, setPlaySongId] = useState<string | null>(null);
+  // R8.2: 联动 — 弹唱视图进入时携带的直播会话上下文（无值表示非联动）
+  const [playLink, setPlayLink] = useState<
+    | { sessionId: string; requestId: string; requesterName: string }
+    | null
+  >(null);
+
+  // R8.2: 触发弹唱。link 可选：来自 LibraryView 时不传；来自 LiveView 时传会话+队列项。
+  const handlePlaySong = (
+    songId: string,
+    link?: { sessionId: string; requestId: string; requesterName: string }
+  ) => {
+    setPlaySongId(songId);
+    setPlayLink(link ?? null);
+    setView("play");
+  };
+  // R8.2: 退出弹唱 — 联动模式回 live 视图；非联动模式回 library 视图。
+  const handlePlayBack = () => {
+    if (playLink) setView("live");
+    else setView("library");
+    setPlaySongId(null);
+    setPlayLink(null);
+  };
 
   const dark = resolveAppearance(appearance.appearanceMode, systemDark) === "dark";
 
@@ -526,15 +548,19 @@ export default function App() {
             <LibraryView dark={dark}
               onStatsChange={setSongStats}
               onEditTargetChange={setLibDialogOpen}
-              onPlaySong={(id) => { setPlaySongId(id); setView("play"); }} />
+              onPlaySong={(id) => handlePlaySong(id)} />
           )}
 
-          {/* ===== 弹唱视图（R8.0） ===== */}
+          {/* ===== 弹唱视图（R8.0 + R8.2 联动） ===== */}
           {view === "play" && playSongId && (
             <PlayView
               dark={dark}
               songId={playSongId}
-              onBack={() => { setView("library"); setPlaySongId(null); }} />
+              linkedSessionId={playLink?.sessionId}
+              linkedRequestId={playLink?.requestId}
+              linkedRequesterName={playLink?.requesterName}
+              onBack={handlePlayBack}
+            />
           )}
 
           {/* ===== 设置视图 ===== */}
@@ -553,7 +579,7 @@ export default function App() {
           )}
 
           {/* ===== 直播视图 ===== */}
-          {view === "live" && <LiveView dark={dark} />}
+          {view === "live" && <LiveView dark={dark} onPlaySong={handlePlaySong} />}
 
           {/* ===== 统计视图 (R4) ===== */}
           {view === "stats" && (
