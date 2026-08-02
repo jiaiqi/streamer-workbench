@@ -28,6 +28,7 @@ import { savePoster } from "./api/posters";
 import type { AppearanceSettings, Settings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 import SpecialPostersPanel from "./posters/SpecialPostersPanel";
+import TonightSetCard from "./components/TonightSetCard";
 import { usePosterStore } from "./posters/usePosterStore";
 import { openQuickView, isElectron } from "./electron-bridge";
 import { useWorkspaceState } from "./workspace/useWorkspaceState";
@@ -327,6 +328,12 @@ export default function App() {
           {/* ===== LEFT: theme list（仅工作台视图显示，<800px 隐藏） ===== */}
           {inWorkspace && (
           <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
+            {/* R9.5 今晚歌单 — 工作台首屏运营卡片（live session Top 5 + 弹唱按钮） */}
+            <TonightSetCard
+              dark={dark}
+              onPlaySong={handlePlaySong}
+              onOpenLiveView={() => setView("live")}
+            />
             {/* R1a.5 海报文档区 + 歌曲来源（独立 hook 状态机） */}
             <WorkspacePosterBridge
               dark={dark}
