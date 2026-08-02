@@ -37,6 +37,8 @@ import { useWorkspaceState } from "./workspace/useWorkspaceState";
 import { PlayerProvider, usePlayer, type PlayerMode } from "./player/PlayerContext";
 import MiniPlayer from "./components/MiniPlayer";
 import { ToastProvider } from "./components/Toast";
+import ShortcutsPanel from "./components/ShortcutsPanel";
+import Onboarding, { resetOnboarded } from "./components/Onboarding";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -210,6 +212,8 @@ function AppInner() {
   const maxPage = ws.maxPage;
   /* ---- R4.1.5 命令面板：Cmd+K 跨视图 ---- */
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /* ---- L1.2 快捷键面板：? 键（Shift+/）打开 ---- */
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   /* ---- M1.2 全局找歌：所有 songs（搜索用）---- */
   const [allSongs, setAllSongs] = useState<Song[]>([]);
   useEffect(() => {
@@ -259,6 +263,8 @@ function AppInner() {
     { id: "act-export", title: "导出当前海报", group: "操作", shortcut: "⌘E", keywords: ["export", "下载"], action: () => setExportDialogOpen(true), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
     { id: "act-refresh", title: "刷新预览", group: "操作", shortcut: "⌘R", keywords: ["refresh", "reload"], action: () => ws.refresh(), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
     { id: "act-quickview", title: "打开直播速查", group: "速查", keywords: ["quickview", "速查"], action: () => openQuickView() },
+    { id: "act-shortcuts", title: "查看快捷键面板", group: "帮助", shortcut: "?", keywords: ["shortcut", "快捷键", "help", "帮助"], action: () => setShortcutsOpen(true) },
+    { id: "act-onboarding", title: "重看首次启动引导", group: "帮助", keywords: ["onboard", "引导", "tutorial", "教程", "新用户"], action: () => { resetOnboarded(); window.location.reload(); } },
   ], [view, ws]);
 
   useEffect(() => {
@@ -272,6 +278,13 @@ function AppInner() {
       if (mod && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         setPaletteOpen(p => !p);
+        return;
+      }
+
+      // L1.2: ?（Shift+/）打开快捷键面板
+      if (e.key === "?" && !mod && !typing) {
+        e.preventDefault();
+        setShortcutsOpen(p => !p);
         return;
       }
 
@@ -798,6 +811,10 @@ function AppInner() {
         dark={dark}
         hidden={view === "play" || paletteOpen || exportDialogOpen || libDialogOpen}
       />
+      {/* L1.2 全局快捷键面板 — ? 键打开 */}
+      <ShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} dark={dark} />
+      {/* L1.3 首次启动 Onboarding（localStorage 标记控制） */}
+      <Onboarding dark={dark} />
     </div>
   );
 }

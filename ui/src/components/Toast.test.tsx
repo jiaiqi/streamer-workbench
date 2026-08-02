@@ -169,3 +169,98 @@ describe("Toast - 边界", () => {
     expect(action.className).toContain("text-amber-300");
   });
 });
+
+describe("Toast - L1.1 kind 变体（info / success / warning / error）", () => {
+  it("default kind=info；显示 ℹ 图标 + zinc 左边色条", () => {
+    function Demo() {
+      const toast = useToast();
+      return <button data-testid="trigger" onClick={() => toast.show({ message: "X" })}>show</button>;
+    }
+    render(<ToastProvider><Demo /></ToastProvider>);
+    fireEvent.click(document.querySelector('[data-testid="trigger"]')!);
+    const item = document.querySelector('[data-testid="toast-item"]')!;
+    expect(item.getAttribute("data-kind")).toBe("info");
+    expect(document.querySelector('[data-testid="toast-icon"]')?.textContent).toBe("ℹ");
+    expect(item.className).toContain("border-l-zinc-500");
+  });
+
+  it("kind=success → ✓ 图标 + emerald 左边色条", () => {
+    function Demo() {
+      const toast = useToast();
+      return <button data-testid="trigger" onClick={() => toast.show({ message: "已保存", kind: "success" })}>show</button>;
+    }
+    render(<ToastProvider><Demo /></ToastProvider>);
+    fireEvent.click(document.querySelector('[data-testid="trigger"]')!);
+    const item = document.querySelector('[data-testid="toast-item"]')!;
+    expect(item.getAttribute("data-kind")).toBe("success");
+    expect(document.querySelector('[data-testid="toast-icon"]')?.textContent).toBe("✓");
+    expect(item.className).toContain("border-l-emerald-500");
+  });
+
+  it("kind=warning → ⚠ 图标 + amber 左边色条 + role=alert", () => {
+    function Demo() {
+      const toast = useToast();
+      return <button data-testid="trigger" onClick={() => toast.show({ message: "注意", kind: "warning" })}>show</button>;
+    }
+    render(<ToastProvider><Demo /></ToastProvider>);
+    fireEvent.click(document.querySelector('[data-testid="trigger"]')!);
+    const item = document.querySelector('[data-testid="toast-item"]')!;
+    expect(item.getAttribute("role")).toBe("alert");
+    expect(document.querySelector('[data-testid="toast-icon"]')?.textContent).toBe("⚠");
+    expect(item.className).toContain("border-l-amber-500");
+  });
+
+  it("kind=error → ✕ 图标 + red 左边色条 + 默认 durationMs=0（不显示倒计时）", () => {
+    function Demo() {
+      const toast = useToast();
+      return <button data-testid="trigger" onClick={() => toast.show({ message: "失败", kind: "error" })}>show</button>;
+    }
+    render(<ToastProvider><Demo /></ToastProvider>);
+    fireEvent.click(document.querySelector('[data-testid="trigger"]')!);
+    const item = document.querySelector('[data-testid="toast-item"]')!;
+    expect(item.getAttribute("role")).toBe("alert");
+    expect(document.querySelector('[data-testid="toast-icon"]')?.textContent).toBe("✕");
+    expect(item.className).toContain("border-l-red-500");
+    // 错误不自动消失 → 不显示倒计时
+    expect(document.querySelector('[data-testid="toast-remaining"]')).toBeNull();
+  });
+
+  it("toast.error() 便捷方法 = kind: 'error'", () => {
+    function Demo() {
+      const toast = useToast();
+      return <button data-testid="trigger" onClick={() => toast.error("网络错误")}>show</button>;
+    }
+    render(<ToastProvider><Demo /></ToastProvider>);
+    fireEvent.click(document.querySelector('[data-testid="trigger"]')!);
+    const item = document.querySelector('[data-testid="toast-item"]')!;
+    expect(item.getAttribute("data-kind")).toBe("error");
+    expect(document.querySelector('[data-testid="toast-message"]')?.textContent).toBe("网络错误");
+  });
+
+  it("toast.success() 便捷方法 = kind: 'success'", () => {
+    function Demo() {
+      const toast = useToast();
+      return <button data-testid="trigger" onClick={() => toast.success("已恢复")}>show</button>;
+    }
+    render(<ToastProvider><Demo /></ToastProvider>);
+    fireEvent.click(document.querySelector('[data-testid="trigger"]')!);
+    expect(document.querySelector('[data-testid="toast-item"]')?.getAttribute("data-kind")).toBe("success");
+  });
+
+  it("toast.error() 错误 toast 不自动消失（5s 后还在）", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useToast(), { wrapper: ToastProvider });
+    act(() => { result.current.error("永久错误"); });
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(document.querySelectorAll('[data-testid="toast-item"]').length).toBe(1);
+  });
+
+  it("toast.success() 3s 后自动消失", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useToast(), { wrapper: ToastProvider });
+    act(() => { result.current.success("X"); });
+    expect(document.querySelectorAll('[data-testid="toast-item"]').length).toBe(1);
+    act(() => { vi.advanceTimersByTime(3000); });
+    expect(document.querySelectorAll('[data-testid="toast-item"]').length).toBe(0);
+  });
+});

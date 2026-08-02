@@ -1,7 +1,7 @@
 /// App.tsx 集成：workspace 左栏接入 WorkspacePosterBridge。
 /// 仅验证挂载与关键区域渲染，不覆盖预览/导出主流程。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("./posters/WorkspacePosterBridge", () => ({
   default: () => <div data-testid="workspace-bridge">bridge</div>,
@@ -83,5 +83,46 @@ describe("App workspace 视图", () => {
     expect(next!.getAttribute("src")).toContain("page=2");
     // hidden img 不会进 a11y tree
     expect(next!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  // ---- L1.2 快捷键面板：? 键 ----
+  it("按 ? 键打开 ShortcutsPanel", async () => {
+    localStorage.setItem("sw-onboarded", "v1");  // 跳过 onboarding
+    const App = (await import("./App")).default;
+    await act(async () => {
+      render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    expect(screen.queryByTestId("shortcuts-panel")).toBeNull();
+    // 触发 ? 键（Shift+/）
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" }));
+    });
+    expect(screen.getByTestId("shortcuts-panel")).toBeTruthy();
+  });
+
+  // ---- L1.3 Onboarding ----
+  it("localStorage 未标记 → 首次启动显示 Onboarding", async () => {
+    localStorage.removeItem("sw-onboarded");
+    const App = (await import("./App")).default;
+    await act(async () => {
+      render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    // Onboarding 用 useEffect 异步设 visible — 等几帧
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(screen.getByTestId("onboarding-panel")).toBeTruthy();
+  });
+
+  it("localStorage 已标记 → 不显示 Onboarding", async () => {
+    localStorage.setItem("sw-onboarded", "v1");
+    const App = (await import("./App")).default;
+    await act(async () => {
+      render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    expect(screen.queryByTestId("onboarding-panel")).toBeNull();
   });
 });

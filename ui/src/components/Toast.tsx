@@ -12,6 +12,8 @@
 /// 未来可扩展：所有破坏性操作（preset 删除、session 关闭、批量操作等）
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
+export type ToastKind = "info" | "success" | "warning" | "error";
+
 export interface ToastAction {
   label: string;
   onClick: () => void | Promise<void>;
@@ -22,21 +24,35 @@ export interface ToastAction {
 export interface ToastInput {
   message: string;
   action?: ToastAction;
-  /** 自动消失毫秒数；0 = 不自动消失（需手动 ✕）；默认 5000 */
+  /** 自动消失毫秒数；0 = 不自动消失（需手动 ✕）；默认按 kind 决定 */
   durationMs?: number;
+  /** L1.1: toast 类型（影响配色 + 默认 duration） */
+  kind?: ToastKind;
 }
 
 interface ToastItem extends ToastInput {
   id: string;
+  kind: ToastKind;
   /** 注入：用于倒计时显示剩余秒数 */
   createdAt: number;
 }
 
 interface ToastApi {
   show: (input: ToastInput) => string;
+  /** 便捷方法：L1.1 错误全局 toast 通道 */
+  error: (message: string, action?: ToastAction) => string;
+  success: (message: string) => string;
+  warning: (message: string) => string;
   dismiss: (id: string) => void;
   clear: () => void;
 }
+
+const KIND_DEFAULT_DURATION: Record<ToastKind, number> = {
+  info: 5000,
+  success: 3000,
+  warning: 6000,
+  error: 0,  // 错误不自动消失 —— 用户必须看清 ✕
+};
 
 const ToastContext = createContext<ToastApi | null>(null);
 
@@ -57,8 +73,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const show = useCallback((input: ToastInput): string => {
     const id = `t${nextId++}`;
-    const duration = input.durationMs ?? 5000;
-    const item: ToastItem = { ...input, id, createdAt: Date.now() };
+    const kind: ToastKind = input.kind ?? "info";
+    const duration = input.durationMs ?? KIND_DEFAULT_DURATION[kind];
+    const item: ToastItem = { ...input, id, kind, createdAt: Date.now() };
     setItems(prev => [...prev, item]);
     if (duration > 0) {
       const t = setTimeout(() => dismiss(id), duration);
@@ -66,6 +83,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
     return id;
   }, [dismiss]);
+
+  // L1.1 便捷方法：让 catch (e) → toast.error(e.message) 更顺
+  const error = useCallback((message: string, action?: ToastAction) =>
+    show({ message, kind: "error", action }), [show]);
+  const success = useCallback((message: string) =>
+    show({ message, kind: "success" }), [show]);
+  const warning = useCallback((message: string) =>
+    show({ message, kind: "warning" }), [show]);
 
   const clear = useCallback(() => {
     setItems([]);
@@ -82,7 +107,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ show, dismiss, clear }}>
+    <ToastContext.Provider value={{ show, error, success, warning, dismiss, clear }}>
       {children}
       <ToastViewport items={items} onDismiss={dismiss} />
     </ToastContext.Provider>
@@ -152,13 +177,30 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: (id: strin
 
   const remainingSec = Math.ceil(remainingMs / 1000);
 
+  // L1.1: kind-specific 样式（左边色条 + 头部 icon）
+  const kindStyle: Record<ToastKind, { accent: string; icon: string; iconColor: string; ariaRole: "status" | "alert" }> = {
+    info:    { accent: "border-l-zinc-500",  icon: "ℹ",  iconColor: "text-zinc-300",   ariaRole: "status" },
+    success: { accent: "border-l-emerald-500", icon: "✓", iconColor: "text-emerald-400", ariaRole: "status" },
+    warning: { accent: "border-l-amber-500",  icon: "⚠",  iconColor: "text-amber-400",  ariaRole: "alert"  },
+    error:   { accent: "border-l-red-500",    icon: "✕",  iconColor: "text-red-400",    ariaRole: "alert"  },
+  };
+  const ks = kindStyle[item.kind];
+
   return (
     <div
       data-testid="toast-item"
       data-toast-id={item.id}
-      role="status"
-      className="pointer-events-auto flex items-center gap-3 rounded-lg bg-zinc-900/95 px-4 py-2.5 text-sm text-zinc-100 shadow-lg backdrop-blur-md border border-zinc-700/60 min-w-[280px] max-w-[420px]"
+      data-kind={item.kind}
+      role={ks.ariaRole}
+      className={`pointer-events-auto flex items-center gap-2.5 rounded-lg bg-zinc-900/95 pl-3 pr-3 py-2.5 text-sm text-zinc-100 shadow-lg backdrop-blur-md border border-zinc-700/60 border-l-4 ${ks.accent} min-w-[280px] max-w-[420px]`}
     >
+      <span
+        data-testid="toast-icon"
+        aria-hidden="true"
+        className={`shrink-0 text-base ${ks.iconColor}`}
+      >
+        {ks.icon}
+      </span>
       <span data-testid="toast-message" className="flex-1 min-w-0 truncate">
         {item.message}
       </span>
