@@ -13,7 +13,8 @@ export default defineConfig({
     // vitest 只接管 .tsx（React 组件/hook）测试 + play/ 模块的 .ts 解析器测试。
     // 其他 .ts 单元测试走 node:test（互不干扰、顺序无关、独立 CI 阶段）。
     // R8.0: play/ 下的 .ts 解析器（lrc/chordpro）也走 vitest，jsdom 环境足够
-    include: ["src/**/*.test.tsx", "src/play/*.test.ts"],
+    // M1.1: search/ 下的 .ts 解析器（globalSongSearch）也走 vitest
+    include: ["src/**/*.test.tsx", "src/play/*.test.ts", "src/search/*.test.ts"],
     // 历史 node:test 文件（用 import test from "node:test"）— 让 vitest 跳过
     exclude: [
       "**/node_modules/**",
