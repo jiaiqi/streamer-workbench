@@ -83,6 +83,8 @@ class SongResponse(BaseModel):
     audio_vocal_path: str = ""
     audio_instrumental_path: str = ""
     audio_duration_ms: int = 0
+    # R9.6 软删除
+    deleted_at: str = ""
 
 
 class SongCounts(BaseModel):

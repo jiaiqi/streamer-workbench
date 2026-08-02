@@ -98,6 +98,20 @@ class SongApplicationService:
     def delete_by_title(self, title: str) -> SongDeletion:
         return self._delete("title", title.strip())
 
+    # ---- R9.6 软删除配套 ----
+
+    def restore_by_id(self, song_id: str) -> "SongResponse":
+        return self._restore("id", song_id)
+
+    def restore_by_title(self, title: str) -> "SongResponse":
+        return self._restore("title", title.strip())
+
+    def purge_by_id(self, song_id: str) -> SongDeletion:
+        return self._purge("id", song_id)
+
+    def purge_by_title(self, title: str) -> SongDeletion:
+        return self._purge("title", title.strip())
+
     def seed_sample_songs(self) -> SongMutation:
         """仅当曲库为空时载入内置样例曲库；非空返回当前 mutation 不写盘。"""
         snapshot = self._songs.load()
@@ -203,11 +217,36 @@ class SongApplicationService:
         return self._mutation(song, library)
 
     def _delete(self, identity_kind: str, identity: str) -> SongDeletion:
+        """R9.6 软删除：设置 deleted_at（30 天后 cleanup_expired 真删）。
+        若 song 已经被删，则更新 deleted_at（刷新计时）。
+        """
         snapshot = self._songs.load()
         library = snapshot.value
         song = self._find(library, identity_kind, identity)
-        library.remove_by_id(song.id)
+        now_iso = datetime.now().astimezone().isoformat(timespec="seconds")
+        library.soft_delete_by_id(song.id, now_iso)
+        # save 报告（用 song 的当前字段，含 deleted_at）
         self._save_and_report(snapshot, "song_deleted", song)
+        return SongDeletion(
+            song.id, song.title, library.count_active(), library.count_draft())
+
+    def _restore(self, identity_kind: str, identity: str) -> "SongResponse":
+        """R9.6 恢复软删除：清空 deleted_at。"""
+        from server.api.song_models import SongResponse
+        snapshot = self._songs.load()
+        library = snapshot.value
+        song = self._find(library, identity_kind, identity)
+        library.restore_by_id(song.id)
+        self._save_and_report(snapshot, "song_restored", song)
+        return SongResponse(**song_values(song))
+
+    def _purge(self, identity_kind: str, identity: str) -> SongDeletion:
+        """R9.6 真删：不可恢复。"""
+        snapshot = self._songs.load()
+        library = snapshot.value
+        song = self._find(library, identity_kind, identity)
+        library.purge_by_id(song.id)
+        self._save_and_report(snapshot, "song_purged", song)
         return SongDeletion(
             song.id, song.title, library.count_active(), library.count_draft())
 
@@ -434,6 +473,8 @@ def song_values(song: Song) -> dict[str, Any]:
         "audio_vocal_path": song.audio_vocal_path,
         "audio_instrumental_path": song.audio_instrumental_path,
         "audio_duration_ms": song.audio_duration_ms,
+        # R9.6 软删除
+        "deleted_at": song.deleted_at,
     }
 
 

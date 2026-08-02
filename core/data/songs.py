@@ -50,6 +50,8 @@ class Song:
     added_at: str = ""
     notes: str = ""
     learned_at: str = ""         # 学会日期（song_learned 事件时回填；旧 active 歌曲留空）
+    # R9.6 软删除：ISO datetime；空字符串 = 未删；30 天后真删（见 cleanup_expired）
+    deleted_at: str = ""
     tab_files: List[str] = field(default_factory=list)  # 曲谱文件相对路径（data/tabs/ 下）
     # 分类归属（1=一字..6=六字, 7=长歌名/英文），对应旧脚本 8 个列表的 section。
     # 分组规则（2026-07-25 定案）：
@@ -181,7 +183,7 @@ class SongLibrary:
         return True
 
     def remove(self, title: str) -> bool:
-        """删除歌曲。返回是否成功找到并删除。"""
+        """物理删除歌曲。R9.6 后推荐用 soft_delete（保留 30 天可恢复）。"""
         for i, s in enumerate(self.songs):
             if s.title == title:
                 self.songs.pop(i)
@@ -189,21 +191,67 @@ class SongLibrary:
         return False
 
     def remove_by_id(self, song_id: str) -> bool:
-        """按不可变 ID 删除歌曲。"""
+        """按不可变 ID 物理删除。R9.6 后推荐用 soft_delete_by_id。"""
         for i, song in enumerate(self.songs):
             if song.id == song_id:
                 self.songs.pop(i)
                 return True
         return False
 
+    # ---- R9.6 软删除 ----
+
+    def soft_delete_by_id(self, song_id: str, deleted_at: str) -> bool:
+        """按不可变 ID 软删除：设置 deleted_at；列表 API 默认排除。
+        已删除的歌曲再调一次相当于刷新 deleted_at。
+        """
+        for s in self.songs:
+            if s.id == song_id:
+                s.deleted_at = deleted_at
+                return True
+        return False
+
+    def restore_by_id(self, song_id: str) -> bool:
+        """恢复软删除的歌曲（清空 deleted_at）。"""
+        for s in self.songs:
+            if s.id == song_id:
+                s.deleted_at = ""
+                return True
+        return False
+
+    def purge_by_id(self, song_id: str) -> bool:
+        """真删（不可恢复）。"""
+        for i, s in enumerate(self.songs):
+            if s.id == song_id:
+                self.songs.pop(i)
+                return True
+        return False
+
+    def cleanup_expired(self, days: int = 30, now_iso: Optional[str] = None) -> int:
+        """清理超过 days 天的软删除歌曲（真删）。返回清理条数。
+        now_iso 形如 '2026-08-02T12:00:00Z'，用于测试注入。
+        """
+        from datetime import datetime, timedelta, timezone
+        if now_iso is None:
+            now = datetime.now(timezone.utc)
+        else:
+            now = datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
+        cutoff = now - timedelta(days=days)
+        before = len(self.songs)
+        self.songs = [
+            s for s in self.songs
+            if not s.deleted_at
+            or datetime.fromisoformat(s.deleted_at.replace("Z", "+00:00")) > cutoff
+        ]
+        return before - len(self.songs)
+
     def count_active(self) -> int:
-        return sum(1 for s in self.songs if s.status == "active")
+        return sum(1 for s in self.songs if s.status == "active" and not s.deleted_at)
 
     def count_draft(self) -> int:
-        return sum(1 for s in self.songs if s.status == "draft")
+        return sum(1 for s in self.songs if s.status == "draft" and not s.deleted_at)
 
     # ---- JSON 持久化 ----
-    CURRENT_VERSION: ClassVar[int] = 7
+    CURRENT_VERSION: ClassVar[int] = 8
 
     @staticmethod
     def _migrate_v1_to_v2(data: dict) -> dict:
@@ -292,6 +340,15 @@ class SongLibrary:
             default = item.get("capo_default")
             if not isinstance(default, int) or default < 0 or default > 12:
                 item["capo_default"] = item.get("capo") or 0
+        return data
+
+    @staticmethod
+    def _migrate_v7_to_v8(data: dict) -> dict:
+        """v7→v8：R9.6 软删除字段增量（deleted_at）。"""
+        for item in data.get("songs", []):
+            item.setdefault("deleted_at", "")
+            if not isinstance(item["deleted_at"], str):
+                item["deleted_at"] = ""
         return data
 
     @staticmethod
@@ -408,7 +465,8 @@ class SongLibrary:
 # 注册版本迁移链（类外注册，避免类体内方法引用顺序问题）
 SongLibrary.MIGRATIONS.update({1: SongLibrary._migrate_v1_to_v2, 2: SongLibrary._migrate_v2_to_v3,
                                3: SongLibrary._migrate_v3_to_v4, 4: SongLibrary._migrate_v4_to_v5,
-                               5: SongLibrary._migrate_v5_to_v6, 6: SongLibrary._migrate_v6_to_v7})
+                               5: SongLibrary._migrate_v5_to_v6, 6: SongLibrary._migrate_v6_to_v7,
+                               7: SongLibrary._migrate_v7_to_v8})
 
 
 def pinyin_initials(title: str) -> str:

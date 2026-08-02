@@ -90,15 +90,32 @@ def api_songs(req: Request):
 
 
 @router.get("/api/songs/list", response_model=SongsListResponse)
-def api_songs_list(req: Request, status: str = None):
+def api_songs_list(req: Request, status: str = None, include_deleted: bool = False):
     library = _library(get_app_context(req))
+    # 触发过期清理（>30 天的真删；幂等）
+    library.cleanup_expired()
     songs = library.songs
+    # R9.6 默认排除已删除
+    if not include_deleted:
+        songs = [s for s in songs if not s.deleted_at]
     if status:
         songs = [s for s in songs if s.status == status]
     return {"total": len(songs),
             "active": library.count_active(),
             "draft": library.count_draft(),
             "songs": [_song_dict(s) for s in songs]}
+
+
+@router.get("/api/songs/trash")
+def api_songs_trash(req: Request):
+    """R9.6 垃圾桶：列出 deleted_at 距今 ≤ 30 天的歌曲（可恢复或真删）。"""
+    library = _library(get_app_context(req))
+    library.cleanup_expired()
+    deleted = [s for s in library.songs if s.deleted_at]
+    # 按 deleted_at 倒序
+    deleted.sort(key=lambda s: s.deleted_at, reverse=True)
+    return {"total": len(deleted),
+            "songs": [_song_dict(s) for s in deleted]}
 
 
 @router.post("/api/songs/status", response_model=SongLegacyStatusResponse)
@@ -233,16 +250,30 @@ def api_song_status_by_id(req: Request, song_id: str, payload: SongStatusRequest
 
 
 @router.delete("/api/songs/{song_id}", response_model=SongDeleteResponse)
-def api_song_delete_by_id(req: Request, song_id: str):
-    """按不可变 ID 删除歌曲；历史事件保留 ID 与 title_snapshot。"""
+def api_song_delete_by_id(req: Request, song_id: str, permanent: bool = False):
+    """按不可变 ID 删除歌曲（R9.6 软删除：默认 30 天可恢复；?permanent=true 真删）。"""
     context = get_app_context(req)
     try:
-        result = context.song_service.delete_by_id(song_id)
+        if permanent:
+            result = context.song_service.purge_by_id(song_id)
+        else:
+            result = context.song_service.delete_by_id(song_id)
     except SongServiceError as error:
         return _song_service_error(error)
     return {"ok": True, "song_id": result.song_id,
             "title_snapshot": result.title_snapshot,
             "active": result.active, "draft": result.draft}
+
+
+@router.post("/api/songs/{song_id}/restore", response_model=SongUpdateResponse)
+def api_song_restore_by_id(req: Request, song_id: str):
+    """R9.6 恢复软删除的歌曲（清空 deleted_at）。"""
+    context = get_app_context(req)
+    try:
+        song = context.song_service.restore_by_id(song_id)
+    except SongServiceError as error:
+        return _song_service_error(error)
+    return {"ok": True, "song": song}
 
 
 # ── 曲谱附件 ──

@@ -251,7 +251,7 @@ def test_migration_v6_to_v7_capo_library():
         {"id": "song_e", "title": "e", "capo": 3, "capo_default": 99},
     ]}
     out = SongLibrary._migrate(data)
-    assert out["version"] == 7
+    assert out["version"] == SongLibrary.CURRENT_VERSION
     a, b, c, d, e = out["songs"]
     assert a["capo_options"] == [] and a["capo_default"] == 0
     assert b["capo_options"] == [] and b["capo_default"] == 2
@@ -266,12 +266,69 @@ def test_migration_chain_v1_to_v7():
     data = {"version": 1, "songs": [{"title": "知足", "capo": 5, "pinyin": ""}]}
     out = SongLibrary._migrate(data)
     s = out["songs"][0]
-    assert out["version"] == 7
+    assert out["version"] == SongLibrary.CURRENT_VERSION
     assert s["capo"] == 5
     assert s["capo_options"] == []
     assert s["capo_default"] == 5
     # 旧 R8 字段也应被 v5→v6 补全
     assert s["lyrics_lrc"] == "" and s["audio_vocal_path"] == ""
+
+def test_soft_delete_by_id_basic():
+    """R9.6 软删除：set deleted_at 不移除 song。"""
+    s = Song(title="a", id="song_x")
+    lib = SongLibrary([s])
+    assert lib.soft_delete_by_id("song_x", "2026-08-01T00:00:00Z") is True
+    assert lib.get_by_id("song_x") is not None
+    assert lib.get_by_id("song_x").deleted_at == "2026-08-01T00:00:00Z"
+    # 重复软删 = 刷新 deleted_at
+    assert lib.soft_delete_by_id("song_x", "2026-08-02T00:00:00Z") is True
+    assert lib.get_by_id("song_x").deleted_at == "2026-08-02T00:00:00Z"
+
+def test_restore_by_id_clears_deleted_at():
+    s = Song(title="a", id="song_x", deleted_at="2026-08-01T00:00:00Z")
+    lib = SongLibrary([s])
+    assert lib.restore_by_id("song_x") is True
+    assert lib.get_by_id("song_x").deleted_at == ""
+    # 不存在的 id
+    assert lib.restore_by_id("song_missing") is False
+
+def test_purge_by_id_removes_song():
+    s = Song(title="a", id="song_x", deleted_at="2026-08-01T00:00:00Z")
+    lib = SongLibrary([s])
+    assert lib.purge_by_id("song_x") is True
+    assert lib.get_by_id("song_x") is None
+
+def test_cleanup_expired_purges_old_deleted():
+    s1 = Song(title="a", id="song_recent", deleted_at="2026-08-01T00:00:00Z")
+    s2 = Song(title="b", id="song_old", deleted_at="2026-06-01T00:00:00Z")
+    s3 = Song(title="c", id="song_kept", deleted_at="")
+    lib = SongLibrary([s1, s2, s3])
+    # 8 月 2 日清理：recent 30 天内保留；old 30 天前清掉
+    purged = lib.cleanup_expired(days=30, now_iso="2026-08-02T00:00:00Z")
+    assert purged == 1
+    assert lib.get_by_id("song_recent") is not None
+    assert lib.get_by_id("song_old") is None
+    assert lib.get_by_id("song_kept") is not None
+
+def test_count_active_excludes_deleted():
+    a = Song(title="a", id="song_a", status="active")
+    b = Song(title="b", id="song_b", status="active", deleted_at="2026-08-01T00:00:00Z")
+    c = Song(title="c", id="song_c", status="draft")
+    lib = SongLibrary([a, b, c])
+    assert lib.count_active() == 1
+    assert lib.count_draft() == 1
+
+def test_migration_v7_to_v8_soft_delete():
+    """R9.6 迁移：补 deleted_at 字段。"""
+    data = {"version": 7, "songs": [
+        {"id": "song_a", "title": "a"},
+        # 已有 deleted_at 字段
+        {"id": "song_b", "title": "b", "deleted_at": "2026-08-01T00:00:00Z"},
+    ]}
+    out = SongLibrary._migrate(data)
+    assert out["version"] == SongLibrary.CURRENT_VERSION
+    assert out["songs"][0]["deleted_at"] == ""
+    assert out["songs"][1]["deleted_at"] == "2026-08-01T00:00:00Z"
 
 def test_save_load_roundtrip_v5():
     import json, tempfile
@@ -495,11 +552,20 @@ def test_song_id_api_delete_preserves_snapshot_in_event():
     song = Song(title="待删除", id="song_delete")
     library = SongLibrary([song])
     request = _request_for_library(library)
+    # R9.6 默认软删除：song 还在库中，但 deleted_at 非空；列表 API 默认排除
     result = songs_router.api_song_delete_by_id(request, "song_delete")
     events = request.app.state.context.event_store.tail(
         limit=10, event_type="song_deleted")
     assert result["song_id"] == "song_delete"
     assert result["title_snapshot"] == "待删除"
+    soft = library.get_by_id("song_delete")
+    assert soft is not None
+    assert soft.deleted_at != ""
+    # 列表端点默认排除
+    list_result = songs_router.api_songs_list(request)
+    assert all(s["id"] != "song_delete" for s in list_result["songs"])
+    # permanent=true 物理删除
+    result2 = songs_router.api_song_delete_by_id(request, "song_delete", permanent=True)
     assert library.get_by_id("song_delete") is None
     assert len(events) == 1
     assert events[0]["song_id"] == "song_delete"
