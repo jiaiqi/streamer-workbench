@@ -35,6 +35,7 @@ import { usePosterStore } from "./posters/usePosterStore";
 import { openQuickView, isElectron } from "./electron-bridge";
 import { useWorkspaceState } from "./workspace/useWorkspaceState";
 import { PlayerProvider, usePlayer, type PlayerMode } from "./player/PlayerContext";
+import MiniPlayer from "./components/MiniPlayer";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -107,6 +108,7 @@ function AppInner() {
     else setView("library");
     setPlaySongId(null);
     setPlayLink(null);
+    // 不清 PlayerContext —— 让 M1.4 MiniPlayer 留在底部，主播一键回弹唱
   };
 
   const dark = resolveAppearance(appearance.appearanceMode, systemDark) === "dark";
@@ -225,6 +227,23 @@ function AppInner() {
     () => paletteQuery.trim() ? searchSongs(paletteQuery, allSongs, { limit: 5 }) : [],
     [paletteQuery, allSongs],
   );
+
+  /* ---- M1.4 MiniPlayer：当前歌名查表 + 打开/关闭回调 ---- */
+  const currentTitle = useMemo(
+    () => player.currentSongId
+      ? allSongs.find(s => s.id === player.currentSongId)?.title ?? null
+      : null,
+    [allSongs, player.currentSongId],
+  );
+  const handleMiniPlayerOpen = useCallback(() => setView("play"), []);
+  const handleMiniPlayerClose = useCallback(() => {
+    // 清 PlayerContext + 退出视图态：和 handlePlayBack 一致，但额外清 context
+    player.setCurrent(null);
+    setPlaySongId(null);
+    setPlayLink(null);
+    if (playLink) setView("live");
+    else setView("library");
+  }, [player, playLink]);
 
   const commands: Command[] = useMemo(() => [
     { id: "view-workspace", title: "切换到海报工作台", group: "视图", shortcut: "1", keywords: ["poster", "海报"], action: () => setView("workspace") },
@@ -747,6 +766,14 @@ function AppInner() {
         onPickSong={(id) => { handlePlaySong(id, undefined, "browse"); setPaletteOpen(false); }}
         query={paletteQuery}
         onQueryChange={setPaletteQuery}
+      />
+      {/* M1.4 跨场景迷你播放器：除 PlayView 自身 + 模态场景外常驻底栏 */}
+      <MiniPlayer
+        currentTitle={currentTitle}
+        onOpen={handleMiniPlayerOpen}
+        onClose={handleMiniPlayerClose}
+        dark={dark}
+        hidden={view === "play" || paletteOpen || exportDialogOpen || libDialogOpen}
       />
     </div>
   );
