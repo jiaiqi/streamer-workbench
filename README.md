@@ -2,9 +2,9 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
-> **进度快照（2026-08-02 下午）**：R0–R8 + R4 Runtime v1 收口；**R9 吉他手特化首批**全部收口（R9.1 联动「再唱一遍」/ R9.2 chord 远观模式 1-1.6x / R9.3 顶栏 Capo 大字 + 升降快捷键 ↑↓ + 实际 Key 反推 / R9.4 个人 Capo 库 capo_options+capo_default / R9.5 今晚歌单工作台首屏卡片 / R9.6a 软删除垃圾桶 30 天）。待推：R8.2.x 录屏 / R9.6b 5 秒撤销 toast / R4 Runtime v2 抽象 / R5c 高级体验 / R7 桌面正式发布门。
+> **进度快照（2026-08-02 傍晚）**：R0–R8 + R4 Runtime v1 + R9 吉他手特化首批 + **M0 蓝图 v0.1 首批**（178 首曲库已在 / fullscreen-flow 第 5 套版式 + 金标准 4 张 / 月夜星河第 8 套主题 / 加密备份包 MVP `.songworkbench` + HMAC-SHA256）全部收口。待推：M1 全局找歌 + PlayerController 三场景 / M2 加密备份完整实现 + WebDAV / M3 SQLite FTS5 / M4 Tauri 2 / R8.2.x 录屏 / R9.6b 撤销 toast / R4 Runtime v2 / R5c / R7 桌面正式发布门。
 >
-> **测试基线**：Python 728 passed / 1 skipped（52 个测试文件）+ vitest 340/340（31 个测试文件）+ node:test 16/16 + 4 套金标准 31/31（grid-wrap 16 + magazine-flow 5 + live-set 5 + learning-report 5）；TSC 干净。
+> **测试基线**：Python 759 passed / 1 skipped（56 个测试文件）+ vitest 340/340（31 个测试文件）+ node:test 16/16 + 5 套金标准 35/35（grid-wrap 16 + magazine-flow 5 + live-set 5 + learning-report 5 + fullscreen-flow 4）；TSC 干净。
 >
 > **已上线能力**：
 > - **R1a 海报闭环** — PosterDocument 领域 + 仓储 + 服务 + HTTP `/api/posters*` + 样例曲库 + 能力声明 + RenderDocument；`usePosterStore` 状态机 + 自动保存 + 撤销重做（Cmd+Z）+ Bridge；最近海报 3 动作内可导出。
@@ -21,9 +21,10 @@
 > - **R4 Runtime v1 抽象** — `DataChannel` Literal 枚举（`song_library` / `live_session` / `learning_report`）；4 套 layout 显式声明 `supported_channels`，engine 不再 duck-typing；`get_layout(id, channel=...)` / `list_layouts(channel=...)` 按 channel 过滤；30 项测试 + 31/31 金标准复跑。**v2 待做**：统一 `LayoutPlan` / `Palette-Skin` 接线 / Path 排文。
 > - **R8 弹唱播放器 R8.0 + R8.1 + R8.2 联动** — R8.0：Song 增量 5 字段（`lyrics_lrc` / `lyrics_plain` / `audio_vocal_path` / `audio_instrumental_path` / `audio_duration_ms`）；`core/lrc.py` + `core/chordpro.py` + `core/audio.py` 3 个核心模块；`LyricsPanel` + `TabsPanel` + `PlayerBar` + `PlayView` 4 个组件；歌曲库 ▶ 弹唱按钮；LRC 时间滚动 + chordpro chord 高亮。R8.1：5 个音频端点（POST 上传 / GET 列出 / DELETE 删除 / GET 元信息 / GET 流式 `/file`）+ HTML5 `<audio>` 接入 PlayView + vocal/instrumental 切轨（仅当两轨都有时显示）+ `POST /api/playback/events` 上报 `playback_started/paused/completed`。R8.2 联动：LiveView 队列项行尾 ▶ 弹唱按钮 → 调 `onPlaySong(songId, { sessionId, requestId, requesterName })` → App.tsx 进 PlayView 联动模式；顶栏显示「联播 · {name}」标签 + 「已唱 ✓」按钮；`audio.ended` 或按钮 → 自动 `POST /api/live-sessions/{sid}/record (result=sung)` + 切回 live 视图。
 > - **R9 吉他手特化首批** — R9.1 联动「↻ 再唱一遍」按钮（重置 audio + recordSubmittedRef，可再次 mark sung）。R9.2 chord/歌词远观模式 toggle 1x/1.3x/1.6x（弹唱时屏幕 1-2m 远，inline style 字号 + toFixed(3) 避浮点精度）。R9.3 顶栏大字 Capo 标识「Capo X / 实际 Key: Y」（C + Capo 2 = D 等半音循环，含小调 m 保留 + Db/Eb/Gb/Ab/Bb 降号）+ 升降 Capo 大按钮 + 快捷键 ↑↓（INPUT/TEXTAREA 聚焦时跳过）。R9.4 个人 Capo 库：Song 增量 `capo_options: list[int]` + `capo_default: int`（v6→v7 迁移 + CURRENT_VERSION 5→7）；顶栏「+ 习惯」按钮 → PATCH `/api/songs/{id}` 把当前 Capo 加入 options + 设 default。R9.5 「今晚歌单」工作台首屏左栏卡片：拉活跃 LiveSession 队列 Top 5（排除 sung/skipped 等）+ 每项 ▶ 弹唱按钮触发 R8.2 联动 + 「完整队列 →」按钮。R9.6a 软删除垃圾桶：Song 增量 `deleted_at: str`（v7→v8 迁移 + CURRENT_VERSION 7→8）；`cleanup_expired(days=30)` 自动真删过期；`GET /api/songs/list?include_deleted=False` 默认排除；`GET /api/songs/trash` 列出；`DELETE /api/songs/{id}` 默认软删除 + `?permanent=true` 真删；`POST /api/songs/{id}/restore` 恢复；LibraryView 加「垃圾桶」tab + TrashView 列表/恢复/永久删除（window.confirm 二次确认）。
+> - **M0 蓝图 v0.1 首批** — 178 首曲库已在 data/songs.json（蓝图 §3.5 真实样本：一字 2 / 二字 36 / 三字 41 / 四字 41 / 五字 22 / 六字 14 / 长歌名 19）。`fullscreen-flow` 第 5 套版式（1080×2400 全屏 9:20 + 全避让 + 2 页字数目录；强制 9:20 画布）+ 金标准 4 张（卡通音符 + 海洋柔光 × 2 页）。月夜星河第 8 套主题（深蓝紫黑渐变 + 散布星点 + 暖白月光 + 6 颗带十字光芒的亮星 + 暖琥珀当前行；PIL 程序生成无外部素材）。加密备份包 MVP：`.songworkbench` 格式 + `manifest.json` + `manifest.hmac` 签名 + 4 子命令 `export/import/verify/list` + 错密码 / 篡改 / 缺 HMAC 全部拒绝；MVP 警告：未做 AES 真加密，生产前需接 `pyzipper`（WinZip AES-256）或 `cryptography`（AES-GCM）。
 > - **R2.5+Electron** — 桌面壳（macOS arm64）+ PyInstaller 后端单文件 + electron-builder 打包 + 置顶速查窗 (Cmd/Ctrl+Shift+U)。
 >
-> **下一步**：R9.6b 5 秒撤销 toast（高风险 mutation 包装）；R8.2.x 录屏（Electron `desktopCapturer` + MediaRecorder + SRT）；R4 Runtime v2 抽象；R5c 高级体验；R7 桌面正式发布门。
+> **下一步**：M1 全局找歌（拼音 + 歌词片段 + 风格 + 调式）+ PlayerController 三场景抽象（直播伴奏/练习对拍/曲库试听）；M2 加密备份完整实现 + WebDAV 同步；M3 SQLite FTS5 全文检索；M4 Tauri 2 桌面壳 + PWA；R8.2.x 录屏；R9.6b 5 秒撤销 toast；R4 Runtime v2；R5c；R7 桌面正式发布门。
 >
 > 文档入口见 [`AGENTS.md`](AGENTS.md)、[`HANDOFF.md`](HANDOFF.md) 与 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >

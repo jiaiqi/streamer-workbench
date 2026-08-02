@@ -72,8 +72,9 @@
               R4-R7 🟡  Layout Runtime v1 抽象已交付（最小化：DataChannel 契约 + supported_channels 声明 + 30 项测试 + 32/32 金标准）；v2 待做（统一 LayoutPlan / Palette-Skin 接线 / 桌面发布门）
               R8     🟡  弹唱播放器 R8.0/R8.1/R8.2 联动收口；R8.2.x 录屏 待推
               R9     ✅  吉他手特化首批收口（R9.1 联动「再唱一遍」/ R9.2 chord 远观模式 1-1.6x / R9.3 顶栏 Capo 大字 + 升降快捷键 ↑↓ + 实际 Key 反推 / R9.4 个人 Capo 库 capo_options+capo_default / R9.5 今晚歌单工作台首屏卡片 / R9.6a 软删除垃圾桶 30 天）
+              M0     ✅  蓝图 v0.1 首批（5 子项；数据 178 首已在）/ fullscreen-flow 全屏柔光绕排版式 + 金标准 4 张 / 月夜星河主题第 8 套 / 加密备份包 MVP（.songworkbench + HMAC-SHA256）/ 178 首曲库验证
 桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
-UI        ~99%       工作台/歌曲库（含垃圾桶 tab）/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 + 4 嵌入点导出历史 + 弹唱视图（PlayView：v8.1 接入 <audio> + vocal/instrumental 切轨 + 进度联动 + R9 大字 Capo + 远观模式 + 再唱一遍 + 习惯 Capo） 均可用
+UI        ~99%       工作台/歌曲库（含垃圾桶 tab）/学歌/速查/海报/直播会话/复盘海报/数据统计/学习报告/专用海报/命令面板 + 4 嵌入点导出历史 + 弹唱视图（PlayView：v8.1 接入 <audio> + vocal/instrumental 切轨 + 进度联动 + R9 大字 Capo + 远观模式 + 再唱一遍 + 习惯 Capo） + 5 套 layout（grid/magazine/live-set/learning-report/fullscreen）+ 8 套主题（含月夜星河） 均可用
 ```
 
 ### 技术栈
@@ -86,7 +87,7 @@ UI        ~99%       工作台/歌曲库（含垃圾桶 tab）/学歌/速查/海
 | 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量）、data/tabs/{song_id}/（曲谱附件）、data/audio/{song_id}/（R8 音频，v8.1+） |
 | 桌面壳 | Electron（spike） | Python 作 child_process；正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 52 项 Python 测试文件（728 passed / 1 skipped） + 31 项 vitest（340/340） + 16 项 node:test + 16/16 grid 金标准 + 5/5 magazine PNG + 5/5 live-set PNG + 5/5 learning-report PNG + OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
+| 测试 | 56 项 Python 测试文件（759 passed / 1 skipped） + 31 项 vitest（340/340） + 16 项 node:test + 16/16 grid 金标准 + 5/5 magazine PNG + 5/5 live-set PNG + 5/5 learning-report PNG + 4/4 fullscreen PNG（35/35 0 像素差异）+ OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
 
 ---
 
