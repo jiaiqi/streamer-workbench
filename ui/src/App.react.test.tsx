@@ -125,4 +125,58 @@ describe("App workspace 视图", () => {
     });
     expect(screen.queryByTestId("onboarding-panel")).toBeNull();
   });
+
+  // ---- L1.5 离线检测 ----
+  it("在线状态：顶栏 OnlineStatusBadge data-state=online", async () => {
+    localStorage.setItem("sw-onboarded", "v1");
+    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    const App = (await import("./App")).default;
+    await act(async () => {
+      render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    // 让 OnlineStatusBadge useEffect 跑完
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(screen.getByTestId("online-status-badge").getAttribute("data-state")).toBe("online");
+  });
+
+  it("离线：顶栏 OnlineStatusBadge data-state=offline", async () => {
+    localStorage.setItem("sw-onboarded", "v1");
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    const App = (await import("./App")).default;
+    await act(async () => {
+      render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(screen.getByTestId("online-status-badge").getAttribute("data-state")).toBe("offline");
+  });
+
+  it("从在线掉到离线：warning toast 弹出", async () => {
+    localStorage.setItem("sw-onboarded", "v1");
+    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    const App = (await import("./App")).default;
+    await act(async () => {
+      render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(screen.getByTestId("online-status-badge").getAttribute("data-state")).toBe("online");
+    // 模拟掉线
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    await act(async () => {
+      window.dispatchEvent(new Event("offline"));
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    // warning toast 出现
+    const warning = document.querySelector('[data-testid="toast-item"][data-kind="warning"]');
+    expect(warning).toBeTruthy();
+    expect(warning!.textContent).toContain("网络已断开");
+  });
 });

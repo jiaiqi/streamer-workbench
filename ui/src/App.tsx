@@ -8,7 +8,7 @@
 /// 工作台视图专属的状态（themes / selTheme / page / canvas / avoid / params /
 /// renderKey / loading / previewError / hasFrame / 持久化 / 防抖 / 派生）全部由
 /// `useWorkspaceState` 接管。
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { CANVAS_OPTIONS } from "./types";
 import { Icon } from "./icons";
 import LibraryView from "./views/LibraryView";
@@ -36,9 +36,10 @@ import { openQuickView, isElectron } from "./electron-bridge";
 import { useWorkspaceState } from "./workspace/useWorkspaceState";
 import { PlayerProvider, usePlayer, type PlayerMode } from "./player/PlayerContext";
 import MiniPlayer from "./components/MiniPlayer";
-import { ToastProvider } from "./components/Toast";
+import { ToastProvider, useToast } from "./components/Toast";
 import ShortcutsPanel from "./components/ShortcutsPanel";
 import Onboarding, { resetOnboarded } from "./components/Onboarding";
+import OnlineStatusBadge from "./components/OnlineStatusBadge";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -69,6 +70,30 @@ function AppInner() {
   const ws = useWorkspaceState({ layoutId: posterStore.current.layout_id });
   /* M1.3: 跨场景播放器状态（M1.4 MiniPlayer 读这个） */
   const player = usePlayer();
+  /* L1.5 离线检测 + M9.6b toast */
+  const toast = useToast();
+  const [online, setOnline] = useState<boolean>(() => navigator.onLine);
+  const wasOnlineRef = useRef<boolean>(navigator.onLine);
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+  // 离线/恢复 toast 提示（仅在状态变化时）
+  useEffect(() => {
+    if (online === wasOnlineRef.current) return;
+    wasOnlineRef.current = online;
+    if (online) {
+      toast.success("网络已恢复");
+    } else {
+      toast.warning("网络已断开；导出 / 同步操作会失败");
+    }
+  }, [online, toast]);
 
   /* ---- 跨视图状态：外观 + 暗色 ---- */
   const [appearance, setAppearance] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
@@ -260,7 +285,7 @@ function AppInner() {
     { id: "view-live", title: "切换到直播", group: "视图", shortcut: "4", keywords: ["live", "直播"], action: () => setView("live") },
     { id: "view-stats", title: "切换到数据统计", group: "视图", shortcut: "5", keywords: ["stats", "统计"], action: () => setView("stats") },
     { id: "view-settings", title: "打开设置", group: "视图", shortcut: "⌘,", keywords: ["setting", "设置"], action: () => setView("settings") },
-    { id: "act-export", title: "导出当前海报", group: "操作", shortcut: "⌘E", keywords: ["export", "下载"], action: () => setExportDialogOpen(true), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
+    { id: "act-export", title: "导出当前海报", group: "操作", shortcut: "⌘E", keywords: ["export", "下载"], action: () => setExportDialogOpen(true), disabledReason: view !== "workspace" ? "切到工作台后可用" : !online ? "离线状态无法导出" : undefined },
     { id: "act-refresh", title: "刷新预览", group: "操作", shortcut: "⌘R", keywords: ["refresh", "reload"], action: () => ws.refresh(), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
     { id: "act-quickview", title: "打开直播速查", group: "速查", keywords: ["quickview", "速查"], action: () => openQuickView() },
     { id: "act-shortcuts", title: "查看快捷键面板", group: "帮助", shortcut: "?", keywords: ["shortcut", "快捷键", "help", "帮助"], action: () => setShortcutsOpen(true) },
@@ -303,6 +328,10 @@ function AppInner() {
 
       if (mod && e.key === "e") {
         e.preventDefault();
+        if (!online) {
+          toast.warning("离线状态无法导出海报");
+          return;
+        }
         setExportDialogOpen(true);
       } else if (mod && e.key === "r") {
         e.preventDefault();
@@ -393,6 +422,8 @@ function AppInner() {
         {/* header */}
         <header className={`flex h-11 shrink-0 items-center gap-5 border-b px-5 text-[13px] transition-colors duration-500 ${dark ? "border-zinc-700/50 text-zinc-500" : "border-border text-muted-foreground"}`}>
           <span className={`font-serif text-[15px] font-semibold tracking-wide whitespace-nowrap ${dark ? "text-zinc-200" : "text-foreground"}`}>主播工作台</span>
+          <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
+          <OnlineStatusBadge dark={dark} />
           <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
           <span className="hidden min-[800px]:inline whitespace-nowrap">{ws.themes.length} 个主题 · {ws.maxPage} 页</span>
           <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
