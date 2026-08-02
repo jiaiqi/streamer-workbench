@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-02T16:48:25+08:00",
+  "engine": "streamer-workbench/render_pages + fullscreen-flow v1",
+  "note": "M0.2 (蓝图 v0.1) 新布局金标准：全屏柔光绕排 9:20 + 全避让；content fingerprint 对比",
+  "entries": [
+    {
+      "path": "tests/golden_fullscreen/卡通音符-p1.png",
+      "theme": "卡通音符",
+      "canvas": "抖音全屏 9:20",
+      "page": 1,
+      "sha256": "445759b5982a75a0821f140c3e9a8a70f1eced1272e579f4bc03170b1e71e382",
+      "size_bytes": 790838
+    },
+    {
+      "path": "tests/golden_fullscreen/卡通音符-p2.png",
+      "theme": "卡通音符",
+      "canvas": "抖音全屏 9:20",
+      "page": 2,
+      "sha256": "5429955879664f9610f12a1cf50a3078009ec950aa15002c739f99a0859fdda7",
+      "size_bytes": 643478
+    },
+    {
+      "path": "tests/golden_fullscreen/海洋柔光-p1.png",
+      "theme": "海洋柔光",
+      "canvas": "抖音全屏 9:20",
+      "page": 1,
+      "sha256": "9921fb13983ad625bee6035d5f9e598406947131175488fa4f78331f7f0fcc22",
+      "size_bytes": 1927595
+    },
+    {
+      "path": "tests/golden_fullscreen/海洋柔光-p2.png",
+      "theme": "海洋柔光",
+      "canvas": "抖音全屏 9:20",
+      "page": 2,
+      "sha256": "df5cb1646084d7eb01054c8f3e0eda5fcade160de815d2976b010d59a06d8eb3",
+      "size_bytes": 2319596
+    }
+  ]
+}

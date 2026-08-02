@@ -59,12 +59,14 @@ class TestDataChannel:
         assert is_supported(["live_session", "learning_report"], "learning_report") is True
 
 
-# ---- 注册表 + 4 套 layout 声明 ----
+# ---- 注册表 + 5 套 layout 声明（R0-R4: 4 套 + M0.2: fullscreen-flow）----
 
 class TestLayoutRegistry:
-    def test_registry_has_four_layouts(self):
+    def test_registry_has_five_layouts(self):
+        """M0.2 蓝图 v0.1：新增 fullscreen-flow（全屏柔光绕排版）。"""
         assert set(REGISTRY.keys()) == {
             "grid-wrap", "magazine-flow", "live-set", "learning-report",
+            "fullscreen-flow",
         }
 
     def test_all_layouts_are_LayoutPlugin(self):
@@ -82,6 +84,15 @@ class TestLayoutRegistry:
 
     def test_learning_report_declares_learning_report(self):
         assert REGISTRY["learning-report"].supported_channels == ("learning_report",)
+
+    def test_fullscreen_flow_declares_song_library(self):
+        """M0.2 蓝图 v0.1：fullscreen-flow 走 song_library 通道。"""
+        assert REGISTRY["fullscreen-flow"].supported_channels == ("song_library",)
+
+    def test_fullscreen_flow_name_and_pages(self):
+        assert REGISTRY["fullscreen-flow"].name == "全屏柔光绕排版"
+        assert REGISTRY["fullscreen-flow"].pages == 2
+        assert REGISTRY["fullscreen-flow"].supports_avoidance is True
 
     def test_each_layout_declares_exactly_one_channel(self):
         """R4 Runtime v1 阶段每个 layout 只支持一个数据通道；
@@ -158,15 +169,16 @@ class TestGetLayout:
 class TestListLayouts:
     def test_list_layouts_all(self):
         rows = list_layouts()
-        assert len(rows) == 4
+        assert len(rows) == 5
         for row in rows:
             assert {"id", "name", "pages", "supports_avoidance",
                     "supported_channels"} <= set(row.keys())
 
     def test_list_layouts_filter_by_song_library(self):
+        """M0.2 蓝图 v0.1：song_library 通道有 3 套（grid-wrap + magazine-flow + fullscreen-flow）。"""
         rows = list_layouts(channel="song_library")
         ids = {r["id"] for r in rows}
-        assert ids == {"grid-wrap", "magazine-flow"}
+        assert ids == {"grid-wrap", "magazine-flow", "fullscreen-flow"}
 
     def test_list_layouts_filter_by_live_session(self):
         rows = list_layouts(channel="live_session")
