@@ -467,6 +467,24 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
 
                               {/* 操作列 */}
                               <div className="shrink-0 ml-auto flex md:flex-col gap-1.5 w-full md:w-24">
+                                {/* M1.5 试听入口：与卡片小 ▶ 图标互补，展开后更醒目；不传 link 即 browse 模式 */}
+                                {onPlaySong && (
+                                  <button
+                                    type="button"
+                                    data-testid={`library-preview-${s.id}`}
+                                    onClick={() => onPlaySong(s.id)}
+                                    title="试听：歌词 + 曲谱同步（不联动直播）"
+                                    aria-label={`试听 ${s.title}`}
+                                    className={`flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                      dark
+                                        ? "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30"
+                                        : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60"
+                                    }`}
+                                  >
+                                    <span aria-hidden="true">▶</span>
+                                    试听
+                                  </button>
+                                )}
                                 <button onClick={() => toggleStatus(s)}
                                   disabled={actionSong === s.id}
                                   className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${s.status === "draft"
