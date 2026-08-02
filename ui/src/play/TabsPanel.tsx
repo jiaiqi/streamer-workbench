@@ -14,6 +14,8 @@ export interface TabsPanelProps {
   parsed: ParsedChordPro;    // 已解析的 chordpro
   currentTimeMs: number;
   totalMs: number;           // 音频总时长（用于估算当前行号）
+  /** R9.2: 字号倍数（1 / 1.3 / 1.6），远观模式用 */
+  sizeScale?: 1 | 1.3 | 1.6;
   "data-testid"?: string;
 }
 
@@ -28,7 +30,7 @@ function estimateActiveLineIndex(lines: ChordProLine[], currentTimeMs: number, t
   return Math.min(lyricLines.length - 1, Math.floor(currentTimeMs / perLine));
 }
 
-export default function TabsPanel({ dark, parsed, currentTimeMs, totalMs, "data-testid": testId = "tabs-panel" }: TabsPanelProps) {
+export default function TabsPanel({ dark, parsed, currentTimeMs, totalMs, sizeScale = 1, "data-testid": testId = "tabs-panel" }: TabsPanelProps) {
   const activeLineIndex = useMemo(
     () => estimateActiveLineIndex(parsed.lines, currentTimeMs, totalMs),
     [parsed.lines, currentTimeMs, totalMs]
@@ -65,7 +67,7 @@ export default function TabsPanel({ dark, parsed, currentTimeMs, totalMs, "data-
       data-active-line={activeLineIndex}
       className="h-full overflow-y-auto px-5 py-6"
     >
-      <ol className="space-y-1 font-mono text-sm">
+      <ol className="space-y-1 font-mono" style={{ fontSize: `${0.875 * sizeScale}rem` }}>
         {parsed.lines.map((line) => {
           // 注释行
           if (line.directive === "comment") {
@@ -73,7 +75,8 @@ export default function TabsPanel({ dark, parsed, currentTimeMs, totalMs, "data-
               <li
                 key={line.lineIndex}
                 data-testid={`${testId}-comment`}
-                className={`italic text-xs ${dark ? "text-zinc-600" : "text-muted-foreground/70"}`}
+                style={{ fontSize: `${0.75 * sizeScale}rem` }}
+                className={`italic ${dark ? "text-zinc-600" : "text-muted-foreground/70"}`}
               >
                 {/* {line.section && <span className="mr-2 opacity-60">[{line.section}]</span>} */}
                 {line.text}
@@ -115,7 +118,10 @@ export default function TabsPanel({ dark, parsed, currentTimeMs, totalMs, "data-
                 </div>
               )}
               {/* 歌词行：把 chord token 内联插到对应字符位置 */}
-              <div className={isActive ? `font-semibold ${dark ? "text-zinc-50" : "text-foreground"}` : dark ? "text-zinc-300" : "text-foreground/80"}>
+              <div
+                className={isActive ? `font-semibold ${dark ? "text-zinc-50" : "text-foreground"}` : dark ? "text-zinc-300" : "text-foreground/80"}
+                style={isActive ? { fontSize: `${1 * sizeScale}rem` } : undefined}
+              >
                 {renderLineWithChords(line, activeChordNames, dark)}
               </div>
             </li>

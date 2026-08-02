@@ -15,11 +15,13 @@ export interface LyricsPanelProps {
   dark: boolean;
   lines: LrcLine[];          // 已解析的歌词行（已按 timeMs 升序）
   currentTimeMs: number;     // 当前时间（毫秒）
+  /** R9.2: 字号倍数（1 / 1.3 / 1.6），远观模式用 */
+  sizeScale?: 1 | 1.3 | 1.6;
   /** 测试 id */
   "data-testid"?: string;
 }
 
-export default function LyricsPanel({ dark, lines, currentTimeMs, "data-testid": testId = "lyrics-panel" }: LyricsPanelProps) {
+export default function LyricsPanel({ dark, lines, currentTimeMs, sizeScale = 1, "data-testid": testId = "lyrics-panel" }: LyricsPanelProps) {
   const activeIndex = findActiveLine(lines, currentTimeMs);
   const activeRef = useRef<HTMLLIElement | null>(null);
 
@@ -67,10 +69,11 @@ export default function LyricsPanel({ dark, lines, currentTimeMs, "data-testid":
             data-testid={`${testId}-line`}
             data-active={isActive ? "true" : "false"}
             data-time-ms={line.timeMs}
+            style={{ fontSize: isActive ? `${(1.5 * sizeScale).toFixed(3)}rem` : `${(1 * sizeScale).toFixed(3)}rem` }}
             className={`py-2 transition-all duration-300 ${
               isActive
-                ? `text-2xl font-semibold ${dark ? "text-zinc-50" : "text-foreground"} scale-100`
-                : `text-base ${dark ? "text-zinc-500" : "text-muted-foreground"} scale-95 opacity-60`
+                ? `font-semibold ${dark ? "text-zinc-50" : "text-foreground"} scale-100`
+                : `${dark ? "text-zinc-500" : "text-muted-foreground"} scale-95 opacity-60`
             }`}
           >
             {line.text || <span className="opacity-30">（空白）</span>}

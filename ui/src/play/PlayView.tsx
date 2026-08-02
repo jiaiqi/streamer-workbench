@@ -23,6 +23,10 @@
 /// R9.1 联动增强：
 ///   - 顶栏「↻ 再唱一遍」按钮：重置 audio.currentTime + 重新 play + 重置 recordSubmittedRef
 ///   - 用于主播临时想从头再唱一次（间奏太长 / 观众想再听副歌）
+///
+/// R9.2 远观模式：
+///   - 顶栏字号档位按钮 1× / 1.3× / 1.6×（影响 LyricsPanel + TabsPanel 字号）
+///   - 弹唱时屏幕 1-2m 远，普通字号看不清
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
 import type { Song, SongsData } from "../types";
@@ -112,6 +116,8 @@ export default function PlayView({
 
   // R8.1: 当前选中的 audio role（vocal / instrumental）
   const [audioRole, setAudioRole] = useState<"vocal" | "instrumental">("vocal");
+  // R9.2: 远观模式字号档位（1 / 1.3 / 1.6）；影响 LyricsPanel + TabsPanel 字号
+  const [sizeScale, setSizeScale] = useState<1 | 1.3 | 1.6>(1);
 
   // R8.1: 该歌可用 audio 列表（从 song 字段推断，避免额外请求）
   const hasVocal = !!song?.audio_vocal_path;
@@ -283,6 +289,29 @@ export default function PlayView({
             </p>
           )}
         </div>
+        {/* R9.2: 远观模式字号档位按钮 */}
+        <div
+          className="flex shrink-0 items-center rounded-full border px-1 py-0.5 text-[10px]"
+          data-testid="play-view-size-scale"
+        >
+          {([1, 1.3, 1.6] as const).map(scale => (
+            <button
+              key={scale}
+              type="button"
+              data-testid={`play-view-size-${scale}`}
+              data-active={sizeScale === scale ? "true" : "false"}
+              onClick={() => setSizeScale(scale)}
+              className={`rounded-full px-2 py-0.5 transition-colors ${
+                sizeScale === scale
+                  ? dark ? "bg-amber-500/20 text-amber-300" : "bg-amber-100 text-amber-700"
+                  : dark ? "text-zinc-400 hover:text-zinc-200" : "text-muted-foreground hover:text-foreground"
+              }`}
+              title={scale === 1 ? "标准" : scale === 1.3 ? "中号" : "远观（1.5m+ 距离）"}
+            >
+              {scale === 1 ? "Aa" : scale === 1.3 ? "Aa" : "AA"}
+            </button>
+          ))}
+        </div>
         {/* R8.1: vocal / instrumental 切换（仅当两轨都有时显示） */}
         {hasVocal && hasInstrumental && (
           <div className="flex shrink-0 items-center rounded-full border px-1 py-0.5 text-[10px]">
@@ -377,7 +406,7 @@ export default function PlayView({
       {/* 中央：左歌词 + 右曲谱 */}
       <main className="flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-[3] flex-col border-r" data-region="lyrics">
-          <LyricsPanel dark={dark} lines={lyricsLines} currentTimeMs={currentTimeMs} />
+          <LyricsPanel dark={dark} lines={lyricsLines} currentTimeMs={currentTimeMs} sizeScale={sizeScale} />
         </section>
         <section className="flex min-w-0 flex-[2] flex-col" data-region="tabs">
           <TabsPanel
@@ -385,6 +414,7 @@ export default function PlayView({
             parsed={tabsParsed}
             currentTimeMs={currentTimeMs}
             totalMs={totalMs}
+            sizeScale={sizeScale}
           />
         </section>
       </main>

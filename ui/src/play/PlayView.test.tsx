@@ -296,3 +296,54 @@ describe("PlayView - R9.1 再唱一遍", () => {
     });
   });
 });
+
+/* ================== R9.2 远观模式 ================== */
+
+describe("PlayView - R9.2 远观模式", () => {
+  it("默认 sizeScale = 1（标准）", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    expect(getByTestId("play-view-size-1").getAttribute("data-active")).toBe("true");
+    expect(getByTestId("play-view-size-1.3").getAttribute("data-active")).toBe("false");
+    expect(getByTestId("play-view-size-1.6").getAttribute("data-active")).toBe("false");
+  });
+
+  it("点击 1.6x → LyricsPanel 当前行 inline style fontSize 反映放大", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    fireEvent.click(getByTestId("play-view-size-1.6"));
+    expect(getByTestId("play-view-size-1.6").getAttribute("data-active")).toBe("true");
+    // 当前行（第一行）应该应用 1.5 * 1.6 = 2.4rem
+    await waitFor(() => {
+      const lines = document.querySelectorAll('[data-testid="lyrics-panel-line"]');
+      const activeLine = Array.from(lines).find(ln => ln.getAttribute("data-active") === "true");
+      expect(activeLine).toBeTruthy();
+      const style = (activeLine as HTMLElement).style.fontSize;
+      expect(style).toBe("2.4rem");
+    });
+  });
+
+  it("点击 1.3x → LyricsPanel 字号对应 1.3 倍", async () => {
+    const { getByTestId } = render(
+      <PlayView dark={false} songId={SAMPLE_SONG.id} onBack={() => {}} />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    fireEvent.click(getByTestId("play-view-size-1.3"));
+    await waitFor(() => {
+      const lines = document.querySelectorAll('[data-testid="lyrics-panel-line"]');
+      const activeLine = Array.from(lines).find(ln => ln.getAttribute("data-active") === "true");
+      const style = (activeLine as HTMLElement).style.fontSize;
+      expect(style).toBe("1.95rem");
+    });
+  });
+});
