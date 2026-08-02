@@ -21,11 +21,13 @@ THEMES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 # ═══════ Theme Loader ═══════
 
-def test_load_themes_all_7():
+def test_load_themes_all_8():
+    """M0.3 蓝图 v0.1：8 套主题（R0-R9 7 套 + 月夜星河）。"""
     themes = load_themes(THEMES_DIR)
-    assert len(themes) == 7
+    assert len(themes) == 8
     assert "海洋柔光" in themes
     assert "青提气泡" in themes
+    assert "月夜星河" in themes
 
 def test_theme_styles_have_5_roles():
     themes = load_themes(THEMES_DIR)
