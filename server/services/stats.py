@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from server.ports.repositories import EventQuery
 from core.data.events import compute_streaks  # R4.0: 共享 streak 算法
@@ -76,6 +76,33 @@ class TopSongItem:
 class TopSongsResult:
     metric: str
     items: List[TopSongItem] = field(default_factory=list)
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class RequestedSongItem:
+    """M2.5: 点歌热度 Top N（含最近一次点歌时间）"""
+    song_id: str
+    title: str
+    artist: str = ""
+    count: int = 0
+    last_requested: str = ""
+
+
+@dataclass(frozen=True)
+class RecentlySungItem:
+    """M2.5: 最近演唱 Top N（按时间倒序）"""
+    song_id: str
+    title: str
+    artist: str = ""
+    last_sung: str = ""
+    times_sung: int = 0
+
+
+@dataclass(frozen=True)
+class InsightsResult:
+    top_requested: List[RequestedSongItem] = field(default_factory=list)
+    recently_sung: List[RecentlySungItem] = field(default_factory=list)
     note: str = ""
 
 
@@ -291,6 +318,74 @@ class StatsApplicationService:
         if not items:
             return TopSongsResult(metric=metric, items=[], note=f"暂无 {metric} 数据")
         return TopSongsResult(metric=metric, items=items)
+
+    # ---- M2.5 综合洞察 ----
+    def insights(self, *, request_limit: int = 10, sung_limit: int = 10) -> InsightsResult:
+        """聚合 events.jsonl：
+          - top_requested: 点歌次数 Top N + 最近一次点歌时间
+          - recently_sung: 最近演唱 Top N + 演唱次数（按时间倒序）
+        """
+        songs_by_id, *_ = self._songs_snapshot()
+
+        def _resolve(sid: str) -> Tuple[str, str]:
+            song = songs_by_id.get(sid)
+            if song is None:
+                return f"(未知歌曲) {sid[:18]}…", ""
+            title = song.title or ""
+            artist = "、".join(song.artists) if song.artists else ""
+            return title, artist
+
+        # 1) top_requested: 累加 queue_added
+        req_counter: Counter = Counter()
+        req_last: Dict[str, str] = {}
+        for ev in self._all_events():
+            if ev.get("type") != "queue_added":
+                continue
+            sid = ev.get("song_id", "")
+            if not sid:
+                continue
+            req_counter[sid] += 1
+            t = ev.get("occurred_at") or ev.get("created_at", "")
+            if t and (sid not in req_last or t > req_last[sid]):
+                req_last[sid] = t
+        top_req: List[RequestedSongItem] = []
+        for sid, count in req_counter.most_common(request_limit):
+            title, artist = _resolve(sid)
+            top_req.append(RequestedSongItem(
+                song_id=sid, title=title, artist=artist,
+                count=count, last_requested=req_last.get(sid, ""),
+            ))
+
+        # 2) recently_sung: 按 performance_sung 时间倒序
+        sung_last: Dict[str, str] = {}
+        sung_count: Counter = Counter()
+        for ev in self._all_events():
+            if ev.get("type") != "performance_sung":
+                continue
+            sid = ev.get("song_id", "")
+            if not sid:
+                continue
+            sung_count[sid] += 1
+            t = ev.get("occurred_at") or ev.get("created_at", "")
+            if t and (sid not in sung_last or t > sung_last[sid]):
+                sung_last[sid] = t
+        # 按 last_sung 倒序
+        recent_sung: List[RecentlySungItem] = []
+        for sid, last in sorted(sung_last.items(), key=lambda kv: kv[1], reverse=True)[:sung_limit]:
+            title, artist = _resolve(sid)
+            recent_sung.append(RecentlySungItem(
+                song_id=sid, title=title, artist=artist,
+                last_sung=last, times_sung=sung_count.get(sid, 0),
+            ))
+
+        note = ""
+        if not top_req and not recent_sung:
+            note = "暂无点歌 / 演唱数据；先开几场直播或录入练习记录"
+        return InsightsResult(
+            top_requested=top_req,
+            recently_sung=recent_sung,
+            note=note,
+        )
 
     # ---- distribution ----
     def distribution(self, *, metric: str = "difficulty") -> DistributionResult:

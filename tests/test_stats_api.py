@@ -268,6 +268,78 @@ def test_feed_cold_start(tmp_path_factory_app):
     assert "暂无事件" in body["note"]
 
 
+# ===== M2.5 综合洞察 =====
+
+def test_insights_top_requested(app_with_data):
+    """点歌次数 Top N：song_beta 2 次 > song_gamma 1 次"""
+    client = app_with_data
+    res = client.get("/api/stats/insights?request_limit=5")
+    assert res.status_code == 200
+    body = res.json()
+    top_req = body["top_requested"]
+    assert len(top_req) == 2  # song_beta + song_gamma
+    # 按次数倒序
+    assert top_req[0]["song_id"] == "song_beta"
+    assert top_req[0]["title"] == "成都"
+    assert top_req[0]["count"] == 2
+    assert top_req[0]["last_requested"] != ""
+    assert top_req[1]["song_id"] == "song_gamma"
+    assert top_req[1]["count"] == 1
+
+
+def test_insights_recently_sung(app_with_data):
+    """最近演唱 Top N：按时间倒序"""
+    client = app_with_data
+    res = client.get("/api/stats/insights?sung_limit=5")
+    assert res.status_code == 200
+    body = res.json()
+    recent = body["recently_sung"]
+    assert len(recent) == 1
+    assert recent[0]["song_id"] == "song_beta"
+    assert recent[0]["title"] == "成都"
+    assert recent[0]["times_sung"] == 1
+    assert recent[0]["last_sung"] != ""
+
+
+def test_insights_limit(app_with_data):
+    """request_limit / sung_limit 参数生效"""
+    client = app_with_data
+    res = client.get("/api/stats/insights?request_limit=1&sung_limit=1")
+    body = res.json()
+    assert len(body["top_requested"]) == 1
+    assert len(body["recently_sung"]) == 1
+
+
+def test_insights_clamp_limits(app_with_data):
+    """越界 limit 自动 clamp 到 [1, 50]"""
+    client = app_with_data
+    res = client.get("/api/stats/insights?request_limit=999&sung_limit=0")
+    assert res.status_code == 200
+    # sung_limit=0 会被 clamp 到 1；不报错
+    body = res.json()
+    assert isinstance(body["top_requested"], list)
+
+
+def test_insights_cold_start(tmp_path_factory_app):
+    """空 events → 两个空数组 + 提示文案"""
+    client = tmp_path_factory_app
+    res = client.get("/api/stats/insights")
+    body = res.json()
+    assert body["top_requested"] == []
+    assert body["recently_sung"] == []
+    assert "暂无" in body["note"]
+
+
+def test_insights_resolves_artist(app_with_data):
+    """title + artist 从 SongLibrary 解析"""
+    client = app_with_data
+    res = client.get("/api/stats/insights")
+    body = res.json()
+    beta = next(x for x in body["top_requested"] if x["song_id"] == "song_beta")
+    assert beta["title"] == "成都"
+    assert beta["artist"] == "赵雷"
+
+
 @pytest.fixture
 def tmp_path_factory_app():
     """空 events.jsonl + 单首歌曲。"""

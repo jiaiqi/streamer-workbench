@@ -623,6 +623,31 @@ class TopSongsResponse(BaseModel):
     note: str = ""
 
 
+class RequestedSongItemResponse(BaseModel):
+    """M2.5: 点歌热度 Top N（含最近一次点歌时间）"""
+    song_id: str
+    title: str
+    artist: str = ""
+    count: int = 0
+    last_requested: str = ""  # ISO datetime
+
+
+class RecentlySungItemResponse(BaseModel):
+    """M2.5: 最近演唱 Top N（按时间倒序）"""
+    song_id: str
+    title: str
+    artist: str = ""
+    last_sung: str = ""  # ISO datetime
+    times_sung: int = 0
+
+
+class InsightsResponse(BaseModel):
+    """M2.5: 综合洞察 — 点歌热度 + 最近演唱"""
+    top_requested: list[RequestedSongItemResponse] = Field(default_factory=list)
+    recently_sung: list[RecentlySungItemResponse] = Field(default_factory=list)
+    note: str = ""
+
+
 class DistributionBucketResponse(BaseModel):
     label: str
     count: int

@@ -1,4 +1,4 @@
-"""R4 统计路由 — 总览 / 时间线 / Top N / 分布。"""
+"""R4 统计路由 — 总览 / 时间线 / Top N / 分布 / 综合洞察。"""
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
@@ -11,6 +11,9 @@ from server.api.secondary_models import (
     TopSongsResponse,
     DistributionBucketResponse,
     DistributionResponse,
+    RequestedSongItemResponse,
+    RecentlySungItemResponse,
+    InsightsResponse,
 )
 from server.dependencies import get_app_context
 
@@ -84,4 +87,29 @@ def api_distribution(req: Request, metric: str = "difficulty"):
         metric=d.metric,
         buckets=[DistributionBucketResponse(label=b.label, count=b.count) for b in d.buckets],
         note=d.note,
+    )
+
+
+# ---- M2.5 综合洞察 ----
+@router.get("/api/stats/insights", response_model=InsightsResponse)
+def api_insights(req: Request, request_limit: int = 10, sung_limit: int = 10):
+    """M2.5: 综合洞察
+    - top_requested: 点歌次数 Top N（+ 最近点歌时间）
+    - recently_sung: 最近演唱 Top N（按时间倒序 + 演唱次数）
+    """
+    request_limit = max(1, min(50, int(request_limit)))
+    sung_limit = max(1, min(50, int(sung_limit)))
+    ctx = get_app_context(req)
+    svc = ctx.stats_service
+    i = svc.insights(request_limit=request_limit, sung_limit=sung_limit)
+    return InsightsResponse(
+        top_requested=[RequestedSongItemResponse(
+            song_id=x.song_id, title=x.title, artist=x.artist,
+            count=x.count, last_requested=x.last_requested,
+        ) for x in i.top_requested],
+        recently_sung=[RecentlySungItemResponse(
+            song_id=x.song_id, title=x.title, artist=x.artist,
+            last_sung=x.last_sung, times_sung=x.times_sung,
+        ) for x in i.recently_sung],
+        note=i.note,
     )
