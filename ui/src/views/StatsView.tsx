@@ -1,14 +1,15 @@
-/// R4 数据统计视图 — 5 tab: 总览 / 时间线 / Top 歌曲 / 难度 / Key 分布。
+/// R4 数据统计视图 — 6 tab: 总览 / 时间线 / Top 歌曲 / 洞察 / 难度 / Key 分布。
 ///
 /// 数据从 /api/stats/* 现算, 冷启动空态友好 (note 提示用户开始积累数据)。
 /// R3.5 learning-report: header 右上角「导出学习报告」按钮 → 渲染 learning-report 海报。
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { apiRequest } from "../api/client";
 import type {
   OverviewStatsResponse,
   FeedResponse,
   TopSongsResponse,
   DistributionResponse,
+  InsightsResponse,
 } from "../api/generated";
 import { toRequestFailure, type RequestFailure, useLatestRequest } from "../async/requestState";
 import { Icon } from "../icons";
@@ -18,7 +19,7 @@ import ErrorBanner from "../components/ErrorBanner";
 import EmptyState from "../components/EmptyState";
 import ExportLogPanel from "../posters/ExportLogPanel";
 
-type Tab = "overview" | "feed" | "top" | "difficulty" | "key";
+type Tab = "overview" | "feed" | "top" | "insights" | "difficulty" | "key";
 type TopMetric = "request" | "perform" | "practice";
 
 interface StatsViewProps {
@@ -120,6 +121,7 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
             ["overview", "总览"],
             ["feed", "时间线"],
             ["top", "Top 歌曲"],
+            ["insights", "洞察"],
             ["difficulty", "难度分布"],
             ["key", "Key 分布"],
           ] as [Tab, string][]).map(([k, label]) => (
@@ -158,6 +160,7 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
             currentMetric="request"
           />
         )}
+        {tab === "insights" && <InsightsPanel dark={dark} />}
         {tab === "difficulty" && <DistributionPanel dark={dark} metric="difficulty" />}
         {tab === "key" && <DistributionPanel dark={dark} metric="key" />}
       </div>
@@ -579,4 +582,148 @@ function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficult
       ))}
     </div>
   );
+}
+
+// ---- M2.5 综合洞察 ----
+function InsightsPanel({ dark }: { dark: boolean }) {
+  const request = useLatestRequest<InsightsResponse>({
+    isEmpty: (d) => (d.top_requested?.length ?? 0) === 0 && (d.recently_sung?.length ?? 0) === 0,
+  });
+  const refresh = useCallback(() => {
+    void request.run(signal => apiRequest<InsightsResponse>("/api/stats/insights?request_limit=10&sung_limit=10", { signal }));
+  }, [request]);
+
+  useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  if (request.status === "loading" && !request.data) {
+    return <Spinner dark={dark} label="加载洞察数据…" />;
+  }
+  if (request.status === "error" && !request.data) {
+    return <ErrorBanner dark={dark} error={request.error} onRetry={refresh} />;
+  }
+  const data = request.data;
+  if (!data) return null;
+  const isEmpty = (data.top_requested?.length ?? 0) === 0 && (data.recently_sung?.length ?? 0) === 0;
+  if (isEmpty) {
+    return (
+      <EmptyState
+        dark={dark}
+        title="暂无洞察数据"
+        description={data.note || "先开几场直播或录入练习记录；点歌 / 演唱事件会在此聚合。"}
+      />
+    );
+  }
+
+  const cardCls = `rounded-xl border p-4 ${dark ? "border-zinc-700/60 bg-zinc-800/40" : "border-zinc-200 bg-card"}`;
+  const labelCls = `text-[10px] font-semibold uppercase tracking-widest ${dark ? "text-zinc-500" : "text-muted-foreground"}`;
+
+  return (
+    <div className="space-y-4" data-testid="insights-panel">
+      {data.note && (
+        <p className={`text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+          {data.note}
+        </p>
+      )}
+
+      {/* 1) 点歌热度 Top 10 */}
+      <section className={cardCls}>
+        <header className="flex items-baseline justify-between mb-3">
+          <h3 className={labelCls}>点歌热度 Top 10</h3>
+          <span className={`text-[10px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+            按 queue_added 次数
+          </span>
+        </header>
+        {(data.top_requested ?? []).length === 0 ? (
+          <p className={`text-xs ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+            暂无点歌数据
+          </p>
+        ) : (
+          <ol className="space-y-1.5" data-testid="insights-top-requested">
+            {(data.top_requested ?? []).map((s, i) => (
+              <li
+                key={s.song_id}
+                data-testid={`insights-top-row-${i}`}
+                className="flex items-center gap-3 text-[13px]"
+              >
+                <span className={`shrink-0 w-5 text-center font-mono tabular-nums ${
+                  i === 0 ? "text-amber-500 font-bold"
+                    : i < 3 ? "text-emerald-500 font-semibold"
+                    : dark ? "text-zinc-500" : "text-muted-foreground"
+                }`}>
+                  {i + 1}
+                </span>
+                <span className={`flex-1 min-w-0 truncate ${dark ? "text-zinc-100" : "text-foreground"}`}>
+                  {s.title}
+                  {s.artist && <span className={`ml-1.5 text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>— {s.artist}</span>}
+                </span>
+                <span className={`shrink-0 tabular-nums font-semibold ${dark ? "text-emerald-300" : "text-emerald-700"}`}>
+                  × {s.count}
+                </span>
+                <span className={`shrink-0 text-[10px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                  {s.last_requested ? formatAgo(s.last_requested) : "—"}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      {/* 2) 最近演唱 Top 10 */}
+      <section className={cardCls}>
+        <header className="flex items-baseline justify-between mb-3">
+          <h3 className={labelCls}>最近演唱 Top 10</h3>
+          <span className={`text-[10px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+            按 performance_sung 时间倒序
+          </span>
+        </header>
+        {(data.recently_sung ?? []).length === 0 ? (
+          <p className={`text-xs ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+            暂无演唱数据
+          </p>
+        ) : (
+          <ol className="space-y-1.5" data-testid="insights-recent-sung">
+            {(data.recently_sung ?? []).map((s, i) => (
+              <li
+                key={s.song_id}
+                data-testid={`insights-sung-row-${i}`}
+                className="flex items-center gap-3 text-[13px]"
+              >
+                <span className={`shrink-0 w-5 text-center font-mono tabular-nums ${
+                  dark ? "text-zinc-500" : "text-muted-foreground"
+                }`}>
+                  {i + 1}
+                </span>
+                <span className={`flex-1 min-w-0 truncate ${dark ? "text-zinc-100" : "text-foreground"}`}>
+                  {s.title}
+                  {s.artist && <span className={`ml-1.5 text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>— {s.artist}</span>}
+                </span>
+                <span className={`shrink-0 tabular-nums ${dark ? "text-sky-300" : "text-sky-700"}`}>
+                  {s.times_sung} 次
+                </span>
+                <span className={`shrink-0 text-[10px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                  {s.last_sung ? formatAgo(s.last_sung) : "—"}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function formatAgo(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const diff = Math.max(0, Date.now() - d.getTime());
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `${sec}s 前`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m 前`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h 前`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d 前`;
+  const mon = Math.floor(day / 30);
+  return `${mon}mo 前`;
 }

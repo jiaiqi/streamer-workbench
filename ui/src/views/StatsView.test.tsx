@@ -23,8 +23,19 @@ const FEED_RESPONSE = {
     { event_id: "e3", type: "song_request", song_id: "s2", summary: "十年 (点歌)", occurred_at: "2026-07-30T20:31:00+08:00" },
   ],
 };
+const INSIGHTS_RESPONSE = {
+  top_requested: [
+    { song_id: "s1", title: "晴天", artist: "周杰伦", count: 5, last_requested: "2026-07-30T20:00:00+08:00" },
+    { song_id: "s2", title: "十年", artist: "陈奕迅", count: 3, last_requested: "2026-07-29T18:00:00+08:00" },
+  ],
+  recently_sung: [
+    { song_id: "s1", title: "晴天", artist: "周杰伦", times_sung: 4, last_sung: "2026-07-30T20:30:00+08:00" },
+    { song_id: "s3", title: "后来", artist: "刘若英", times_sung: 1, last_sung: "2026-07-28T19:00:00+08:00" },
+  ],
+  note: "",
+};
 
-function makeFetch(overrides: { top?: unknown; feed?: unknown } = {}) {
+function makeFetch(overrides: { top?: unknown; feed?: unknown; insights?: unknown } = {}) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : (input as URL).toString();
     const json = (body: unknown) => new Response(JSON.stringify(body), {
@@ -32,6 +43,7 @@ function makeFetch(overrides: { top?: unknown; feed?: unknown } = {}) {
     });
     if (url.includes("/api/stats/top-songs")) return json(overrides.top ?? TOP_RESPONSE);
     if (url.includes("/api/stats/feed")) return json(overrides.feed ?? FEED_RESPONSE);
+    if (url.includes("/api/stats/insights")) return json(overrides.insights ?? INSIGHTS_RESPONSE);
     if (url.includes("/api/stats/overview")) return json({ total_events: 0, active_songs: 0, draft_songs: 0, total_songs: 0, note: "no data" });
     if (url.includes("/api/stats/distribution")) return json({ metric: "difficulty", buckets: [], note: "no data" });
     return json({});
@@ -132,6 +144,40 @@ describe("StatsView Feed tab 数据反哺", () => {
       // FEED_RESPONSE 有 3 条事件：s1, s1, s2 → 去重后 [s1, s2]
       expect(songIds).toEqual(["s1", "s2"]);
       expect(name).toMatch(/^时间线 \d{4}-\d{2}-\d{2}$/);
+    });
+  });
+});
+
+describe("StatsView M2.5 Insights tab", () => {
+  it("点「洞察」tab → 渲染 InsightsPanel + 显示 top_requested + recently_sung", async () => {
+    globalThis.fetch = makeFetch() as unknown as typeof fetch;
+    render(<StatsView dark={false} />);
+    // 先确保初始 tab 是 overview — 切到 insights
+    fireEvent.click(screen.getByTestId("stats-tab-insights"));
+    await waitFor(() => {
+      expect(screen.getByTestId("insights-panel")).toBeTruthy();
+    });
+    // top_requested 渲染
+    const topRows = screen.getAllByTestId(/^insights-top-row-/);
+    expect(topRows.length).toBe(2);
+    expect(topRows[0].textContent).toContain("晴天");
+    expect(topRows[0].textContent).toContain("× 5");
+    // recently_sung 渲染
+    const sungRows = screen.getAllByTestId(/^insights-sung-row-/);
+    expect(sungRows.length).toBe(2);
+    expect(sungRows[0].textContent).toContain("晴天");
+    expect(sungRows[0].textContent).toContain("4 次");
+  });
+
+  it("Insights 冷启动 → 显示 EmptyState 提示", async () => {
+    globalThis.fetch = makeFetch({
+      insights: { top_requested: [], recently_sung: [], note: "暂无数据" },
+    }) as unknown as typeof fetch;
+    render(<StatsView dark={false} />);
+    fireEvent.click(screen.getByTestId("stats-tab-insights"));
+    await waitFor(() => {
+      expect(screen.getByText("暂无洞察数据")).toBeTruthy();
+      expect(screen.getByText(/暂无数据/)).toBeTruthy();
     });
   });
 });

@@ -10,6 +10,44 @@ export interface AnalyzeQuery {
   "theme_id"?: string;
 }
 
+export interface AudioItemResponse {
+  "filename": string;
+  "mime"?: string;
+  "path": string;
+  "role": string;
+  [key: string]: unknown;
+}
+
+export interface AudioListResponse {
+  "items"?: Array<AudioItemResponse>;
+  "song_id": string;
+  [key: string]: unknown;
+}
+
+export interface AudioStreamInfo {
+  "filename": string;
+  "mime"?: string;
+  "path": string;
+  "role": string;
+  "size"?: number;
+  "song_id": string;
+  [key: string]: unknown;
+}
+
+export interface AudioUploadResponse {
+  "filename": string;
+  "ok"?: boolean;
+  "path": string;
+  "role": string;
+  "song_id": string;
+  [key: string]: unknown;
+}
+
+export interface Body_api_audio_upload_api_songs__identity__audio_post {
+  "file": string;
+  [key: string]: unknown;
+}
+
 export interface Body_api_tab_upload_api_songs__identity__tabs_post {
   "file": string;
   [key: string]: unknown;
@@ -213,6 +251,13 @@ export interface HTTPValidationError {
   [key: string]: unknown;
 }
 
+export interface InsightsResponse {
+  "note"?: string;
+  "recently_sung"?: Array<RecentlySungItemResponse>;
+  "top_requested"?: Array<RequestedSongItemResponse>;
+  [key: string]: unknown;
+}
+
 export interface LearningReportPosterRequest {
   "canvas_id"?: string;
   "days"?: number;
@@ -353,6 +398,21 @@ export interface ParamSpecResponse {
   "section_axis"?: string | null;
   "step"?: number | null;
   "unit"?: string;
+  [key: string]: unknown;
+}
+
+export interface PlaybackEventRequest {
+  "duration_ms"?: number;
+  "occurred_at"?: string;
+  "position_ms"?: number;
+  "song_id": string;
+  "source"?: string | null;
+  "type": string;
+}
+
+export interface PlaybackEventResponse {
+  "ok"?: boolean;
+  "type": string;
   [key: string]: unknown;
 }
 
@@ -571,6 +631,15 @@ export interface PresetSummaryResponse {
   [key: string]: unknown;
 }
 
+export interface RecentlySungItemResponse {
+  "artist"?: string;
+  "last_sung"?: string;
+  "song_id": string;
+  "times_sung"?: number;
+  "title": string;
+  [key: string]: unknown;
+}
+
 export interface RenderDocumentRequest {
   "canvas_id"?: string;
   "layout_id"?: string;
@@ -592,6 +661,15 @@ export interface RenderDocumentResponse {
   "poster_id": string;
   "song_count": number;
   "theme_id": string;
+  [key: string]: unknown;
+}
+
+export interface RequestedSongItemResponse {
+  "artist"?: string;
+  "count"?: number;
+  "last_requested"?: string;
+  "song_id": string;
+  "title": string;
   [key: string]: unknown;
 }
 
@@ -626,11 +704,18 @@ export interface SettingsUpdateResponse {
 
 export interface SongCreateRequest {
   "artists"?: Array<unknown> | null;
+  "audio_duration_ms"?: unknown | null;
+  "audio_instrumental_path"?: unknown | null;
+  "audio_vocal_path"?: unknown | null;
   "capo"?: unknown | null;
+  "capo_default"?: number | null;
+  "capo_options"?: Array<number> | null;
   "composer"?: unknown | null;
   "difficulty"?: unknown | null;
   "key"?: unknown | null;
   "lyricist"?: unknown | null;
+  "lyrics_lrc"?: unknown | null;
+  "lyrics_plain"?: unknown | null;
   "notes"?: unknown | null;
   "pinyin"?: unknown | null;
   "section"?: unknown | null;
@@ -651,11 +736,18 @@ export interface SongDeleteResponse {
 
 export interface SongEditableFields {
   "artists"?: Array<unknown> | null;
+  "audio_duration_ms"?: unknown | null;
+  "audio_instrumental_path"?: unknown | null;
+  "audio_vocal_path"?: unknown | null;
   "capo"?: unknown | null;
+  "capo_default"?: number | null;
+  "capo_options"?: Array<number> | null;
   "composer"?: unknown | null;
   "difficulty"?: unknown | null;
   "key"?: unknown | null;
   "lyricist"?: unknown | null;
+  "lyrics_lrc"?: unknown | null;
+  "lyrics_plain"?: unknown | null;
   "notes"?: unknown | null;
   "pinyin"?: unknown | null;
   "section"?: unknown | null;
@@ -716,13 +808,21 @@ export interface SongQueryRequest {
 export interface SongResponse {
   "added_at": string;
   "artists": Array<string>;
+  "audio_duration_ms"?: number;
+  "audio_instrumental_path"?: string;
+  "audio_vocal_path"?: string;
   "capo": number | null;
+  "capo_default"?: number;
+  "capo_options"?: Array<number>;
   "composer": string;
+  "deleted_at"?: string;
   "difficulty": string;
   "id": string;
   "key": string;
   "learned_at": string;
   "lyricist": string;
+  "lyrics_lrc"?: string;
+  "lyrics_plain"?: string;
   "notes": string;
   "pinyin": string;
   "section": number | null;
