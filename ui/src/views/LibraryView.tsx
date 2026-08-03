@@ -54,6 +54,10 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const [actionError, setActionError] = useState("");
   const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
   const [seedPending, setSeedPending] = useState(false);
+  /* L2.1 批量操作：多选模式 + 已选标题集合 */
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedTitles, setSelectedTitles] = useState<Set<string>>(() => new Set());
+  const [batchPending, setBatchPending] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
@@ -238,6 +242,116 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
     finally { setActionSong(null); }
   };
 
+  /* ---- L2.1 批量操作：多选 helper ---- */
+  const toggleSelectTitle = (title: string) => {
+    setSelectedTitles(prev => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title);
+      else next.add(title);
+      return next;
+    });
+  };
+  const selectAllVisible = () => {
+    setSelectedTitles(prev => {
+      const next = new Set(prev);
+      for (const s of filtered) next.add(s.title);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedTitles(new Set());
+  const exitSelectMode = () => { setSelectMode(false); clearSelection(); };
+  /* ---- L2.1 批量删除：循环调 /api/songs/delete + 聚合 toast + 单条撤销 ---- */
+  const handleBatchDelete = async () => {
+    if (batchPending || selectedTitles.size === 0) return;
+    if (!window.confirm(`确定删除 ${selectedTitles.size} 首？R9.6 软删除：30 天内可在垃圾桶恢复。`)) return;
+    setBatchPending(true);
+    setActionError("");
+    const titles = Array.from(selectedTitles);
+    let succeeded = 0;
+    const failed: string[] = [];
+    const deletedIds: Array<{ id: string; title: string }> = [];
+    for (const title of titles) {
+      const song = songsData?.songs.find(s => s.title === title);
+      if (!song) continue;
+      try {
+        await runWithToast(
+          () => apiRequest("/api/songs/delete", { method: "POST", body: { title } }),
+          "批量删除失败",
+        );
+        succeeded++;
+        deletedIds.push({ id: song.id, title: song.title });
+      } catch (failure) {
+        failed.push(`${title}：${(failure as RequestFailure).message}`);
+      }
+    }
+    setBatchPending(false);
+    if (succeeded > 0) {
+      await refresh();
+      exitSelectMode();
+      if (failed.length === 0 && deletedIds.length === 1) {
+        // 单条走 M9.6b 撤销
+        const only = deletedIds[0];
+        toast.show({
+          message: `已删除「${only.title}」`,
+          action: {
+            label: "撤销",
+            onClick: async () => {
+              try {
+                await runWithToast(
+                  () => apiRequest(`/api/songs/${only.id}/restore`, { method: "POST" }),
+                  "恢复失败",
+                );
+                await refresh();
+                toast.show({ message: `已恢复「${only.title}」`, durationMs: 3000 });
+              } catch { /* toast 已弹 */ }
+            },
+          },
+          durationMs: 5000,
+        });
+      } else {
+        // 多条：聚合 toast（"已删除 N 首" + 失败列表附注）
+        const summary = failed.length > 0
+          ? `已删除 ${succeeded} 首，${failed.length} 首失败：${failed[0]}${failed.length > 1 ? ` 等 ${failed.length} 首` : ""}`
+          : `已删除 ${succeeded} 首`;
+        toast.show({ message: summary, durationMs: failed.length > 0 ? 6000 : 3000 });
+      }
+    } else if (failed.length > 0) {
+      toast.error(`批量删除全部失败：${failed[0]}${failed.length > 1 ? ` 等 ${failed.length} 首` : ""}`);
+    }
+  };
+  /* ---- L2.1 批量改状态：循环调 /api/songs/status + 聚合 toast ---- */
+  const handleBatchStatus = async (next: "active" | "draft") => {
+    if (batchPending || selectedTitles.size === 0) return;
+    setBatchPending(true);
+    setActionError("");
+    const titles = Array.from(selectedTitles);
+    let succeeded = 0;
+    const failed: string[] = [];
+    for (const title of titles) {
+      try {
+        await runWithToast(
+          () => apiRequest("/api/songs/status", { method: "POST", body: { title, status: next } }),
+          `批量改状态失败`,
+        );
+        succeeded++;
+      } catch (failure) {
+        failed.push(`${title}：${(failure as RequestFailure).message}`);
+      }
+    }
+    setBatchPending(false);
+    if (succeeded > 0) {
+      await refresh();
+      exitSelectMode();
+      const verb = next === "active" ? "已会" : "未会";
+      const summary = failed.length > 0
+        ? `已标记 ${succeeded} 首为${verb}，${failed.length} 首失败`
+        : `已标记 ${succeeded} 首为${verb}`;
+      toast.show({ message: summary, durationMs: 3000 });
+    } else if (failed.length > 0) {
+      toast.error(`批量改状态全部失败：${failed[0]}${failed.length > 1 ? ` 等 ${failed.length} 首` : ""}`);
+    }
+  };
+
   /* ---- 设计令牌速记 ---- */
   const hairline = dark ? "border-zinc-700/60" : "border-border";
   const label = "text-[10px] font-semibold uppercase tracking-widest text-muted-foreground";
@@ -283,6 +397,23 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
             className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/70" />
           <kbd className={`text-[10px] px-1 rounded ${dark ? "bg-zinc-700 text-zinc-500" : "bg-background text-muted-foreground/70 border border-border"}`}>/</kbd>
         </div>
+
+        {/* L2.1 批量操作：选择模式切换 */}
+        <button
+          onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+          data-testid="library-select-toggle"
+          aria-pressed={selectMode}
+          className={`flex items-center gap-1.5 rounded-lg px-3 h-8 text-[13px] font-medium transition-colors cursor-pointer ${
+            selectMode
+              ? (dark ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-emerald-50 text-emerald-700 border border-emerald-200")
+              : (dark ? "bg-zinc-800 text-zinc-300 border border-zinc-700/60 hover:bg-zinc-700" : "bg-background text-foreground border border-border hover:bg-muted")
+          }`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+          {selectMode ? "退出选择" : "选择"}
+        </button>
 
         <button onClick={() => setEditTarget("new")}
           className="flex items-center gap-1.5 rounded-lg px-3.5 h-8 text-[13px] font-medium transition-colors cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white">
@@ -363,22 +494,47 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
                 {songs.map(s => {
                   const isOpen = expanded === s.title;
                   const isCursor = cursor === s.title;
+                  const isSelected = selectedTitles.has(s.title);
                   return (
                     <div key={s.title}
                       ref={el => { if (el) rowRefs.current.set(s.title, el); else rowRefs.current.delete(s.title); }}
                       className={isOpen ? "col-span-full" : ""}>
                       {/* ---- 卡片：点击就地展开；状态变化只用背景填充，不加边框 ---- */}
                       <div
-                        onClick={() => setExpanded(isOpen ? null : s.title)}
+                        onClick={() => {
+                          if (selectMode) toggleSelectTitle(s.title);
+                          else setExpanded(isOpen ? null : s.title);
+                        }}
+                        data-testid={`library-card-${s.id}`}
+                        data-selected={isSelected ? "true" : "false"}
                         className={`h-full rounded-xl px-3.5 py-3 cursor-pointer transition-colors duration-200 ${
-                          isOpen
-                            ? (dark ? "bg-zinc-800/80" : "bg-muted/80")
-                            : isCursor
+                          isSelected
+                            ? (dark ? "bg-emerald-500/15 ring-2 ring-emerald-500/50" : "bg-emerald-50 ring-2 ring-emerald-400")
+                            : isOpen
+                              ? (dark ? "bg-zinc-800/80" : "bg-muted/80")
+                              : isCursor
                               ? (dark ? "bg-zinc-800/70" : "bg-muted/70")
                               : (dark ? "bg-zinc-800/40 hover:bg-zinc-800/60" : "bg-muted/40 hover:bg-muted/60")}`}
                       >
                         {/* 歌名 + 展开指示 + 弹唱按钮 */}
                         <div className="flex items-start gap-1.5">
+                          {/* L2.1 批量操作：select 模式下显示 checkbox */}
+                          {selectMode && (
+                            <span
+                              data-testid={`library-card-checkbox-${s.id}`}
+                              data-checked={isSelected ? "true" : "false"}
+                              className={`shrink-0 mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                                isSelected
+                                  ? "bg-emerald-500 border-emerald-500 text-white"
+                                  : (dark ? "border-zinc-600" : "border-gray-300")
+                              }`}>
+                              {isSelected && (
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                  <path d="m5 12 5 5L20 7"/>
+                                </svg>
+                              )}
+                            </span>
+                          )}
                           <span className={`flex-1 min-w-0 font-serif text-[14px] leading-snug truncate ${
                             s.status === "draft"
                               ? (dark ? "text-zinc-400" : "text-muted-foreground")
@@ -558,6 +714,77 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
       {editTarget !== null && (
         <SongEditDialog target={editTarget}
           onClose={() => setEditTarget(null)} onSaved={refresh} />
+      )}
+
+      {/* L2.1 批量操作：底部 action bar（select 模式 + 至少选中 1 首时显示） */}
+      {selectMode && statusFilter !== "trash" && (
+        <div
+          data-testid="library-batch-bar"
+          className={`shrink-0 z-20 flex items-center gap-2 px-6 h-14 border-t ${
+            dark ? "bg-zinc-900/95 border-zinc-700 backdrop-blur-sm" : "bg-background/95 border-border backdrop-blur-sm"
+          }`}>
+          <span className={`text-[13px] font-medium tabular-nums ${
+            dark ? "text-zinc-200" : "text-foreground"
+          }`}>
+            已选 <span data-testid="library-batch-count" className="text-emerald-500">{selectedTitles.size}</span> 首
+          </span>
+          <button
+            type="button"
+            onClick={selectAllVisible}
+            data-testid="library-batch-select-all"
+            className={`text-[12px] px-2 h-7 rounded transition-colors ${
+              dark ? "text-zinc-400 hover:bg-zinc-800" : "text-muted-foreground hover:bg-muted"
+            }`}>
+            全选当前筛选
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            data-testid="library-batch-clear"
+            disabled={selectedTitles.size === 0}
+            className={`text-[12px] px-2 h-7 rounded transition-colors disabled:opacity-40 ${
+              dark ? "text-zinc-400 hover:bg-zinc-800" : "text-muted-foreground hover:bg-muted"
+            }`}>
+            清空
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleBatchStatus("active")}
+              data-testid="library-batch-mark-active"
+              disabled={selectedTitles.size === 0 || batchPending}
+              className="flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-emerald-600 hover:bg-emerald-700 text-white">
+              ✓ 标记已会
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBatchStatus("draft")}
+              data-testid="library-batch-mark-draft"
+              disabled={selectedTitles.size === 0 || batchPending}
+              className={`flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 ${
+                dark ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700" : "bg-background hover:bg-muted text-foreground border border-border"
+              }`}>
+              ◯ 标记未会
+            </button>
+            <button
+              type="button"
+              onClick={handleBatchDelete}
+              data-testid="library-batch-delete"
+              disabled={selectedTitles.size === 0 || batchPending}
+              className="flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-red-600 hover:bg-red-700 text-white">
+              🗑 批量删除
+            </button>
+            <button
+              type="button"
+              onClick={exitSelectMode}
+              data-testid="library-batch-cancel"
+              className={`ml-2 text-[12px] px-2 h-7 rounded transition-colors ${
+                dark ? "text-zinc-500 hover:text-zinc-300" : "text-muted-foreground hover:text-foreground"
+              }`}>
+              取消
+            </button>
+          </div>
+        </div>
       )}
     </main>
   );
