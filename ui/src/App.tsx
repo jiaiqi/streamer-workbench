@@ -41,6 +41,7 @@ import ShortcutsPanel from "./components/ShortcutsPanel";
 import Onboarding, { resetOnboarded } from "./components/Onboarding";
 import OnlineStatusBadge from "./components/OnlineStatusBadge";
 import StatusBar, { type StatusView } from "./components/StatusBar";
+import HelpCenter from "./components/HelpCenter";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -270,6 +271,8 @@ function AppInner() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   /* ---- L1.2 快捷键面板：? 键（Shift+/）打开 ---- */
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /* L1.7 帮助中心：Cmd+Shift+? 打开 ---- */
+  const [helpOpen, setHelpOpen] = useState(false);
   /* ---- M1.2 全局找歌：所有 songs（搜索用）---- */
   const [allSongs, setAllSongs] = useState<Song[]>([]);
   useEffect(() => {
@@ -341,6 +344,13 @@ function AppInner() {
       if (e.key === "?" && !mod && !typing) {
         e.preventDefault();
         setShortcutsOpen(p => !p);
+        return;
+      }
+
+      // L1.7: Cmd+Shift+?（Cmd+Shift+/）打开帮助中心
+      if (mod && e.shiftKey && (e.key === "?" || e.key === "/")) {
+        e.preventDefault();
+        setHelpOpen(p => !p);
         return;
       }
 
@@ -875,6 +885,17 @@ function AppInner() {
       />
       {/* L1.2 全局快捷键面板 — ? 键打开 */}
       <ShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} dark={dark} />
+      {/* L1.7 帮助中心 — Cmd+Shift+? 打开 */}
+      <HelpCenter
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        dark={dark}
+        actions={{
+          openShortcuts: () => setShortcutsOpen(true),
+          reopenOnboarding: () => { resetOnboarded(); window.location.reload(); },
+          openCommandPalette: () => setPaletteOpen(true),
+        }}
+      />
       {/* L1.3 首次启动 Onboarding（localStorage 标记控制） */}
       <Onboarding dark={dark} />
       {/* L1.6 底部状态栏 —— 弹唱视图隐藏（MiniPlayer 占位） */}
