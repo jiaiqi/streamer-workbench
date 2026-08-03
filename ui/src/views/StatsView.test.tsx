@@ -7,7 +7,14 @@
 ///   - 创建中 disable + spinner
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import StatsView from "./StatsView";
+import { ToastProvider } from "../components/Toast";
+
+/** M2.6: useApiError 需要 ToastProvider 上下文 */
+function wrap({ children }: { children: ReactNode }) {
+  return <ToastProvider>{children}</ToastProvider>;
+}
 
 const TOP_RESPONSE = {
   items: [

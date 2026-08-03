@@ -54,7 +54,7 @@ const KIND_DEFAULT_DURATION: Record<ToastKind, number> = {
   error: 0,  // 错误不自动消失 —— 用户必须看清 ✕
 };
 
-const ToastContext = createContext<ToastApi | null>(null);
+export const ToastContext = createContext<ToastApi | null>(null);
 
 let nextId = 1;
 

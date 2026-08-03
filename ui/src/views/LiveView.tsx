@@ -27,7 +27,8 @@ import type {
   LiveSessionRecordResponse,
   LiveSessionSummary,
 } from "../api/generated";
-import { toRequestFailure, useLatestRequest } from "../async/requestState";
+import { useLatestRequest, type RequestFailure } from "../async/requestState";
+import { useApiError } from "../async/useApiError";
 import { openQuickView, openLivePoster, isElectron } from "../electron-bridge";
 import { asRecord, asString, asNumber, asBoolean } from "../lib/narrow";
 import StatusBadge from "../components/StatusBadge";
@@ -152,6 +153,8 @@ export default function LiveView({
   /** R8.2: 弹唱联动 — 队列项行尾「弹唱」按钮触发；App.tsx 接管路由。 */
   onPlaySong?: (songId: string, link: { sessionId: string; requestId: string; requesterName: string }) => void;
 }) {
+  // M2.6 错误全局 toast 化 — 失败时自动 toast.error
+  const { runWithToast } = useApiError();
   const [sessions, setSessions] = useState<LiveSessionSummary[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<LiveSessionDetail | null>(null);
@@ -175,13 +178,16 @@ export default function LiveView({
 
   const loadDetail = useCallback(async (id: string) => {
     try {
-      const d = await apiRequest<LiveSessionDetail>(`/api/live-sessions/${id}`);
+      const d = await runWithToast(
+        () => apiRequest<LiveSessionDetail>(`/api/live-sessions/${id}`),
+        "加载会话详情失败",
+      );
       setDetail(d);
-    } catch (reason) {
+    } catch (failure) {
       setDetail(null);
-      setActionError(toRequestFailure(reason, "加载会话详情失败").message);
+      setActionError((failure as RequestFailure).message);
     }
-  }, []);
+  }, [runWithToast]);
 
   // 启动加载：会话列表 + 曲库（手动加歌需要选歌）
   useEffect(() => {
@@ -223,12 +229,15 @@ export default function LiveView({
   const handleCreate = async () => {
     setActionError("");
     try {
-      const created = await apiRequest<LiveSessionSummary>("/api/live-sessions", {
-        method: "POST", body: { rule_version: "rv1", title: "" } });
+      const created = await runWithToast(
+        () => apiRequest<LiveSessionSummary>("/api/live-sessions", {
+          method: "POST", body: { rule_version: "rv1", title: "" } }),
+        "创建会话失败",
+      );
       await refreshList();
       setActiveId(created.id);
-    } catch (reason) {
-      setActionError(toRequestFailure(reason, "创建会话失败").message);
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
     }
   };
 
@@ -236,11 +245,14 @@ export default function LiveView({
   const handleClose = async (id: string) => {
     setActionError("");
     try {
-      await apiRequest(`/api/live-sessions/${id}/close`, { method: "POST", body: {} });
+      await runWithToast(
+        () => apiRequest(`/api/live-sessions/${id}/close`, { method: "POST", body: {} }),
+        "关闭会话失败",
+      );
       await refreshList();
       await loadDetail(id);
-    } catch (reason) {
-      setActionError(toRequestFailure(reason, "关闭会话失败").message);
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
     }
   };
 
@@ -250,27 +262,30 @@ export default function LiveView({
     setActionError("");
     setActionNotice("");
     try {
-      const res: LiveSessionQueueResponse = await apiRequest(
-        `/api/live-sessions/${activeId}/queue`, {
-          method: "POST",
-          body: {
-            requester_name: "主播",
-            requester_id: null,
-            song_id: songId,
-            entitlement_id: null,
-            entitlement_kind: "manual",
-            note: "主播后台加歌",
-            command_id: `cmd_${uuid().replaceAll("-", "")}`,
+      const res: LiveSessionQueueResponse = await runWithToast(
+        () => apiRequest(
+          `/api/live-sessions/${activeId}/queue`, {
+            method: "POST",
+            body: {
+              requester_name: "主播",
+              requester_id: null,
+              song_id: songId,
+              entitlement_id: null,
+              entitlement_kind: "manual",
+              note: "主播后台加歌",
+              command_id: `cmd_${uuid().replaceAll("-", "")}`,
+            },
           },
-        },
+        ),
+        "加歌失败",
       );
       setActionNotice(res.duplicate_merged
         ? "同一人点过同一首，合并到已有请求"
         : `已加入队列，位置 #${res.position}`);
       setManualPickerOpen(false);
       await loadDetail(activeId);
-    } catch (reason) {
-      setActionError(toRequestFailure(reason, "加歌失败").message);
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
     }
   };
 
@@ -280,17 +295,20 @@ export default function LiveView({
     setActionError("");
     setActionNotice("");
     try {
-      const res: LiveSessionRecordResponse = await apiRequest(
-        `/api/live-sessions/${activeId}/record`, {
-          method: "POST",
-          body: { request_id: requestId, result, operator: "broadcaster", reason: "后台手动覆盖" },
-        },
+      const res: LiveSessionRecordResponse = await runWithToast(
+        () => apiRequest(
+          `/api/live-sessions/${activeId}/record`, {
+            method: "POST",
+            body: { request_id: requestId, result, operator: "broadcaster", reason: "后台手动覆盖" },
+          },
+        ),
+        "记录失败",
       );
       const refundMsg = res.refunded ? "（已退还权益）" : "";
       setActionNotice(`已记录：${RESULT_LABEL[result] ?? result} ${refundMsg}`.trim());
       await loadDetail(activeId);
-    } catch (reason) {
-      setActionError(toRequestFailure(reason, "记录失败").message);
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
     }
   };
 
@@ -301,7 +319,10 @@ export default function LiveView({
     setActionError("");
     setActionNotice("");
     try {
-      const res = await openLivePoster(sessionId);
+      const res = await runWithToast(
+        () => openLivePoster(sessionId),
+        "导出复盘海报失败",
+      );
       if (res.ok) {
         if (res.path) setActionNotice(`已保存到 ${res.path}`);
         else if (res.method === "download") setActionNotice("已下载海报");
@@ -309,13 +330,13 @@ export default function LiveView({
         setActionError(res.error ?? "导出失败");
       }
       // cancelled: 静默
-    } catch (err) {
-      console.error("导出复盘海报失败", err);
-      setActionError(err instanceof Error ? err.message : "导出失败");
+    } catch (failure) {
+      console.error("导出复盘海报失败", failure);
+      setActionError((failure as RequestFailure).message);
     } finally {
       setPosterLoading(false);
     }
-  }, [posterLoading]);
+  }, [posterLoading, runWithToast]);
 
   const activeSession = useMemo(
     () => sessions?.find(s => s.id === activeId) ?? null,

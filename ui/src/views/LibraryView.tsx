@@ -6,7 +6,8 @@ import AsyncStateNotice from "../components/AsyncStateNotice";
 import TrashView from "../components/TrashView";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
-import { toRequestFailure, useLatestRequest } from "../async/requestState";
+import { useLatestRequest, type RequestFailure } from "../async/requestState";
+import { useApiError } from "../async/useApiError";
 
 /* ================= 符号化元数据 ================= */
 // 难度 → 菱形阶（◆◆◇），一瞥可读
@@ -59,6 +60,8 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const probeRef = useRef<HTMLDivElement>(null);
   // M9.6b 全局 toast — 删除成功显示 5s 撤销按钮
   const toast = useToast();
+  // M2.6 错误全局 toast 化 — 失败时自动 toast.error，上层 catch 仍可 setError
+  const { runWithToast } = useApiError();
 
   const refresh = async () => {
     const d = await listRequest.run(signal => apiRequest<SongsData>("/api/songs/list", { signal }));
@@ -73,16 +76,18 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
     setSeedPending(true);
     setActionError("");
     try {
-      const res = await apiRequest<{ ok: boolean; added: string[] }>(
-        "/api/songs/seed-sample", { method: "POST", body: {} },
+      const res = await runWithToast(
+        () => apiRequest<{ ok: boolean; added: string[] }>(
+          "/api/songs/seed-sample", { method: "POST", body: {} },
+        ),
+        "示例曲库载入失败",
       );
       if (res.added.length > 0) {
         setActionError(""); // 清空旧错误
       }
       await refresh();
-    } catch (reason) {
-      const failure = toRequestFailure(reason, "示例曲库载入失败");
-      setActionError(failure.message);
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
     } finally {
       setSeedPending(false);
     }
@@ -179,7 +184,10 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
     const next = song.status === "active" ? "draft" : "active";
     setActionSong(song.id); setActionError("");
     try {
-      await apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: next } });
+      await runWithToast(
+        () => apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: next } }),
+        "状态切换失败",
+      );
       // 本地更新该行 + 统计，避免整表重拉
       setSongsData(prev => {
         if (!prev) return prev;
@@ -191,7 +199,9 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
         onStatsChange(stats);
         return { ...prev, ...stats, songs };
       });
-    } catch (reason) { setActionError(toRequestFailure(reason, "状态切换失败").message); }
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
+    }
     finally { setActionSong(null); }
   };
 
@@ -200,7 +210,10 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
     if (actionSong) return;
     setActionSong(song.id); setActionError("");
     try {
-      await apiRequest("/api/songs/delete", { method: "POST", body: { title: song.title } });
+      await runWithToast(
+        () => apiRequest("/api/songs/delete", { method: "POST", body: { title: song.title } }),
+        "删除失败",
+      );
       if (expanded === song.title) setExpanded(null);
       await refresh();
       // M9.6b: 5s 撤销窗口 — 点撤销调 POST /api/songs/{id}/restore
@@ -209,14 +222,19 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
         action: {
           label: "撤销",
           onClick: async () => {
-            await apiRequest(`/api/songs/${song.id}/restore`, { method: "POST" });
+            await runWithToast(
+              () => apiRequest(`/api/songs/${song.id}/restore`, { method: "POST" }),
+              "恢复失败",
+            );
             await refresh();
             toast.show({ message: `已恢复「${song.title}」`, durationMs: 3000 });
           },
         },
         durationMs: 5000,
       });
-    } catch (reason) { setActionError(toRequestFailure(reason, "删除失败").message); }
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
+    }
     finally { setActionSong(null); }
   };
 

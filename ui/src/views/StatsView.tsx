@@ -11,7 +11,8 @@ import type {
   DistributionResponse,
   InsightsResponse,
 } from "../api/generated";
-import { toRequestFailure, type RequestFailure, useLatestRequest } from "../async/requestState";
+import { type RequestFailure, useLatestRequest } from "../async/requestState";
+import { useApiError } from "../async/useApiError";
 import { Icon } from "../icons";
 import { openLearningReportPoster } from "../electron-bridge";
 import Spinner from "../components/Spinner";
@@ -169,15 +170,20 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
 }
 
 function OverviewPanel({ dark }: { dark: boolean }) {
+  // M2.6 错误全局 toast 化 — 失败时同时 toast.error + 保留 ErrorBanner retry
+  const { runWithToast } = useApiError();
   const [data, setData] = useState<OverviewStatsResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
   const req = useLatestRequest<OverviewStatsResponse>({ isEmpty: d => d.total_events === 0 && !d.note });
 
   useEffect(() => {
     setError(null);
-    void req.run(signal => apiRequest<OverviewStatsResponse>("/api/stats/overview", { signal }))
+    void req.run(signal => runWithToast(
+      () => apiRequest<OverviewStatsResponse>("/api/stats/overview", { signal }),
+      "总览统计加载失败",
+    ))
       .then(d => { if (d) setData(d); })
-      .catch(reason => setError(toRequestFailure(reason)));
+      .catch(failure => setError(failure as RequestFailure));
   }, []); // eslint-disable-line
 
   if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
@@ -240,6 +246,8 @@ function MetricCard({ label, value, color, dark }: {
 }
 
 function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (songIds: string[], name: string) => Promise<void> }) {
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
   const [data, setData] = useState<FeedResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
   const [limit, setLimit] = useState(50);
@@ -249,9 +257,12 @@ function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (
 
   const load = (n: number) => {
     setError(null);
-    void req.run(signal => apiRequest<FeedResponse>(`/api/stats/feed?limit=${n}`, { signal }))
+    void req.run(signal => runWithToast(
+      () => apiRequest<FeedResponse>(`/api/stats/feed?limit=${n}`, { signal }),
+      "时间线加载失败",
+    ))
       .then(d => { if (d) setData(d); })
-      .catch(reason => setError(toRequestFailure(reason)));
+      .catch(failure => setError(failure as RequestFailure));
   };
 
   useEffect(() => { load(limit); /* eslint-disable-next-line */ }, [limit]);
@@ -277,9 +288,12 @@ function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (
       }
       const today = new Date();
       const stamp = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
-      await onCreatePreset(songIds, `时间线 ${stamp}`);
-    } catch (reason) {
-      setCreateError(reason instanceof Error ? reason.message : "创建 Preset 失败");
+      await runWithToast(
+        () => onCreatePreset!(songIds, `时间线 ${stamp}`),
+        "创建 Preset 失败",
+      );
+    } catch (failure) {
+      setCreateError((failure as RequestFailure).message);
     } finally {
       setCreating(false);
     }
@@ -380,6 +394,8 @@ function FeedRow({ item, dark }: { item: import("../api/generated").FeedItemResp
 }
 
 function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCreatePoster?: (songIds: string[], metric: TopMetric) => Promise<void>; currentMetric: TopMetric }) {
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
   const [metric, setMetric] = useState<TopMetric>(currentMetric);
   const [data, setData] = useState<TopSongsResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
@@ -389,9 +405,12 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
 
   useEffect(() => {
     setError(null);
-    void req.run(signal => apiRequest<TopSongsResponse>(`/api/stats/top-songs?metric=${metric}&limit=10`, { signal }))
+    void req.run(signal => runWithToast(
+      () => apiRequest<TopSongsResponse>(`/api/stats/top-songs?metric=${metric}&limit=10`, { signal }),
+      "Top 歌曲加载失败",
+    ))
       .then(d => { if (d) setData(d); })
-      .catch(reason => setError(toRequestFailure(reason)));
+      .catch(failure => setError(failure as RequestFailure));
   }, [metric]); // eslint-disable-line
 
   if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
@@ -417,9 +436,12 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
     setCreateError(null);
     try {
       const songIds = data.items.map(item => item.song_id).filter(id => !!id);
-      await onCreatePoster(songIds, metric);
-    } catch (reason) {
-      setCreateError(reason instanceof Error ? reason.message : "创建海报失败");
+      await runWithToast(
+        () => onCreatePoster!(songIds, metric),
+        "创建海报失败",
+      );
+    } catch (failure) {
+      setCreateError((failure as RequestFailure).message);
     } finally {
       setCreating(false);
     }
@@ -531,15 +553,20 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
 }
 
 function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficulty" | "key" }) {
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
   const [data, setData] = useState<DistributionResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
   const req = useLatestRequest<DistributionResponse>({ isEmpty: d => d.buckets.length === 0 && !d.note });
 
   useEffect(() => {
     setError(null);
-    void req.run(signal => apiRequest<DistributionResponse>(`/api/stats/distribution?metric=${metric}`, { signal }))
+    void req.run(signal => runWithToast(
+      () => apiRequest<DistributionResponse>(`/api/stats/distribution?metric=${metric}`, { signal }),
+      "分布统计加载失败",
+    ))
       .then(d => { if (d) setData(d); })
-      .catch(reason => setError(toRequestFailure(reason)));
+      .catch(failure => setError(failure as RequestFailure));
   }, [metric]); // eslint-disable-line
 
   if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
