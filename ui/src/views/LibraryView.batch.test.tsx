@@ -6,6 +6,8 @@ import { ToastProvider } from "../components/Toast";
 
 const apiRequest = vi.fn();
 const exportBySongIds = vi.fn();
+const exportLibrary = vi.fn();
+const importLibrary = vi.fn();
 vi.mock("../api/client", () => ({
   apiRequest: (...args: unknown[]) => apiRequest(...args),
 }));
@@ -14,6 +16,8 @@ vi.mock("../api/posters", async (importOriginal) => {
   return {
     ...actual,
     exportBySongIds: (...args: unknown[]) => exportBySongIds(...args),
+    exportLibrary: (...args: unknown[]) => exportLibrary(...args),
+    importLibrary: (...args: unknown[]) => importLibrary(...args),
   };
 });
 
@@ -44,6 +48,14 @@ beforeEach(() => {
   exportBySongIds.mockReset();
   exportBySongIds.mockResolvedValue({
     ok: true, total: 0, total_ms: 0, files: [],
+  });
+  exportLibrary.mockReset();
+  exportLibrary.mockResolvedValue({
+    schema_version: 2, version: 8, songs: [], exported_at: "2026-08-04T00:00:00+08:00",
+  });
+  importLibrary.mockReset();
+  importLibrary.mockResolvedValue({
+    ok: true, added: 0, skipped: 0, errors: [], active: 0, draft: 0,
   });
   // 默认 window.confirm 返回 true
   vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -245,6 +257,105 @@ describe("L2.1 LibraryView 批量操作", () => {
   });
 });
 
+
+describe("L2.3 LibraryView 导入导出", () => {
+  it("点「导出」按钮 → 调 exportLibrary + 弹「已导出 N 首」toast", async () => {
+    const { getByTestId } = renderLibrary();
+    await waitForSongs();
+    exportLibrary.mockResolvedValueOnce({
+      schema_version: 2, version: 8,
+      songs: [
+        { id: "song_1", title: "江南" },
+        { id: "song_2", title: "十年" },
+      ],
+      exported_at: "2026-08-04T00:00:00+08:00",
+    });
+    // mock URL.createObjectURL / a.click (jsdom)
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    let downloadUrl = "";
+    URL.createObjectURL = vi.fn(() => { downloadUrl = "blob:mock"; return downloadUrl; });
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi.fn();
+    const origCreateElement = document.createElement.bind(document);
+    document.createElement = (tag: string) => {
+      const el = origCreateElement(tag);
+      if (tag === "a") (el as HTMLAnchorElement).click = clickSpy;
+      return el;
+    };
+    try {
+      fireEvent.click(getByTestId("library-export-button"));
+      await waitFor(() => {
+        expect(exportLibrary).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        const toasts = document.querySelectorAll('[data-testid="toast-item"]');
+        expect(toasts.length).toBeGreaterThanOrEqual(1);
+        expect(toasts[0].textContent).toContain("已导出 2 首");
+      });
+    } finally {
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+      document.createElement = origCreateElement;
+    }
+  });
+
+  it("选 JSON 文件后 → 调 importLibrary(merge) + 弹「已导入 N 首」toast", async () => {
+    const { getByTestId } = renderLibrary();
+    await waitForSongs();
+    importLibrary.mockResolvedValueOnce({
+      ok: true, added: 3, skipped: 1, errors: [], active: 4, draft: 0,
+    });
+    // 构造 file 触发 change
+    const file = new File([JSON.stringify({ songs: [
+      { title: "新歌1" }, { title: "新歌2" }, { title: "新歌3" },
+    ]})], "library.json", { type: "application/json" });
+    const input = getByTestId("library-import-file-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => {
+      expect(importLibrary).toHaveBeenCalled();
+    });
+    const args = importLibrary.mock.calls[0][0];
+    expect(args.mode).toBe("merge");
+    expect(args.songs).toHaveLength(3);
+    await waitFor(() => {
+      const toasts = document.querySelectorAll('[data-testid="toast-item"]');
+      expect(toasts[0].textContent).toContain("已导入 3 首（跳过 1 首重复）");
+    });
+  });
+
+  it("非法 JSON 文件 → 弹「文件不是合法 JSON」error toast", async () => {
+    const { getByTestId } = renderLibrary();
+    await waitForSongs();
+    const file = new File(["not valid json"], "bad.json", { type: "application/json" });
+    const input = getByTestId("library-import-file-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => {
+      const toasts = document.querySelectorAll('[data-testid="toast-item"]');
+      const errorToast = Array.from(toasts).find(t => t.getAttribute("data-kind") === "error");
+      expect(errorToast).toBeTruthy();
+      expect(errorToast!.textContent).toContain("文件不是合法 JSON");
+    });
+    expect(importLibrary).not.toHaveBeenCalled();
+  });
+
+  it("JSON 缺 songs 字段 → 弹「缺少 songs 数组字段」error toast", async () => {
+    const { getByTestId } = renderLibrary();
+    await waitForSongs();
+    const file = new File([JSON.stringify({ foo: "bar" })], "no-songs.json", { type: "application/json" });
+    const input = getByTestId("library-import-file-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => {
+      const toasts = document.querySelectorAll('[data-testid="toast-item"]');
+      const errorToast = Array.from(toasts).find(t => t.getAttribute("data-kind") === "error");
+      expect(errorToast).toBeTruthy();
+      expect(errorToast!.textContent).toContain("缺少 songs 数组字段");
+    });
+  });
+});
 
 describe("L2.2 LibraryView 批量导出", () => {
 it("点「批量导出」按钮 → 调 exportBySongIds + 弹「已导出 N 张」toast", async () => {

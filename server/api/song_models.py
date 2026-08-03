@@ -127,3 +127,27 @@ class SongDeleteResponse(SongCounts):
     ok: bool = True
     song_id: str
     title_snapshot: str
+
+
+# L2.3 导入导出
+class SongImportRequest(StrictRequest):
+    """L2.3 批量导入。merge 模式跳过 title 重复，replace 模式先清空后全量。"""
+    songs: list[SongCreateRequest] = Field(min_length=1)
+    mode: str = "merge"  # "merge" | "replace"
+
+
+class SongImportResult(BaseModel):
+    ok: bool = True
+    added: int = Field(ge=0)
+    skipped: int = Field(ge=0)
+    errors: list[str]
+    active: int = Field(ge=0)
+    draft: int = Field(ge=0)
+
+
+class SongExportResponse(BaseModel):
+    """L2.3 曲库导出 JSON。"""
+    schema_version: int
+    version: int
+    songs: list[dict]
+    exported_at: str

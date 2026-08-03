@@ -6,7 +6,7 @@ import AsyncStateNotice from "../components/AsyncStateNotice";
 import TrashView from "../components/TrashView";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
-import { exportBySongIds } from "../api/posters";
+import { exportBySongIds, exportLibrary, importLibrary } from "../api/posters";
 import { usePosterStore } from "../posters/usePosterStore";
 import { useLatestRequest, type RequestFailure } from "../async/requestState";
 import { useApiError } from "../async/useApiError";
@@ -63,6 +63,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const [selectedTitles, setSelectedTitles] = useState<Set<string>>(() => new Set());
   const [batchPending, setBatchPending] = useState(false);
   const [exportPending, setExportPending] = useState(false);
+  const [importPending, setImportPending] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
@@ -393,6 +394,72 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
     }
   };
 
+  /* ---- L2.3 导出：把整个曲库存为 JSON 文件下载 ---- */
+  const handleExportLibrary = async () => {
+    setActionError("");
+    try {
+      const data = await runWithToast(
+        () => exportLibrary(),
+        "导出曲库失败",
+      );
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `streamer-workbench-library-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.show({ message: `已导出 ${data.songs.length} 首到 JSON 文件`, durationMs: 3000 });
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
+    }
+  };
+
+  /* ---- L2.3 导入：选 JSON 文件 → POST /api/songs/import (merge) ---- */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleImportLibrary = () => {
+    fileInputRef.current?.click();
+  };
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";  // 重置 input 以便下次还能选同一文件
+    if (!file) return;
+    setImportPending(true);
+    setActionError("");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      toast.error("文件不是合法 JSON");
+      setImportPending(false);
+      return;
+    }
+    const songs = (parsed && typeof parsed === "object" && "songs" in parsed
+      ? (parsed as { songs: unknown[] }).songs
+      : null);
+    if (!Array.isArray(songs)) {
+      toast.error("文件缺少 songs 数组字段");
+      setImportPending(false);
+      return;
+    }
+    try {
+      const result = await runWithToast(
+        () => importLibrary({ mode: "merge", songs: songs as Array<{ title: string }> }),
+        "导入曲库失败",
+      );
+      toast.show({
+        message: `已导入 ${result.added} 首（跳过 ${result.skipped} 首重复）`,
+        durationMs: 4000,
+      });
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
+    } finally {
+      setImportPending(false);
+    }
+  };
+
   /* ---- 设计令牌速记 ---- */
   const hairline = dark ? "border-zinc-700/60" : "border-border";
   const label = "text-[10px] font-semibold uppercase tracking-widest text-muted-foreground";
@@ -438,6 +505,39 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
             className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/70" />
           <kbd className={`text-[10px] px-1 rounded ${dark ? "bg-zinc-700 text-zinc-500" : "bg-background text-muted-foreground/70 border border-border"}`}>/</kbd>
         </div>
+
+        {/* L2.3 导入导出：曲库 JSON 备份恢复 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          data-testid="library-import-file-input"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        <button
+          onClick={handleImportLibrary}
+          disabled={importPending || statusFilter === "trash"}
+          data-testid="library-import-button"
+          className={`flex items-center gap-1.5 rounded-lg px-3 h-8 text-[13px] font-medium transition-colors cursor-pointer disabled:opacity-40 ${
+            dark ? "bg-zinc-800 text-zinc-300 border border-zinc-700/60 hover:bg-zinc-700" : "bg-background text-foreground border border-border hover:bg-muted"
+          }`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+          {importPending ? "导入中…" : "导入"}
+        </button>
+        <button
+          onClick={handleExportLibrary}
+          data-testid="library-export-button"
+          className={`flex items-center gap-1.5 rounded-lg px-3 h-8 text-[13px] font-medium transition-colors cursor-pointer ${
+            dark ? "bg-zinc-800 text-zinc-300 border border-zinc-700/60 hover:bg-zinc-700" : "bg-background text-foreground border border-border hover:bg-muted"
+          }`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5 5 5M12 15V3" transform="rotate(180 12 12)"/>
+          </svg>
+          导出
+        </button>
 
         {/* L2.1 批量操作：选择模式切换 */}
         <button

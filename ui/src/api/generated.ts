@@ -898,3 +898,40 @@ export interface ExportByIdsResponse {
   "total_ms": number | null;
   [key: string]: unknown;
 }
+
+// L2.3 导入导出
+export interface SongImportRequestBody {
+  "mode": "merge" | "replace";
+  "songs": Array<{
+    "title": string;
+    "artists"?: string[];
+    "key"?: string;
+    "capo"?: number | null;
+    "difficulty"?: string;
+    "tags"?: string[];
+    "pinyin"?: string;
+    "lyrics_lrc"?: string;
+    "lyrics_plain"?: string;
+    "notes"?: string;
+    "section"?: number | null;
+    "status"?: "active" | "draft";
+  }>;
+}
+
+export interface SongImportResultResponse {
+  "ok"?: boolean;
+  "added": number;
+  "skipped": number;
+  "errors": string[];
+  "active": number;
+  "draft": number;
+  [key: string]: unknown;
+}
+
+export interface SongExportResponse {
+  "schema_version": number;
+  "version": number;
+  "songs": Array<Record<string, unknown>>;
+  "exported_at": string;
+  [key: string]: unknown;
+}

@@ -1,7 +1,9 @@
 """歌曲管理路由（/api/songs*）。"""
 
 from fastapi import APIRouter, UploadFile, File, Request, Response
+from dataclasses import asdict
 
+from core.data.songs import SongLibrary
 from core.data.tabs import MAX_FILE_BYTES
 from server.api.errors import ApiError
 from server.api.handlers import api_error_response
@@ -9,6 +11,9 @@ from server.api.song_models import (
     SongCreateRequest,
     SongDeleteResponse,
     SongEditableFields,
+    SongExportResponse,
+    SongImportRequest,
+    SongImportResult,
     SongLegacyDeleteResponse,
     SongLegacyIdentityRequest,
     SongLegacyStatusRequest,
@@ -209,6 +214,88 @@ def api_songs_seed_sample(req: Request):
     return {"ok": True, "song": song_d,
             "active": result.active, "draft": result.draft,
             "added": [s.title for s in result.added]}
+
+
+# ── L2.3 导入导出（必须在 /api/songs/{song_id} 之前注册） ──
+
+@router.get("/api/songs/export", response_model=SongExportResponse)
+def api_songs_export(req: Request):
+    """L2.3: 导出整个曲库为 JSON（同 songs.json 格式，含全部 active/draft/trash）。"""
+    from datetime import datetime
+    context = get_app_context(req)
+    library = _library(context)
+    songs_data = [asdict(song) for song in library.songs]
+    return {
+        "schema_version": 2,
+        "version": SongLibrary.CURRENT_VERSION,
+        "songs": songs_data,
+        "exported_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+
+
+@router.post("/api/songs/import", response_model=SongImportResult)
+def api_songs_import(req: Request, payload: SongImportRequest):
+    """L2.3: 批量导入曲库。merge 模式跳过 title 重复；replace 模式覆盖全库。"""
+    if payload.mode not in ("merge", "replace"):
+        return api_error_response(
+            req, 400, ApiError(
+                "validation_failed",
+                f"未知 mode: {payload.mode}; 仅支持 merge / replace"))
+    context = get_app_context(req)
+    service = context.song_service
+    # 备份（merge 模式保留现有 + 增量；replace 清空后全量覆盖）
+    library_snapshot = context.song_repository.load()
+    existing_titles = {s.title for s in library_snapshot.value.songs}
+    added = 0
+    skipped = 0
+    errors: list[str] = []
+    if payload.mode == "replace":
+        # 真删所有现有（不区分软删 / 活动；purge 一次性清空）
+        for s in list(library_snapshot.value.songs):
+            try:
+                service.purge_by_id(s.id)
+            except Exception as exc:
+                errors.append(f"清空 {s.title} 失败: {exc}")
+        existing_titles = set()
+    for idx, song_payload in enumerate(payload.songs):
+        try:
+            title = (song_payload.title or "").strip()
+            if not title:
+                errors.append(f"第 {idx + 1} 首缺标题")
+                skipped += 1
+                continue
+            if payload.mode == "merge" and title in existing_titles:
+                skipped += 1
+                continue
+            service.create({
+                "title": title,
+                "artists": song_payload.artists or [],
+                "key": song_payload.key or "",
+                "capo": song_payload.capo,
+                "difficulty": song_payload.difficulty or "",
+                "tags": song_payload.tags or [],
+                "pinyin": song_payload.pinyin or "",
+                "lyrics_lrc": song_payload.lyrics_lrc or "",
+                "lyrics_plain": song_payload.lyrics_plain or "",
+                "notes": song_payload.notes or "",
+                "section": song_payload.section,
+                "status": song_payload.status or "draft",
+            })
+            added += 1
+            existing_titles.add(title)
+        except Exception as exc:
+            errors.append(f"{title or f'#{idx + 1}'}: {exc}")
+            skipped += 1
+    # 重新统计
+    final = context.song_repository.load()
+    return {
+        "ok": True,
+        "added": added,
+        "skipped": skipped,
+        "errors": errors,
+        "active": len([s for s in final.value.songs if s.status == "active" and not s.deleted_at]),
+        "draft": len([s for s in final.value.songs if s.status == "draft" and not s.deleted_at]),
+    }
 
 
 # ── Song ID 主接口 ──

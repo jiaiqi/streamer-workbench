@@ -156,3 +156,18 @@ export function exportBySongIds(args: ExportByIdsArgs): Promise<ExportByIdsResul
     },
   });
 }
+
+// ── L2.3 曲库导入导出 ─────────────────────────────
+
+export function exportLibrary(): Promise<SongExportResponse> {
+  return apiRequest<SongExportResponse>("/api/songs/export");
+}
+
+export function importLibrary(
+  body: SongImportRequestBody,
+): Promise<SongImportResultResponse> {
+  return apiRequest<SongImportResultResponse>("/api/songs/import", {
+    method: "POST",
+    body,
+  });
+}
