@@ -10,7 +10,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../api/client";
 import { asString, asNumber, asBoolean, asRecord } from "../lib/narrow";
-import { useLatestRequest, toRequestFailure } from "../async/requestState";
+import { useLatestRequest, toRequestFailure, type RequestFailure } from "../async/requestState";
+import { useApiError } from "../async/useApiError";
 
 export interface TonightSetCardProps {
   dark: boolean;
@@ -73,6 +74,8 @@ function asQueueEntry(value: unknown): QueueEntry | null {
 const TOP_N = 5;
 
 export default function TonightSetCard({ dark, onPlaySong, onOpenLiveView }: TonightSetCardProps) {
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
   // 拉活跃 session 列表
   const sessionsReq = useLatestRequest<LiveSessionSummary[]>({
     isEmpty: (d) => d.length === 0,
@@ -89,7 +92,10 @@ export default function TonightSetCard({ dark, onPlaySong, onOpenLiveView }: Ton
   // 拉活跃 sessions
   useEffect(() => {
     const ac = new AbortController();
-    sessionsReq.run((signal) => refreshSessions(signal))
+    sessionsReq.run((signal) => runWithToast(
+      () => refreshSessions(signal),
+      "今晚歌单加载失败",
+    ))
       .then((data) => {
         if (data) {
           // 找最近一个 active session
@@ -97,9 +103,9 @@ export default function TonightSetCard({ dark, onPlaySong, onOpenLiveView }: Ton
           setActiveSession(active ?? null);
         }
       })
-      .catch((reason) => {
-        if (reason?.name !== "AbortError") {
-          setError(toRequestFailure(reason, "加载会话失败").message);
+      .catch((failure) => {
+        if ((failure as { name?: string })?.name !== "AbortError") {
+          setError((failure as RequestFailure).message);
         }
       });
     return () => ac.abort();

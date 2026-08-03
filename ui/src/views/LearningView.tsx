@@ -8,7 +8,8 @@ import PracticeStatsCard from "../practice/PracticeStatsCard";
 import PracticeLogDialog from "../practice/PracticeLogDialog";
 import { DiscoveryTabs, TheoryHelper } from "../discovery";
 import { apiRequest } from "../api/client";
-import { toRequestFailure, useLatestRequest } from "../async/requestState";
+import { toRequestFailure, useLatestRequest, type RequestFailure } from "../async/requestState";
+import { useApiError } from "../async/useApiError";
 
 /* ---- 学歌管理视图（按设计稿 learning.html 重写）----
    设计语言：晨光纸感 · 卡片网格 · 星光难度 · 衬线标题
@@ -62,6 +63,8 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
   const [actionError, setActionError] = useState("");
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const listRequest = useLatestRequest<{ draft: SongsData; all: SongsData }>({ isEmpty: result => result.draft.total === 0 });
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
 
   const refresh = async () => {
     const result = await listRequest.run(signal => Promise.all([
@@ -85,14 +88,17 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
     if (learningSong) return;
     setLearningSong(song.id); setActionError("");
     try {
-      await apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: "active" } });
+      await runWithToast(
+        () => apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: "active" } }),
+        "标记失败",
+      );
       setJustLearned(song.title);
       setTimeout(() => {
         setSongs(prev => prev.filter(s => s.title !== song.title));
         setJustLearned(null);
       }, 450);
       onStatsChange(prev => prev && ({ active: prev.active + 1, draft: prev.draft - 1 }));
-    } catch (reason) { setActionError(toRequestFailure(reason, "标记失败").message); }
+    } catch (failure) { setActionError((failure as RequestFailure).message); }
     finally { setLearningSong(null); }
   };
 

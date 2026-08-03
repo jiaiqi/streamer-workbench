@@ -5,6 +5,8 @@ import type { SettingsUpdateResponse } from "../api/generated";
 import DataDirPanel from "../components/DataDirPanel";
 import type { AppearanceSettings, Settings, Theme } from "../types";
 import { CANVAS_OPTIONS } from "../types";
+import { useApiError } from "../async/useApiError";
+import { type RequestFailure } from "../async/requestState";
 
 interface SettingsViewProps {
   dark: boolean;
@@ -23,6 +25,8 @@ export default function SettingsView({
   onAppearanceSaved,
   onSavingChange,
 }: SettingsViewProps) {
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
   const [form, setForm] = useState<Settings | null>(null);
   const [baseline, setBaseline] = useState<AppearanceSettings>(appearance);
   const [status, setStatus] = useState<"loading" | "ready" | "saving" | "saved" | "error">("loading");
@@ -30,18 +34,19 @@ export default function SettingsView({
 
   useEffect(() => {
     let active = true;
-    apiRequest<Settings>("/api/settings")
+    runWithToast(() => apiRequest<Settings>("/api/settings"), "设置加载失败")
       .then(settings => {
         if (!active) return;
+        if (!settings) return;
         const nextAppearance = normalizeAppearance(settings);
         setForm({ ...settings, ...nextAppearance });
         setBaseline(nextAppearance);
         onAppearancePreview(nextAppearance);
         setStatus("ready");
       })
-      .catch(reason => {
+      .catch(failure => {
         if (!active) return;
-        setError(reason instanceof Error ? reason.message : "设置加载失败");
+        setError((failure as RequestFailure).message);
         setStatus("error");
       });
     return () => { active = false; };
@@ -60,17 +65,20 @@ export default function SettingsView({
     onSavingChange(true);
     setError("");
     try {
-      const response = await apiRequest<SettingsUpdateResponse>("/api/settings", { method: "POST", body: form });
+      const response = await runWithToast(
+        () => apiRequest<SettingsUpdateResponse>("/api/settings", { method: "POST", body: form }),
+        "设置保存失败",
+      );
       const nextAppearance = normalizeAppearance(response.settings);
       setForm({ ...response.settings, ...nextAppearance });
       setBaseline(nextAppearance);
       onAppearanceSaved(nextAppearance);
       setStatus("saved");
       window.setTimeout(() => setStatus(current => current === "saved" ? "ready" : current), 2500);
-    } catch (reason) {
+    } catch (failure) {
       setForm(current => current ? { ...current, ...baseline } : current);
       onAppearancePreview(baseline);
-      setError(`${reason instanceof Error ? reason.message : "设置保存失败"}，外观已恢复为上次保存状态。`);
+      setError(`${(failure as RequestFailure).message}，外观已恢复为上次保存状态。`);
       setStatus("error");
     } finally {
       onSavingChange(false);

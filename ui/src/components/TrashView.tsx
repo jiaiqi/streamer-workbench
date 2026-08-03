@@ -5,6 +5,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "../api/client";
 import { asString, asRecord, asStringArray } from "../lib/narrow";
+import { useApiError } from "../async/useApiError";
+import { type RequestFailure } from "../async/requestState";
 
 interface TrashSong {
   id: string;
@@ -55,6 +57,8 @@ function daysSince(iso: string): number {
 }
 
 export default function TrashView({ dark, onChanged }: TrashViewProps) {
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
   const [songs, setSongs] = useState<TrashSong[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,16 +68,19 @@ export default function TrashView({ dark, onChanged }: TrashViewProps) {
     setLoading(true);
     setError("");
     try {
-      const data = await apiRequest<{ songs?: unknown[] }>("/api/songs/trash");
+      const data = await runWithToast(
+        () => apiRequest<{ songs?: unknown[] }>("/api/songs/trash"),
+        "加载垃圾桶失败",
+      );
       const list = (data?.songs ?? []).map(asTrashSong).filter((s): s is TrashSong => s !== null);
       list.sort((a, b) => b.deleted_at.localeCompare(a.deleted_at));
       setSongs(list);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "加载垃圾桶失败");
+    } catch (failure) {
+      setError((failure as RequestFailure).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [runWithToast]);
 
   useEffect(() => {
     void refresh();
@@ -83,30 +90,36 @@ export default function TrashView({ dark, onChanged }: TrashViewProps) {
     if (busyId) return;
     setBusyId(song.id);
     try {
-      await apiRequest(`/api/songs/${encodeURIComponent(song.id)}/restore`, { method: "POST" });
+      await runWithToast(
+        () => apiRequest(`/api/songs/${encodeURIComponent(song.id)}/restore`, { method: "POST" }),
+        "恢复失败",
+      );
       setSongs(prev => prev.filter(s => s.id !== song.id));
       onChanged();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "恢复失败");
+    } catch (failure) {
+      setError((failure as RequestFailure).message);
     } finally {
       setBusyId(null);
     }
-  }, [busyId, onChanged]);
+  }, [busyId, onChanged, runWithToast]);
 
   const handlePurge = useCallback(async (song: TrashSong) => {
     if (busyId) return;
     if (!window.confirm(`确定永久删除「${song.title}」？此操作不可恢复。`)) return;
     setBusyId(song.id);
     try {
-      await apiRequest(`/api/songs/${encodeURIComponent(song.id)}?permanent=true`, { method: "DELETE" });
+      await runWithToast(
+        () => apiRequest(`/api/songs/${encodeURIComponent(song.id)}?permanent=true`, { method: "DELETE" }),
+        "永久删除失败",
+      );
       setSongs(prev => prev.filter(s => s.id !== song.id));
       onChanged();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "永久删除失败");
+    } catch (failure) {
+      setError((failure as RequestFailure).message);
     } finally {
       setBusyId(null);
     }
-  }, [busyId, onChanged]);
+  }, [busyId, onChanged, runWithToast]);
 
   if (loading) {
     return (

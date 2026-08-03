@@ -5,7 +5,8 @@
 /// 提交 → POST /api/practice/log.
 import { useState } from "react";
 import { apiRequest } from "../api/client";
-import { toRequestFailure } from "../async/requestState";
+import { type RequestFailure } from "../async/requestState";
+import { useApiError } from "../async/useApiError";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +27,8 @@ interface PracticeLogDialogProps {
 }
 
 export default function PracticeLogDialog({ open, onClose, onSaved, songTitle }: PracticeLogDialogProps) {
+  // M2.6 错误全局 toast 化
+  const { runWithToast } = useApiError();
   const [minutes, setMinutes] = useState("30");
   const [rating, setRating] = useState("0");
   const [note, setNote] = useState(songTitle ? `练习了《${songTitle}》` : "");
@@ -47,21 +50,24 @@ export default function PracticeLogDialog({ open, onClose, onSaved, songTitle }:
     setSaving(true);
     setError("");
     try {
-      await apiRequest("/api/practice/log", {
-        method: "POST",
-        body: {
-          song_id: "",
-          title_snapshot: songTitle ?? "",
-          minutes: m,
-          self_rating: r,
-          note: note.trim(),
-          occurred_at: "",
-        },
-      });
+      await runWithToast(
+        () => apiRequest("/api/practice/log", {
+          method: "POST",
+          body: {
+            song_id: "",
+            title_snapshot: songTitle ?? "",
+            minutes: m,
+            self_rating: r,
+            note: note.trim(),
+            occurred_at: "",
+          },
+        }),
+        "打卡失败",
+      );
       await onSaved();
       onClose();
-    } catch (reason) {
-      setError(toRequestFailure(reason, "打卡失败").message);
+    } catch (failure) {
+      setError((failure as RequestFailure).message);
     } finally {
       setSaving(false);
     }
