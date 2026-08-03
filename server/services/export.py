@@ -128,6 +128,32 @@ class ExportSpec:
 
 
 @dataclass(frozen=True)
+class ExportByIdsSpec:
+    """L2.2 批量按歌曲 ID 导出：每首选中歌曲渲染成 1 张 PNG 存盘。"""
+    theme: str
+    song_ids: tuple[str, ...]
+    layout: str = "grid-wrap"
+    canvas: str = "标准 9:16"
+    avoid: bool = False
+
+
+@dataclass(frozen=True)
+class ExportByIdsFile:
+    song_id: str
+    title: str
+    path: Path
+    filename: str
+    duration_ms: float | None
+
+
+@dataclass(frozen=True)
+class ExportByIdsResult:
+    total: int
+    files: tuple[ExportByIdsFile, ...]
+    total_ms: float | None
+
+
+@dataclass(frozen=True)
 class ExportBatchSpec:
     layout: str = "grid-wrap"
     canvas: str = "抖音全屏 9:20"
@@ -237,6 +263,44 @@ class ExportApplicationService:
     def job(self, job_id: str) -> dict | None:
         return self._jobs.get(job_id)
 
+    def export_by_song_ids(self, spec: ExportByIdsSpec) -> ExportByIdsResult:
+        """L2.2: 按 song_ids 列表，每首选中歌曲渲染成 1 张 PNG（page=1）存盘。"""
+        from server.ports.repositories import StoredSnapshot  # 局部避免循环
+        from core.data.songs import SongLibrary
+        started = time.perf_counter()
+        theme, layout, canvas, _ = self._resolve(
+            spec.theme, spec.layout, spec.canvas, spec.avoid, None)
+        settings = self._settings.load()
+        output_dir = Path(settings.value["output_dir"]).resolve(strict=False)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        full_snapshot = self._songs.load()
+        active_by_id = {s.id: s for s in full_snapshot.value.active()}
+        files: list[ExportByIdsFile] = []
+        for song_id in spec.song_ids:
+            song = active_by_id.get(song_id)
+            if song is None:
+                continue
+            temp_snapshot = StoredSnapshot[SongLibrary](
+                value=SongLibrary(songs=[song]), revision=full_snapshot.revision)
+            document = build_render_document(
+                song_snapshot=temp_snapshot, theme=theme,
+                layout_id=layout.id, canvas=canvas, page=1,
+                font_path=self._font_path,
+                settings_revision=settings.revision,
+                title=song.title)
+            t0 = time.perf_counter()
+            image = render_document(document)
+            filename = self._filename_for_song(theme.output_prefix, layout.id, canvas, song)
+            target = output_dir / filename
+            _publish_png(image, target)
+            duration_ms = round((time.perf_counter() - t0) * 1000, 1)
+            files.append(ExportByIdsFile(
+                song_id=song.id, title=song.title, path=target,
+                filename=filename, duration_ms=duration_ms))
+        total_ms = round((time.perf_counter() - started) * 1000, 1)
+        return ExportByIdsResult(
+            total=len(files), files=tuple(files), total_ms=total_ms)
+
     def output_directory(self) -> Path:
         settings = self._settings.load()
         return Path(settings.value["output_dir"]).resolve(strict=False)
@@ -262,6 +326,14 @@ class ExportApplicationService:
         tag = ("糖圆体全屏绕排"
                if canvas.avoid_zones and canvas.height > 1920 else "糖圆体")
         return f"{prefix}-{layout_id}-{tag}-{page}.png"
+
+    @staticmethod
+    def _filename_for_song(prefix: str, layout_id: str, canvas, song) -> str:
+        """L2.2: 单曲文件名 `<prefix>-<layout_id>-<title_slug>-<song_id>.png`"""
+        import re as _re
+        tag = ("全屏" if canvas.avoid_zones and canvas.height > 1920 else "标准")
+        slug = _re.sub(r"[^\w\u4e00-\u9fff]+", "-", song.title).strip("-")[:32] or "untitled"
+        return f"{prefix}-{layout_id}-{tag}-{slug}-{song.id}.png"
 
 
 def _new_job_state(output_dir: Path, total: int) -> dict:

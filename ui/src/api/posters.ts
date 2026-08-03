@@ -117,3 +117,42 @@ export interface PosterExportSettingsUI {
   singlePage: boolean;
   dpi: number;
 }
+
+// ── L2.2 批量按 ID 导出 ─────────────────────────────
+
+export interface ExportByIdsArgs {
+  theme: string;
+  song_ids: string[];
+  layout?: string;
+  canvas?: string;
+  avoid?: boolean;
+}
+
+export interface ExportByIdsFileResult {
+  song_id: string;
+  title: string;
+  path: string;
+  filename: string;
+  duration_ms: number | null;
+}
+
+export interface ExportByIdsResult {
+  ok: boolean;
+  total: number;
+  total_ms: number | null;
+  files: ExportByIdsFileResult[];
+}
+
+/** 同步执行：每首选中歌曲渲染成 1 张 PNG 存到 settings.output_dir。 */
+export function exportBySongIds(args: ExportByIdsArgs): Promise<ExportByIdsResult> {
+  return apiRequest<ExportByIdsResult>("/api/export/by-ids", {
+    method: "POST",
+    body: {
+      theme: args.theme,
+      song_ids: args.song_ids,
+      layout: args.layout ?? "grid-wrap",
+      canvas: args.canvas ?? "标准 9:16",
+      avoid: args.avoid ?? true,
+    },
+  });
+}

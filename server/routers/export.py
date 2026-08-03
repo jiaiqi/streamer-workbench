@@ -11,6 +11,9 @@ from server.api.handlers import api_error_response
 from server.api.secondary_models import (
     ExportBatchRequest,
     ExportBatchResponse,
+    ExportByIdsFileResponse,
+    ExportByIdsRequest,
+    ExportByIdsResponse,
     ExportJobResponse,
     ExportOpenResponse,
     ExportRequest,
@@ -19,6 +22,7 @@ from server.api.secondary_models import (
 from server.dependencies import get_app_context
 from server.services.export import (
     ExportBatchSpec,
+    ExportByIdsSpec,
     ExportExecutionFailed,
     ExportLayoutNotFound,
     ExportSpec,
@@ -65,6 +69,41 @@ def api_export_batch(req: Request, query: Annotated[ExportBatchRequest, Query()]
         return api_error_response(
             req, 404, ApiError("layout_not_found", str(error)))
     return {"ok": True, "job_id": result.job_id, "total": result.total}
+
+
+@router.post("/api/export/by-ids", response_model=ExportByIdsResponse)
+def api_export_by_ids(req: Request, payload: ExportByIdsRequest):
+    """L2.2: 按 song_ids 列表，每首选中歌曲渲染成 1 张 PNG 存到 output_dir。
+
+    同步执行（N 通常很小，178 首上限）。失败：单个 song_id 找不到时静默跳过；
+    theme/layout 不存在时整批 404。
+    """
+    context = get_app_context(req)
+    try:
+        result = context.export_service.export_by_song_ids(ExportByIdsSpec(
+            theme=payload.theme, song_ids=tuple(payload.song_ids),
+            layout=payload.layout, canvas=payload.canvas, avoid=payload.avoid))
+    except ExportThemeNotFound as error:
+        return api_error_response(
+            req, 404, ApiError("theme_not_found", str(error)))
+    except ExportLayoutNotFound as error:
+        return api_error_response(
+            req, 404, ApiError("layout_not_found", str(error)))
+    except ExportExecutionFailed:
+        return api_error_response(
+            req, 500, ApiError(
+                "export_failed", "导出失败",
+                recovery="检查输出目录权限与磁盘空间后重试",
+            ))
+    return {
+        "ok": True,
+        "total": result.total,
+        "total_ms": result.total_ms,
+        "files": [ExportByIdsFileResponse(
+            song_id=f.song_id, title=f.title, path=str(f.path),
+            filename=f.filename, duration_ms=f.duration_ms)
+            for f in result.files],
+    }
 
 
 @router.get("/api/export/jobs/{job_id}", response_model=ExportJobResponse)

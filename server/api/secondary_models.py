@@ -287,6 +287,30 @@ class ExportBatchRequest(StrictRequest):
     avoid: bool = True
 
 
+class ExportByIdsRequest(StrictRequest):
+    """L2.2: 按 song_ids 列表批量导出，每首选中歌曲渲染成 1 张 PNG 存盘。"""
+    theme: str
+    song_ids: list[str] = Field(min_length=1)
+    layout: str = "grid-wrap"
+    canvas: str = "标准 9:16"
+    avoid: bool = False
+
+
+class ExportByIdsFileResponse(BaseModel):
+    song_id: str
+    title: str
+    path: str
+    filename: str
+    duration_ms: float | None
+
+
+class ExportByIdsResponse(BaseModel):
+    ok: bool = True
+    total: int = Field(ge=0)
+    total_ms: float | None
+    files: list[ExportByIdsFileResponse]
+
+
 class ExportResponse(BaseModel):
     ok: bool = True
     path: str

@@ -6,6 +6,8 @@ import AsyncStateNotice from "../components/AsyncStateNotice";
 import TrashView from "../components/TrashView";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
+import { exportBySongIds } from "../api/posters";
+import { usePosterStore } from "../posters/usePosterStore";
 import { useLatestRequest, type RequestFailure } from "../async/requestState";
 import { useApiError } from "../async/useApiError";
 
@@ -47,6 +49,8 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const [songsData, setSongsData] = useState<SongsData | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft" | "trash">("all");
+  // L2.2 批量导出：当前工作台 layout/theme/canvas
+  const posterStore = usePosterStore();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Song | "new" | null>(null);
@@ -58,6 +62,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const [selectMode, setSelectMode] = useState(false);
   const [selectedTitles, setSelectedTitles] = useState<Set<string>>(() => new Set());
   const [batchPending, setBatchPending] = useState(false);
+  const [exportPending, setExportPending] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const listRef = useRef<HTMLDivElement>(null);
@@ -349,6 +354,42 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
       toast.show({ message: summary, durationMs: 3000 });
     } else if (failed.length > 0) {
       toast.error(`批量改状态全部失败：${failed[0]}${failed.length > 1 ? ` 等 ${failed.length} 首` : ""}`);
+    }
+  };
+
+  /* ---- L2.2 批量导出：每首选中歌曲渲染成 1 张 PNG 存盘 ---- */
+  const handleBatchExport = async () => {
+    if (exportPending || selectedTitles.size === 0) return;
+    setExportPending(true);
+    setActionError("");
+    const titles = Array.from(selectedTitles);
+    const ids = titles
+      .map(t => songsData?.songs.find(s => s.title === t)?.id)
+      .filter((id): id is string => !!id);
+    if (ids.length === 0) {
+      toast.error("未能解析选中歌曲的 ID");
+      setExportPending(false);
+      return;
+    }
+    try {
+      const result = await runWithToast(
+        () => exportBySongIds({
+          theme: posterStore.current.theme_id,
+          song_ids: ids,
+          layout: posterStore.current.layout_id,
+          canvas: posterStore.current.canvas_id,
+        }),
+        "批量导出失败",
+      );
+      const summary = result.total === ids.length
+        ? `已导出 ${result.total} 张海报到输出目录`
+        : `已导出 ${result.total} 张（跳过 ${ids.length - result.total} 首）`;
+      toast.show({ message: summary, durationMs: 4000 });
+      exitSelectMode();
+    } catch (failure) {
+      setActionError((failure as RequestFailure).message);
+    } finally {
+      setExportPending(false);
     }
   };
 
@@ -773,6 +814,14 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
               disabled={selectedTitles.size === 0 || batchPending}
               className="flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-red-600 hover:bg-red-700 text-white">
               🗑 批量删除
+            </button>
+            <button
+              type="button"
+              onClick={handleBatchExport}
+              data-testid="library-batch-export"
+              disabled={selectedTitles.size === 0 || batchPending || exportPending}
+              className="flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-blue-600 hover:bg-blue-700 text-white">
+              📤 批量导出
             </button>
             <button
               type="button"

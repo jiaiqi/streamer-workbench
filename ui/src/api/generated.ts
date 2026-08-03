@@ -880,3 +880,21 @@ export interface ValidationError {
   "type": string;
   [key: string]: unknown;
 }
+
+// L2.2 批量按 ID 导出
+export interface ExportByIdsFileResponse {
+  "duration_ms": number | null;
+  "filename": string;
+  "path": string;
+  "song_id": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface ExportByIdsResponse {
+  "files": Array<ExportByIdsFileResponse>;
+  "ok"?: boolean;
+  "total": number;
+  "total_ms": number | null;
+  [key: string]: unknown;
+}
