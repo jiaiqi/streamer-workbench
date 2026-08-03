@@ -40,6 +40,7 @@ import { ToastProvider, useToast } from "./components/Toast";
 import ShortcutsPanel from "./components/ShortcutsPanel";
 import Onboarding, { resetOnboarded } from "./components/Onboarding";
 import OnlineStatusBadge from "./components/OnlineStatusBadge";
+import StatusBar, { type StatusView } from "./components/StatusBar";
 
 const navItems = [
   { id: "workspace", label: "海报工作台", icon: Icon.layout },
@@ -141,6 +142,36 @@ function AppInner() {
     setPlayLink(null);
     // 不清 PlayerContext —— 让 M1.4 MiniPlayer 留在底部，主播一键回弹唱
   };
+
+  /* L1.6 状态栏：view + op + lastSaveTime */
+  const statusView: StatusView = (() => {
+    if (view === "play") return "play";
+    if (view === "settings") return "settings";
+    if (view === "library") return "library";
+    if (view === "learning") return "learning";
+    if (view === "live") return "live";
+    if (view === "stats") return "stats";
+    if (view === "preview") return "preview";
+    return "workspace";
+  })();
+  const statusOp = appearanceSaving || settingsSaving
+    ? "saving"
+    : ws.loading
+      ? "rendering"
+      : "idle";
+  // 最近一次保存时间：mount 时从 /api/events 拉取
+  const [lastSaveTime, setLastSaveTime] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    apiRequest<{ events: { created_at: string }[] }>(
+      "/api/events?type=poster_saved&limit=1",
+    ).then(data => {
+      if (!active) return;
+      const first = data?.events?.[0];
+      if (first?.created_at) setLastSaveTime(first.created_at);
+    }).catch(() => { /* 静默 — 离线时也会失败 */ });
+    return () => { active = false; };
+  }, []);
 
   const dark = resolveAppearance(appearance.appearanceMode, systemDark) === "dark";
 
@@ -846,6 +877,17 @@ function AppInner() {
       <ShortcutsPanel open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} dark={dark} />
       {/* L1.3 首次启动 Onboarding（localStorage 标记控制） */}
       <Onboarding dark={dark} />
+      {/* L1.6 底部状态栏 —— 弹唱视图隐藏（MiniPlayer 占位） */}
+      <StatusBar
+        view={statusView}
+        op={statusOp}
+        lastRenderMs={ws.lastRenderMs}
+        lastSaveTime={lastSaveTime}
+        errorMessage={ws.resourceError || undefined}
+        onRetry={() => window.location.reload()}
+        dark={dark}
+        hidden={view === "play" || paletteOpen || exportDialogOpen || libDialogOpen}
+      />
     </div>
   );
 }
