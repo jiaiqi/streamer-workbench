@@ -74,7 +74,7 @@
               R9     ✅  吉他手特化首批收口（R9.1 联动「再唱一遍」/ R9.2 chord 远观模式 1-1.6x / R9.3 顶栏 Capo 大字 + 升降快捷键 ↑↓ + 实际 Key 反推 / R9.4 个人 Capo 库 capo_options+capo_default / R9.5 今晚歌单工作台首屏卡片 / R9.6a 软删除垃圾桶 30 天 / R9.6b 5 秒撤销 toast 全局系统）
               M0     ✅  蓝图 v0.1 首批（5 子项；数据 178 首已在）/ fullscreen-flow 全屏柔光绕排版式 + 金标准 4 张 / 月夜星河主题第 8 套 / 加密备份包 MVP（.songworkbench + HMAC-SHA256）/ 178 首曲库验证
               M1     ✅  本地最小可用首批（M1.1 全局找歌 8 字段加权 + 13 测试 / M1.2 CommandPalette 找歌 + 5 测试 / M1.3 PlayerContext 顶层 Provider + 8 测试 / M1.4 MiniPlayer 全局底栏 + 9 测试 / M1.5 LibraryView 试听入口 + 6 测试 / M1.6a LRC 同步 3 测试 / M1.6b 吉他谱锚点 8 测试 / M1.7 渐进式海报相邻页预加载 6 测试）
-              M2     ✅  加密备份完整（5 子项；M2.1 AES-256 真加密 + 错密码真拒绝 + 向后兼容 v1 备份 + pyzipper 依赖）+ M2.5 综合洞察（后端 GET /api/stats/insights + StatsView「洞察」tab + eventsHeat 反哺 M1 找歌，log2 压缩加成上限 50）
+              M2     ✅  加密备份完整（5 子项；M2.1 AES-256 真加密 + 错密码真拒绝 + 向后兼容 v1 备份 + pyzipper 依赖）+ M2.5 综合洞察（后端 GET /api/stats/insights + StatsView「洞察」tab + eventsHeat 反哺 M1 找歌，log2 压缩加成上限 50）+ M2.6 错误全局 toast 化第一批（useApiError hook + LibraryView/LiveView/StatsView 13 处 catch）
               L1     ✅  体验打磨首批（L1.1 toast 4 kind + 8 测试 / L1.2 全局快捷键面板 `?` + 10 测试 / L1.3 首次启动 Onboarding 3 步 + 12 测试 / L1.4 草稿保护 ConfirmDialog + 11 测试 / L1.5 离线检测 OnlineStatusBadge + 9 测试）
               M1     ✅  本地最小可用首批（M1.1 全局找歌 8 字段加权 + 13 测试 / M1.2 CommandPalette 找歌 + 5 测试 / M1.3 PlayerContext 顶层 Provider + 8 测试 / M1.4 MiniPlayer 全局底栏 + 9 测试 / M1.5 LibraryView 试听入口 + 6 测试 / M1.6a LRC 同步 3 测试 / M1.6b 吉他谱锚点 8 测试 / M1.7 渐进式海报相邻页预加载 6 测试）
 桌面壳    ✅ dev + packaged  PyInstaller/electron-builder 已落地，macOS arm64
