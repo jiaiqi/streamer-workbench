@@ -22,7 +22,7 @@ import PreviewCrossfade from "./components/PreviewCrossfade";
 import ParamInspector from "./components/ParamInspector";
 import ColumnTemplatePicker from "./components/ColumnTemplatePicker";
 import CommandPalette, { type Command } from "./components/CommandPalette";
-import { searchSongs } from "./search/globalSongSearch";
+import { searchSongs, buildEventsHeat } from "./search/globalSongSearch";
 import type { Song } from "./types";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
@@ -288,11 +288,28 @@ function AppInner() {
       .catch(() => { /* 静默 — CommandPalette 仍能用命令 */ });
     return () => { active = false; };
   }, []);
+  /* ---- M2.5 反哺：events 热度（queue_added 累计）喂给 searchSongs ---- */
+  const [eventsHeat, setEventsHeat] = useState<Map<string, number>>(() => new Map());
+  useEffect(() => {
+    let active = true;
+    apiRequest<{ total: number; events: Array<{ song_id?: string | null }> }>(
+      "/api/events?type=queue_added&limit=200",
+      {},
+    )
+      .then(data => {
+        if (!active) return;
+        setEventsHeat(buildEventsHeat(data?.events));
+      })
+      .catch(() => { /* 静默 — 热度缺失不影响搜索 */ });
+    return () => { active = false; };
+  }, []);
   /* M1.2 实时计算搜歌结果（query 来自 CommandPalette 内部，这里只暴露 songResults） */
   const [paletteQuery, setPaletteQuery] = useState("");
   const songResults = useMemo(
-    () => paletteQuery.trim() ? searchSongs(paletteQuery, allSongs, { limit: 5 }) : [],
-    [paletteQuery, allSongs],
+    () => paletteQuery.trim()
+      ? searchSongs(paletteQuery, allSongs, { limit: 5, eventsHeat })
+      : [],
+    [paletteQuery, allSongs, eventsHeat],
   );
 
   /* ---- M1.4 MiniPlayer：当前歌名查表 + 打开/关闭回调 ---- */
