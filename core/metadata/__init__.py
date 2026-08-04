@@ -37,7 +37,7 @@ from .types import (
 )
 
 # M2.8+ providers（具体实现）
-from .providers import NeteaseProvider
+from .providers import NeteaseProvider, QQProvider
 
 __all__ = [
     # types
@@ -63,4 +63,5 @@ __all__ = [
     "DEFAULT_TTL_SECONDS",
     # providers
     "NeteaseProvider",
+    "QQProvider",
 ]

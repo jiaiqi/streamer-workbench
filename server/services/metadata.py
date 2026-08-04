@@ -19,6 +19,7 @@ from core.metadata import (
     MetadataCache,
     MetadataRouter,
     NeteaseProvider,
+    QQProvider,
 )
 
 
@@ -76,11 +77,12 @@ class MetadataApplicationService:
 def build_default_router(cache_dir, *, providers: list | None = None) -> tuple[MetadataRouter, MetadataCache]:
     """构造默认的 MetadataRouter + Cache。
 
-    providers 为空时自动注入 [NeteaseProvider()]。
-    调用方可加更多 provider（M2.10 加 QQ / Kugou 等）。
+    providers 为空时自动注入 [NeteaseProvider(), QQProvider()]（M2.10 多源回退）。
+    调用方可传入自定义 providers 列表覆盖默认。
     """
     cache = MetadataCache(cache_dir)
     if not providers:
-        providers = [NeteaseProvider()]
+        # M2.10 默认装两个 provider，Router 自动回退
+        providers = [NeteaseProvider(), QQProvider()]
     router = MetadataRouter(providers, cache=cache)
     return router, cache
