@@ -32,6 +32,43 @@ contextBridge.exposeInMainWorld("streamer", {
   saveFile(params) {
     return ipcRenderer.invoke("dialog:saveFile", params);
   },
+  // ===== 海报分享（M2.16） =====
+  /**
+   * 把 PNG 字节写入系统剪贴板（用户 Cmd+V 即可贴到任何 App：微信、邮件、Pages 等）。
+   * @param {{ data: ArrayBuffer }} params
+   * @returns {Promise<{ ok: boolean, error?: string }>}
+   */
+  copyImageToClipboard(params) {
+    return ipcRenderer.invoke("clipboard:writeImage", params || {});
+  },
+  /**
+   * 在文件管理器中定位文件（macOS 高亮 / Windows 打开 Explorer / Linux 打开文件管理器）。
+   * @param {{ filePath: string }} params
+   * @returns {Promise<{ ok: boolean, error?: string }>}
+   */
+  revealInFinder(params) {
+    return ipcRenderer.invoke("shell:showItemInFolder", params || {});
+  },
+  /**
+   * macOS 原生分享面板：调系统级 NSSharingServicePicker（AirDrop / 微信 / 邮件 / 备忘录）。
+   * 非 darwin 平台返回 `{ ok: false, code: "unsupported" }`，UI 端应 disabled 按钮。
+   * @param {{ data: ArrayBuffer, defaultName?: string }} params
+   * @returns {Promise<{ ok: boolean, code?: string, error?: string }>}
+   */
+  shareToMacOS(params) {
+    return ipcRenderer.invoke("share:macosSheet", params || {});
+  },
+  /**
+   * 当前主进程是否支持 macOS Share Sheet（仅 darwin）。
+   * 渲染层用此 disable 按钮。
+   * @returns {boolean}
+   */
+  isMacOSShareSupported() {
+    return navigator.platform.toLowerCase().includes("mac") ||
+      // navigator.userAgent 在 Electron renderer 里有 "Mac OS X"
+      /mac/i.test(navigator.userAgent);
+  },
+
   // ===== 系统集成首批（桌面平台特性 P0） =====
   /**
    * 渲染层 → 主进程：推当前播放器状态（PlayerContext 同步 + LiveSession 队列数）。

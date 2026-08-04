@@ -48,6 +48,11 @@
 //       · `dock.setBadge(queueCount)`     - Dock 图标显示待唱数
 //       · `new Notification(...)`         - 切歌 / 直播开始时弹系统通知
 //       · 菜单栏「播控」菜单（上一首/暂停-继续/下一首） - 不开窗口也能控
+//
+// 海报分享（M2.16）：
+//   - 跨平台：clipboard:writeImage / shell:showItemInFolder
+//   - macOS 原生：share:macosSheet 调 `osascript` 桥接 `NSSharingServicePicker`，
+//     弹系统级分享面板（AirDrop / 微信 / 邮件 / 备忘录 / Pages / Finder 全支持）
 //   - 菜单点击 / 系统通知回调通过 `mainWin.webContents.send("player:control", cmd)` 派回渲染层
 //   - 其他平台 (win/linux) 仅保留菜单 + IPC，dock / notification no-op，不崩
 const { app, BrowserWindow, Menu, dialog, shell, ipcMain, protocol, Notification } = require("electron");
@@ -621,6 +626,141 @@ ipcMain.handle("player:notify", async (_evt, opts) => {
 
 // IPC：测试用 — 当前 state 快照（vitest 集水）
 ipcMain.handle("player:getState", () => ({ ...playerState }));
+
+// =====================================================================
+// 海报分享（M2.16 macOS Share Sheet + 跨平台剪贴板 / Finder 定位）
+// =====================================================================
+//
+// 设计要点：
+// 1. 渲染层持有 ArrayBuffer（来自 /api/render 字节流），通过 IPC 传给主进程
+// 2. 主进程写临时文件 + 触发平台对应分享能力：
+//    - clipboard:writeImage — 跨平台，把 PNG bytes 写进系统剪贴板（用户 Cmd+V 即可贴到任何 App）
+//    - shell:showItemInFolder — 跨平台，macOS 高亮、Win 打开 Explorer、Linux 打开文件管理器
+//    - share:macosSheet — 仅 darwin，通过 osascript 调 NSSharingServicePicker 弹系统分享面板
+// 3. share:macosSheet 不可用时返回 { ok: false, code: "unsupported" }，UI 端按需 disabled
+// 4. 临时文件统一在 OS temp 目录，文件名 `streamer-poster-{nanoid}.png`，由 OS 回收
+//
+// 平台差异：
+// - macOS：全支持（剪贴板 / Finder 高亮 / Share Sheet）
+// - Windows：剪贴板 / Explorer 打开（无原生 share sheet，UI 上 disabled）
+// - Linux：剪贴板 / 文件管理器打开（无原生 share sheet，UI 上 disabled）
+const os = require("os");
+const { execFile } = require("child_process");
+const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
+const { clipboard, nativeImage } = require("electron");
+
+function tempPosterPath(defaultName) {
+  const safe = (defaultName || "poster").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 60);
+  const id = crypto.randomBytes(6).toString("hex");
+  return path.join(os.tmpdir(), `streamer-poster-${id}-${safe}.png`);
+}
+
+/**
+ * macOS 原生分享面板：写临时文件 + osascript 调 NSSharingServicePicker
+ *
+ * AppleScript 桥接说明：
+ *   - use framework "Foundation" / "AppKit" 拿到 NSImage / NSSharingServicePicker
+ *   - initWithContentsOfFile: 用 POSIX 路径读图
+ *   - sharingServicePickerWithItems: 传 array of NSImage
+ *   - showRelativeToRect:ofView:preferredEdge: 用零矩形 + 关键窗口定位弹板
+ *
+ * 为什么不用 Electron 的 webContents.share？
+ *   - Electron 至今没有稳定暴露 Web Share API 给 BrowserWindow
+ *   - osascript 桥接是 macOS 上最稳的方式，零新依赖
+ */
+function buildMacShareScript(filePath) {
+  // 注意：osascript 的引号转义很脆弱，全部用单引号 + double-escape
+  return `use framework "Foundation"
+use framework "AppKit"
+use scripting additions
+
+set theFile to POSIX file "${filePath.replace(/"/g, '\\"')}"
+set theImage to current application's NSImage's alloc()'s initWithContentsOfFile:theFile
+if theImage is missing value then
+  return "ERROR: failed to load image"
+end if
+
+set thePicker to current application's NSSharingServicePicker's sharingServicePickerWithItems:{theImage}
+set theWindow to current application's NSApplication's sharedApplication()'s keyWindow()
+if theWindow is missing value then
+  return "ERROR: no key window"
+end if
+set theView to theWindow's contentView()
+set zeroRect to current application's NSMakeRect(0, 0, 0, 0)
+thePicker's showRelativeToRect:zeroRect ofView:theView preferredEdge:0
+return "OK"
+`;
+}
+
+ipcMain.handle("clipboard:writeImage", async (_evt, params) => {
+  try {
+    const data = params?.data;
+    if (!data) return { ok: false, error: "missing data" };
+    const buf = Buffer.from(data);
+    const img = nativeImage.createFromBuffer(buf);
+    if (img.isEmpty()) {
+      return { ok: false, error: "invalid image buffer" };
+    }
+    clipboard.writeImage(img);
+    return { ok: true };
+  } catch (err) {
+    logErr("clipboard:writeImage:", err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("shell:showItemInFolder", async (_evt, params) => {
+  const filePath = params?.filePath;
+  if (!filePath || !fs.existsSync(filePath)) {
+    return { ok: false, error: "file not found" };
+  }
+  try {
+    shell.showItemInFolder(filePath);
+    return { ok: true };
+  } catch (err) {
+    logErr("shell:showItemInFolder:", err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("share:macosSheet", async (_evt, params) => {
+  if (process.platform !== "darwin") {
+    return { ok: false, code: "unsupported", error: "macOS only" };
+  }
+  try {
+    const data = params?.data;
+    const defaultName = params?.defaultName || "poster.png";
+    if (!data) return { ok: false, error: "missing data" };
+    const buf = Buffer.from(data);
+    // 验证是有效图片
+    const img = nativeImage.createFromBuffer(buf);
+    if (img.isEmpty()) return { ok: false, error: "invalid image buffer" };
+    const filePath = tempPosterPath(defaultName);
+    fs.writeFileSync(filePath, buf);
+    log(`share:macosSheet temp file ${filePath} (${buf.length} bytes)`);
+    const script = buildMacShareScript(filePath);
+    return await new Promise((resolve) => {
+      execFile("osascript", ["-e", script], { timeout: 10_000 }, (err, stdout) => {
+        const out = String(stdout || "").trim();
+        if (err) {
+          logErr("osascript:", err.message, out);
+          resolve({ ok: false, error: err.message, osascript: out });
+        } else if (out.startsWith("ERROR")) {
+          resolve({ ok: false, error: out });
+        } else {
+          // 临时文件立刻删（用户拖到目标 App 时 Finder 已复制到目标）
+          try { fs.unlinkSync(filePath); } catch { /* 留着让 OS 回收 */ }
+          resolve({ ok: true });
+        }
+      });
+    });
+  } catch (err) {
+    logErr("share:macosSheet:", err.message);
+    return { ok: false, error: err.message };
+  }
+});
 
 app.whenReady().then(async () => {
   // packaged mode 每次启动生成新 session token

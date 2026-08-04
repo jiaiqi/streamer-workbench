@@ -1,7 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { apiRequest } from "../api/client";
 import { toRequestFailure } from "../async/requestState";
 import ExportLogPanel from "../posters/ExportLogPanel";
+import { useToast } from "./Toast";
+
+declare global {
+  interface Window {
+    streamer?: {
+      copyImageToClipboard?: (params: { data: ArrayBuffer }) => Promise<{ ok: boolean; error?: string }>;
+      revealInFinder?: (params: { filePath: string }) => Promise<{ ok: boolean; error?: string }>;
+      shareToMacOS?: (params: { data: ArrayBuffer; defaultName?: string }) => Promise<{ ok: boolean; code?: string; error?: string }>;
+      isMacOSShareSupported?: () => boolean;
+    };
+  }
+}
 
 /* ---- 导出对话框：范围选择 + 预估 + 进度 + 打开目录 ----
    常挂载（open 控制显隐），保证范围选择跨次打开记忆；
@@ -25,6 +37,72 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [done, setDone] = useState<{ count: number; totalMs: number; outputDir: string } | null>(null);
   const [error, setError] = useState("");
+  // M2.16 海报分享：当前页 PNG bytes + share pending
+  const [sharePng, setSharePng] = useState<ArrayBuffer | null>(null);
+  const [sharePngLoading, setSharePngLoading] = useState(false);
+  const [sharePending, setSharePending] = useState<"clipboard" | "finder" | "macos" | null>(null);
+  const toast = useToast();
+  const macShareSupported = !!window.streamer?.isMacOSShareSupported?.();
+
+  // 打开 dialog 或 selTheme/page 变化时拉一张当前页 PNG 到内存备用
+  useEffect(() => {
+    if (!open || exporting) return;
+    let cancelled = false;
+    setSharePngLoading(true);
+    setSharePng(null);
+    const url = `/api/render?theme=${encodeURIComponent(selTheme)}&page=${page}&canvas=${encodeURIComponent(canvas)}&avoid=${avoid}${paramsQuery}`;
+    fetch(url)
+      .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`render ${r.status}`)))
+      .then(buf => { if (!cancelled) setSharePng(buf); })
+      .catch(() => { if (!cancelled) setSharePng(null); })
+      .finally(() => { if (!cancelled) setSharePngLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, selTheme, page, canvas, avoid, paramsQuery, exporting]);
+
+  const handleCopyToClipboard = useCallback(async () => {
+    if (!sharePng || !window.streamer?.copyImageToClipboard) return;
+    setSharePending("clipboard");
+    try {
+      const r = await window.streamer.copyImageToClipboard({ data: sharePng });
+      if (r.ok) toast.success("已复制到剪贴板", "可粘贴到微信 / 邮件 / 任何 App");
+      else toast.error("复制失败", r.error || "未知错误");
+    } finally {
+      setSharePending(null);
+    }
+  }, [sharePng, toast]);
+
+  const handleRevealInFinder = useCallback(async () => {
+    if (!done?.outputDir || !window.streamer?.revealInFinder) return;
+    setSharePending("finder");
+    try {
+      // 拼一个示例文件路径（取第一张）
+      const firstFile = done.outputDir.replace(/\/$/, "") + "/page-1.png";
+      const r = await window.streamer.revealInFinder({ filePath: firstFile });
+      if (!r.ok) {
+        // fallback: 让后端打开目录
+        try { await apiRequest("/api/export/open", { method: "POST" }); }
+        catch { /* 静默 */ }
+      }
+    } finally {
+      setSharePending(null);
+    }
+  }, [done, toast]);
+
+  const handleMacShare = useCallback(async () => {
+    if (!sharePng || !window.streamer?.shareToMacOS) return;
+    setSharePending("macos");
+    try {
+      const r = await window.streamer.shareToMacOS({
+        data: sharePng,
+        defaultName: `${selTheme || "poster"}-${canvas.replace(/[:/]/g, "_")}-p${page}.png`,
+      });
+      if (r.ok) toast.success("分享面板已弹出", "选择目标 App 后导出完成");
+      else if (r.code === "unsupported") toast.warn("当前平台不支持", "仅 macOS 可用");
+      else toast.error("分享失败", r.error || "未知错误");
+    } finally {
+      setSharePending(null);
+    }
+  }, [sharePng, selTheme, canvas, page, toast]);
 
   // 打开时重置进度/完成态 + scope 回到默认
   useEffect(() => {
@@ -180,12 +258,41 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
         )}
 
         {/* 操作按钮 */}
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 flex-wrap">
           {done && (
             <button onClick={openOutputDir}
               className={`rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer ${dark ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-muted hover:bg-border text-foreground"}`}>
               打开目录
             </button>
+          )}
+          {/* M2.16 海报分享：仅 done 后可用，避免渲染中的图片分享出去 */}
+          {done && (
+            <>
+              <button
+                onClick={handleCopyToClipboard}
+                disabled={sharePending !== null || sharePngLoading || !sharePng}
+                data-testid="export-copy-clipboard-button"
+                title={sharePngLoading ? "正在加载海报…" : !sharePng ? "海报加载失败" : ""}
+                className={`rounded-xl px-3.5 py-2 text-sm transition-colors cursor-pointer disabled:opacity-50 ${dark ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-muted hover:bg-border text-foreground"}`}>
+                {sharePending === "clipboard" ? "复制中…" : "📋 复制到剪贴板"}
+              </button>
+              <button
+                onClick={handleRevealInFinder}
+                disabled={sharePending !== null}
+                data-testid="export-reveal-finder-button"
+                title={macShareSupported ? "在 Finder 中高亮海报" : "在文件管理器中打开"}
+                className={`rounded-xl px-3.5 py-2 text-sm transition-colors cursor-pointer disabled:opacity-50 ${dark ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-muted hover:bg-border text-foreground"}`}>
+                {sharePending === "finder" ? "打开中…" : macShareSupported ? "📁 Finder 中显示" : "📁 打开文件夹"}
+              </button>
+              <button
+                onClick={handleMacShare}
+                disabled={sharePending !== null || !macShareSupported || sharePngLoading || !sharePng}
+                data-testid="export-mac-share-button"
+                title={!macShareSupported ? "仅 macOS 可用" : sharePngLoading ? "正在加载海报…" : !sharePng ? "海报加载失败" : "弹系统级分享面板（AirDrop / 微信 / 邮件）"}
+                className={`rounded-xl px-3.5 py-2 text-sm transition-colors cursor-pointer disabled:opacity-40 ${dark ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200" : "bg-muted hover:bg-border text-foreground"}`}>
+                {sharePending === "macos" ? "分享中…" : "🪟 系统分享"}
+              </button>
+            </>
           )}
           <button onClick={() => !exporting && onClose()} disabled={exporting}
             className={`rounded-xl px-4 py-2 text-sm transition-colors cursor-pointer disabled:opacity-50 ${dark ? "text-zinc-400 hover:text-zinc-200" : "text-muted-foreground hover:text-foreground"}`}>
