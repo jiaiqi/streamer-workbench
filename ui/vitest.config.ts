@@ -16,7 +16,8 @@ export default defineConfig({
     // M1.1: search/ 下的 .ts 解析器（globalSongSearch）也走 vitest
     // M1.3: player/ 下的 .tsx（PlayerContext）也走 vitest
     // P0 桌面集成: hooks/ 下的 hook 测试也走 vitest（.test.tsx 走 esbuild React transform）
-    include: ["src/**/*.test.tsx", "src/play/*.test.ts", "src/search/*.test.ts", "src/player/*.test.tsx", "src/hooks/*.test.tsx"],
+    // R8.2.x: useRecording 纯 hook 测试用 .test.ts（无 React render 之外的 jsx）
+    include: ["src/**/*.test.tsx", "src/play/*.test.ts", "src/search/*.test.ts", "src/player/*.test.tsx", "src/hooks/*.test.tsx", "src/hooks/*.test.ts"],
     // 历史 node:test 文件（用 import test from "node:test"）— 让 vitest 跳过
     exclude: [
       "**/node_modules/**",

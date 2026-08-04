@@ -112,4 +112,72 @@ contextBridge.exposeInMainWorld("streamer", {
   getPlayerState() {
     return ipcRenderer.invoke("player:getState");
   },
+
+  // ===== R8.2.x 弹唱录屏（Electron desktopCapturer + MediaRecorder） =====
+  /**
+   * 列出可录制的源（屏幕 / 窗口）。
+   * @returns {Promise<{ok: boolean, platform?: string, sources?: Array<{id: string, name: string, isScreen: boolean, thumbnailDataUrl: string|null}>, code?: string, error?: string}>}
+   */
+  listRecordingSources() {
+    return ipcRenderer.invoke("recording:list-sources");
+  },
+  /**
+   * 开始录制。
+   * @param {{
+   *   sourceId: string,           // 来自 listRecordingSources
+   *   sourceName?: string,         // 显示用
+   *   includeAudio?: boolean,      // 是否含系统音频（默认 false）
+   *   sessionId?: string,          // 关联到直播 session（可选；非法值会被拒绝）
+   *   segmentBytes?: number,       // 默认 1GB
+   *   videoBitsPerSecond?: number, // 默认 4Mbps
+   *   audioBitsPerSecond?: number, // 默认 128kbps
+   * }} opts
+   * @returns {Promise<{ok: boolean, id?: string, startedAt?: number, outputDir?: string, mimeType?: string, code?: string, error?: string}>}
+   */
+  startRecording(opts) {
+    return ipcRenderer.invoke("recording:start", opts || {});
+  },
+  pauseRecording(id) {
+    return ipcRenderer.invoke("recording:pause", id);
+  },
+  resumeRecording(id) {
+    return ipcRenderer.invoke("recording:resume", id);
+  },
+  /**
+   * 推 LRC 字幕事件到主进程；停止时会合并生成 SRT。
+   * @param {string} id
+   * @param {Array<{offset_ms: number, text: string}>} events
+   */
+  appendRecordingLrc(id, events) {
+    return ipcRenderer.invoke("recording:append-lrc", { id, events });
+  },
+  /**
+   * 停止录制，返回产物文件列表（含 SRT）。
+   * @returns {Promise<{ok: boolean, id?: string, durationMs?: number, outputDir?: string, files?: Array<{name: string, path: string, bytes: number, index: number, isSrt: boolean}>, code?: string, error?: string}>}
+   */
+  stopRecording(id) {
+    return ipcRenderer.invoke("recording:stop", id);
+  },
+  /**
+   * 拿当前录制状态（id 不传时拿活跃录制）。
+   * @returns {Promise<{ok: boolean, active?: null, id?: string, status?: string, elapsedMs?: number, currentBytes?: number, totalBytes?: number, segmentIndex?: number, files?: string[], sourceName?: string, outputDir?: string, code?: string}>}
+   */
+  getRecordingState(id) {
+    return ipcRenderer.invoke("recording:get-state", id);
+  },
+  /**
+   * 列某 session 的录制产物（webm + srt）。
+   * @param {string} [sessionId] - 不传列所有
+   */
+  listRecordingFiles(sessionId) {
+    return ipcRenderer.invoke("recording:list-files", sessionId);
+  },
+  /** 列所有有录制的 session。 */
+  listRecordingSessions() {
+    return ipcRenderer.invoke("recording:list-sessions");
+  },
+  /** 删除某 session 录制目录（含 webm + srt）。 */
+  deleteRecording(sessionId) {
+    return ipcRenderer.invoke("recording:delete", sessionId);
+  },
 });
