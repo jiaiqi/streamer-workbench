@@ -133,6 +133,18 @@ def _lifespan(config: AppConfig, paths):
             settings_service = SettingsApplicationService(
                 settings_repository=settings_repository,
             )
+            # M2.7+/M2.8 在线元数据服务：构造 Router + Cache
+            # 默认只接 NeteaseProvider；M2.10+ 扩展 QQ / Kugou
+            from server.services.metadata import (
+                MetadataApplicationService,
+                build_default_router,
+            )
+            metadata_router, metadata_cache = build_default_router(
+                paths.metadata_dir,
+            )
+            metadata_service = MetadataApplicationService(
+                metadata_router, cache=metadata_cache,
+            )
             data_dir_service = DataDirectoryService(config=config, paths=paths)
             tab_service = TabApplicationService(
                 song_repository=song_repository,
@@ -164,6 +176,7 @@ def _lifespan(config: AppConfig, paths):
                 export_service=export_service,
                 export_job_manager=app.state.export_jobs, themes=app.state.themes,
                 poster_service=poster_service,
+                metadata_router=metadata_router,  # M2.7+/M2.8
             )
             app.state.context = context
             try:
@@ -226,6 +239,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(learning_report.router)
     app.include_router(exports.router)
     app.include_router(audio.router)
+    from server.routers import metadata  # M2.7+/M2.8 在线元数据
+    app.include_router(metadata.router)
 
     @app.get("/api/health")
     def health(request: Request):

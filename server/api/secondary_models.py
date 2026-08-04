@@ -757,3 +757,103 @@ class SnapshotRestoreRequest(StrictRequest):
 class SnapshotRestoreResponse(BaseModel):
     ok: bool = True
     filename: str
+
+
+# M2.7+ 在线元数据响应模型
+
+
+class MetadataHitResponse(BaseModel):
+    """搜索结果条目（轻量）。"""
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    song_id: str
+    title: str
+    artist: str
+    album: str | None = None
+    duration_ms: int | None = None
+    cover_url: str | None = None
+
+
+class MetadataSongDetailResponse(BaseModel):
+    """歌曲详情。"""
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    song_id: str
+    title: str
+    artist: str
+    artist_id: str | None = None
+    album: str | None = None
+    album_id: str | None = None
+    duration_ms: int = 0
+    cover_url: str | None = None
+    bpm: float | None = None
+
+
+class MetadataLyricResponse(BaseModel):
+    """LRC 歌词。"""
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    song_id: str
+    lrc_text: str
+    translated_lrc: str | None = None
+
+
+class MetadataArtistResponse(BaseModel):
+    """艺人详情（含热门歌曲）。"""
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    artist_id: str
+    name: str
+    bio: str | None = None
+    avatar_url: str | None = None
+    songs: list[MetadataHitResponse] = []
+
+
+class MetadataAlbumResponse(BaseModel):
+    """专辑详情。"""
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    album_id: str
+    title: str
+    artist: str
+    cover_url: str | None = None
+    release_date: str | None = None
+    songs: list[MetadataHitResponse] = []
+
+
+class MetadataPlaylistResponse(BaseModel):
+    """歌单详情。"""
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    playlist_id: str
+    title: str
+    creator: str | None = None
+    cover_url: str | None = None
+    description: str | None = None
+    play_count: int | None = None
+    songs: list[MetadataHitResponse] = []
+
+
+class MetadataChartResponse(BaseModel):
+    """榜单条目。"""
+    model_config = ConfigDict(extra="forbid")
+    source: str
+    chart_id: str
+    title: str
+    cover_url: str | None = None
+    description: str | None = None
+
+
+class MetadataSearchResponse(BaseModel):
+    """搜索结果。"""
+    model_config = ConfigDict(extra="forbid")
+    keyword: str
+    type: str
+    provider: str | None = None  # 命中的 provider（缓存可为空）
+    items: list[MetadataHitResponse] = []
+
+
+class MetadataProviderListResponse(BaseModel):
+    """当前 router 注册的 providers。"""
+    model_config = ConfigDict(extra="forbid")
+    providers: list[str]

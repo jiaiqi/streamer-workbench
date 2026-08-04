@@ -177,6 +177,7 @@ class AppPaths:
     layouts_dir: Path
     backups_dir: Path
     output_dir: Path
+    metadata_dir: Path  # M2.7 在线元数据缓存
     startup_config_path: Path
 
 
@@ -252,5 +253,6 @@ def build_app_paths(config: AppConfig, *,
         layouts_dir=data_root / "layouts",
         backups_dir=data_root / "backups",
         output_dir=data_root / "output",
+        metadata_dir=data_root / "metadata",  # M2.7
         startup_config_path=startup_path,
     )

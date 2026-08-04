@@ -36,6 +36,9 @@ from .types import (
     SongDetail,
 )
 
+# M2.8+ providers（具体实现）
+from .providers import NeteaseProvider
+
 __all__ = [
     # types
     "AlbumDetail",
@@ -58,4 +61,6 @@ __all__ = [
     "MetadataCache",
     "MetadataRouter",
     "DEFAULT_TTL_SECONDS",
+    # providers
+    "NeteaseProvider",
 ]

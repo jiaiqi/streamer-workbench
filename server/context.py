@@ -32,3 +32,4 @@ class AppContext:
     practice_service: Any = None        # P4 R2 增量
     discovery_service: Any = None       # R3 学歌发现增量
     stats_service: Any = None           # R4 统计聚合增量
+    metadata_router: Any = None         # M2.7+ 在线元数据 Router（multi-provider）
