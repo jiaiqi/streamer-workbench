@@ -935,3 +935,17 @@ export interface SongExportResponse {
   "exported_at": string;
   [key: string]: unknown;
 }
+
+// L2.3 快照
+export interface SnapshotItem {
+  "filename": string;
+  "size_bytes": number;
+  "modified_at": string;
+  [key: string]: unknown;
+}
+
+export interface SnapshotListResponse {
+  "items": Array<SnapshotItem>;
+  "total": number;
+  [key: string]: unknown;
+}

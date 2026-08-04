@@ -6,7 +6,7 @@ import AsyncStateNotice from "../components/AsyncStateNotice";
 import TrashView from "../components/TrashView";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
-import { exportBySongIds, exportLibrary, importLibrary } from "../api/posters";
+import { exportBySongIds, exportLibrary, importLibrary, listSnapshots, restoreSnapshot } from "../api/posters";
 import { usePosterStore } from "../posters/usePosterStore";
 import { useLatestRequest, type RequestFailure } from "../async/requestState";
 import { useApiError } from "../async/useApiError";
@@ -39,6 +39,88 @@ function KeyCapo({ song }: { song: Song }) {
 const GRID_CLASS = "grid gap-3 grid-cols-[repeat(auto-fill,minmax(232px,1fr))]";
 
 /* ================= 主视图 ================= */
+function SnapshotsView({ dark, onChanged }: { dark: boolean; onChanged: () => void }) {
+  const [items, setItems] = useState<Array<{ filename: string; size_bytes: number; modified_at: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listSnapshots();
+      setItems(res.items);
+    } catch { /* ignore — toast 由 useApiError 处理 */ }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  const handleRestore = async (filename: string) => {
+    if (!window.confirm(`确定从快照「${filename}」恢复？
+恢复后当前曲库内容会被覆盖（不会丢失，备份仍在 backups/songs/）。`)) return;
+    setRestoring(filename);
+    try {
+      await restoreSnapshot(filename);
+      onChanged();
+      await load();
+    } finally {
+      setRestoring(null);
+    }
+  };
+  if (loading) {
+    return <div className="px-6 py-8 text-center text-sm text-muted-foreground">加载快照…</div>;
+  }
+  if (items.length === 0) {
+    return (
+      <div className="px-6 py-8 text-center">
+        <p className="text-sm text-muted-foreground">暂无快照。每次曲库变更（新增/编辑/状态切换/删除/导入）会自动备份到 <code className="font-mono text-[12px]">backups/songs/</code>。</p>
+      </div>
+    );
+  }
+  return (
+    <div className="px-6 py-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className={`text-[14px] font-semibold ${dark ? "text-zinc-200" : "text-foreground"}`}>
+          曲库快照（共 {items.length} 个，保留最近 20 个）
+        </h3>
+        <button
+          type="button"
+          onClick={load}
+          className={`text-[12px] px-2 h-7 rounded transition-colors ${
+            dark ? "text-zinc-400 hover:bg-zinc-800" : "text-muted-foreground hover:bg-muted"
+          }`}>
+          刷新
+        </button>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map(it => (
+          <li
+            key={it.filename}
+            data-testid={`snapshot-item-${it.filename}`}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] ${
+              dark ? "bg-zinc-800/50 hover:bg-zinc-800" : "bg-muted/50 hover:bg-muted"
+            }`}>
+            <span className={`flex-1 font-mono text-[12px] ${dark ? "text-zinc-300" : "text-foreground"}`}>
+              {it.filename}
+            </span>
+            <span className={`text-[11px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+              {(it.size_bytes / 1024).toFixed(1)} KB
+            </span>
+            <span className={`text-[11px] tabular-nums ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+              {it.modified_at}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleRestore(it.filename)}
+              disabled={restoring === it.filename}
+              data-testid={`snapshot-restore-${it.filename}`}
+              className="rounded-md px-2.5 h-7 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-blue-600 hover:bg-blue-700 text-white">
+              {restoring === it.filename ? "恢复中…" : "恢复"}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function LibraryView({ dark, onStatsChange, onEditTargetChange, onPlaySong }: {
   dark: boolean;
   onStatsChange: (s: { active: number; draft: number }) => void;
@@ -580,7 +662,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
               : (dark ? "text-zinc-500 hover:text-zinc-300" : "text-muted-foreground hover:text-foreground")}`}
           >
             {text}
-            {id !== "trash" && (
+            {id !== "trash" && id !== "snapshots" && (
               <span className="ml-1 tabular-nums opacity-60">
                 {id === "all" ? songsData?.total ?? "" : id === "active" ? songsData?.active ?? "" : songsData?.draft ?? ""}
               </span>
@@ -595,6 +677,11 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
       {/* ===== 垃圾桶视图（R9.6） ===== */}
       {statusFilter === "trash" && (
         <TrashView dark={dark} onChanged={() => { void refresh(); }} />
+      )}
+
+      {/* ===== 快照视图（L2.3） ===== */}
+      {statusFilter === "snapshots" && (
+        <SnapshotsView dark={dark} onChanged={() => { void refresh(); }} />
       )}
 
       {actionError && <div className="mx-6 mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500" role="alert">{actionError}</div>}

@@ -736,3 +736,24 @@ class PlaybackEventRequest(StrictRequest):
 class PlaybackEventResponse(BaseModel):
     ok: bool = True
     type: str
+
+
+# L2.3 快照：列出 / 恢复
+class SnapshotItemResponse(BaseModel):
+    filename: str
+    size_bytes: int
+    modified_at: str  # ISO
+
+
+class SnapshotListResponse(BaseModel):
+    total: int
+    items: list[SnapshotItemResponse]
+
+
+class SnapshotRestoreRequest(StrictRequest):
+    filename: str
+
+
+class SnapshotRestoreResponse(BaseModel):
+    ok: bool = True
+    filename: str

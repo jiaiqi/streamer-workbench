@@ -7,6 +7,12 @@ from core.data.songs import SongLibrary
 from core.data.tabs import MAX_FILE_BYTES
 from server.api.errors import ApiError
 from server.api.handlers import api_error_response
+from server.api.secondary_models import (
+    SnapshotItemResponse,
+    SnapshotListResponse,
+    SnapshotRestoreRequest,
+    SnapshotRestoreResponse,
+)
 from server.api.song_models import (
     SongCreateRequest,
     SongDeleteResponse,
@@ -296,6 +302,51 @@ def api_songs_import(req: Request, payload: SongImportRequest):
         "active": len([s for s in final.value.songs if s.status == "active" and not s.deleted_at]),
         "draft": len([s for s in final.value.songs if s.status == "draft" and not s.deleted_at]),
     }
+
+
+# ── L2.3 快照（songs.json 每次保存自动备份到 backups/songs/） ──
+
+@router.get("/api/songs/snapshots", response_model=SnapshotListResponse)
+def api_songs_snapshots(req: Request):
+    """L2.3: 列出 songs.json 的自动快照（按时间倒序）。"""
+    from datetime import datetime
+    context = get_app_context(req)
+    backups_dir = context.paths.backups_dir / "songs"
+    if not backups_dir.is_dir():
+        return {"total": 0, "items": []}
+    items: list[dict] = []
+    for path in backups_dir.glob("songs-*.json"):
+        try:
+            stat = path.stat()
+            items.append({
+                "filename": path.name,
+                "size_bytes": stat.st_size,
+                "modified_at": datetime.fromtimestamp(
+                    stat.st_mtime, tz=datetime.now().astimezone().tzinfo
+                ).isoformat(timespec="seconds"),
+            })
+        except OSError:
+            continue
+    items.sort(key=lambda it: it["modified_at"], reverse=True)
+    return {"total": len(items), "items": items}
+
+
+@router.post("/api/songs/snapshots/restore", response_model=SnapshotRestoreResponse)
+def api_songs_snapshots_restore(req: Request, payload: SnapshotRestoreRequest):
+    """L2.3: 把指定快照覆盖回 songs.json（从 backups/songs/<filename> 复制）。"""
+    from fastapi.responses import JSONResponse
+    import shutil
+    context = get_app_context(req)
+    backup_path = context.paths.backups_dir / "songs" / payload.filename
+    if not backup_path.is_file():
+        return JSONResponse(
+            status_code=404,
+            content={"error": {"code": "snapshot_not_found",
+                               "message": f"快照不存在：{payload.filename}"}},
+        )
+    # 直接覆盖 songs.json（repository.save 路径会再次备份当前值；这里直接覆盖是用户意图）
+    shutil.copy2(backup_path, context.paths.songs_json)
+    return {"ok": True, "filename": payload.filename}
 
 
 # ── Song ID 主接口 ──

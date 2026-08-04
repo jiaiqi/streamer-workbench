@@ -171,3 +171,16 @@ export function importLibrary(
     body,
   });
 }
+
+// ── L2.3 快照 ─────────────────────────────
+
+export function listSnapshots(): Promise<SnapshotListResponse> {
+  return apiRequest<SnapshotListResponse>("/api/songs/snapshots");
+}
+
+export function restoreSnapshot(filename: string): Promise<{ ok: boolean; filename: string }> {
+  return apiRequest<{ ok: boolean; filename: string }>(
+    "/api/songs/snapshots/restore",
+    { method: "POST", body: { filename } },
+  );
+}
