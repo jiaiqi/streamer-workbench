@@ -4,6 +4,7 @@ import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
 import TrashView from "../components/TrashView";
+import PlaylistImportDialog from "../components/PlaylistImportDialog";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
 import { exportBySongIds, exportLibrary, importLibrary, listSnapshots, restoreSnapshot } from "../api/posters";
@@ -136,6 +137,8 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Song | "new" | null>(null);
+  // M2.11 从歌单导入对话框
+  const [playlistImportOpen, setPlaylistImportOpen] = useState(false);
   const [actionSong, setActionSong] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
@@ -609,6 +612,19 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
           </svg>
           {importPending ? "导入中…" : "导入"}
         </button>
+        {/* M2.11 从在线歌单导入 */}
+        <button
+          onClick={() => setPlaylistImportOpen(true)}
+          disabled={statusFilter === "trash"}
+          data-testid="library-playlist-import-button"
+          className={`flex items-center gap-1.5 rounded-lg px-3 h-8 text-[13px] font-medium transition-colors cursor-pointer disabled:opacity-40 ${
+            dark ? "bg-zinc-800 text-zinc-300 border border-zinc-700/60 hover:bg-zinc-700" : "bg-background text-foreground border border-border hover:bg-muted"
+          }`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18M3 12h18M3 18h12"/>
+          </svg>
+          从歌单导入
+        </button>
         <button
           onClick={handleExportLibrary}
           data-testid="library-export-button"
@@ -943,6 +959,13 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
         <SongEditDialog target={editTarget}
           onClose={() => setEditTarget(null)} onSaved={refresh} />
       )}
+
+      {/* M2.11 从在线歌单导入 */}
+      <PlaylistImportDialog
+        open={playlistImportOpen}
+        onClose={() => setPlaylistImportOpen(false)}
+        onImported={refresh}
+      />
 
       {/* L2.1 批量操作：底部 action bar（select 模式 + 至少选中 1 首时显示） */}
       {selectMode && statusFilter !== "trash" && (
