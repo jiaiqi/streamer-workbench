@@ -33,6 +33,7 @@ import { openQuickView, openLivePoster, isElectron } from "../electron-bridge";
 import { asRecord, asString, asNumber, asBoolean } from "../lib/narrow";
 import StatusBadge from "../components/StatusBadge";
 import ExportLogPanel from "../posters/ExportLogPanel";
+import PolicyDialog from "../components/PolicyDialog";
 
 /* ================== 类型 narrow helpers (R4.1.7 改用 lib/narrow) ================== */
 
@@ -162,6 +163,8 @@ export default function LiveView({
   const [actionError, setActionError] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [manualPickerOpen, setManualPickerOpen] = useState(false);
+  // M2.4 点歌规则配置
+  const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
   // R4.0: 导出复盘海报的 loading 状态（避免重复点击 + spinner 反馈）
   const [posterLoading, setPosterLoading] = useState(false);
 
@@ -454,6 +457,13 @@ export default function LiveView({
             onClose={() => setManualPickerOpen(false)}
           />
         )}
+        {/* M2.4 点歌规则配置弹窗 */}
+        <PolicyDialog
+          open={policyDialogOpen}
+          onClose={() => setPolicyDialogOpen(false)}
+          sessionId={isActive ? activeId : null}
+          onUpdated={() => { void onRefresh(); }}
+        />
       </main>
     </div>
   );
@@ -536,6 +546,17 @@ function SessionDetail({
         <div className="ml-auto flex items-center gap-2">
           <button type="button" className="secondary-action" onClick={onRefresh}>
             刷新
+          </button>
+          {/* M2.4 点歌规则配置 */}
+          <button
+            type="button"
+            className="secondary-action"
+            data-testid="live-policy-button"
+            disabled={!isActive}
+            title={isActive ? "配置点歌规则（冷却 / 队列上限 / 单歌上限 / 单用户上限）" : "会话未激活"}
+            onClick={() => setPolicyDialogOpen(true)}
+          >
+            规则
           </button>
           {/* R2.5: 导出直播复盘海报（live-set 布局）R4.0 加 loading 反馈 */}
           <button

@@ -857,3 +857,38 @@ class MetadataProviderListResponse(BaseModel):
     """当前 router 注册的 providers。"""
     model_config = ConfigDict(extra="forbid")
     providers: list[str]
+
+
+# ── LiveSession M2.4 点歌条件 ──
+
+
+class RequestPolicyResponse(BaseModel):
+    """GET /api/live-sessions/{id}/policy - 当前会话 RequestPolicy。"""
+    model_config = ConfigDict(extra="forbid")
+    rule_version: str
+    created_at: str
+    fan_join_session_quota: int
+    member_daily_quota: int
+    gift_exchange_quota: int
+    high_value_gift_names: list[str] = Field(default_factory=list)
+    bump_default_target: int
+    bump_requires_broadcaster: bool
+    fairness_max_consecutive_bumps: int
+    entitlement_session_window_hours: int
+    # M2.4
+    cooldown_seconds_per_user: int = 0
+    max_queue_length: int = 0
+    per_song_max_per_session: int = 0
+    per_user_max_in_queue: int = 0
+
+
+class RequestPolicyUpdateRequest(StrictRequest):
+    """POST /api/live-sessions/{id}/policy - 主播更新点歌条件。
+
+    M2.4：只暴露 4 个运营字段（quota / 插队 / 公平保护等"业务规则"不开放给主播 UI 改）。
+    0 = 不限；非 0 必须 >= 1。
+    """
+    cooldown_seconds_per_user: int = Field(default=0, ge=0)
+    max_queue_length: int = Field(default=0, ge=0)
+    per_song_max_per_session: int = Field(default=0, ge=0)
+    per_user_max_in_queue: int = Field(default=0, ge=0)

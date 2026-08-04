@@ -187,6 +187,20 @@ class LiveSessionPersistenceService:
     def get_live(self, session_id: str) -> LiveService | None:
         return self._live_services.get(session_id)
 
+    def get_policy(self, session_id: str) -> Any | None:
+        """M2.4：获取当前会话的 RequestPolicy。session 不存在时返回 None。"""
+        live = self._live_services.get(session_id)
+        if live is None:
+            return None
+        return live.policy
+
+    def update_policy(self, session_id: str, *, new_policy: Any) -> Any:
+        """M2.4：更新会话 RequestPolicy（自动 bump rule_version）。"""
+        live = self._require_live(session_id)
+        result = live.update_policy(new_policy=new_policy)
+        self._save_state(live, expected_revision=self._current_revision[session_id])
+        return result
+
     # ── 写穿: 所有命令调用 → LiveService 命令 → 刷写 repo ──
 
     def queue_request(self, session_id: str, **kwargs) -> Any:

@@ -136,5 +136,206 @@ class RuleVersionReportingTests(unittest.TestCase):
         self.assertEqual(d.rule_version, "rule_42")
 
 
+# ── M2.4 点歌条件 ──
+
+
+class M24QueueLimitTests(unittest.TestCase):
+    def setUp(self):
+        from dataclasses import replace
+        from core.data.live import RequestPolicy
+        self._replace = replace
+        self._RequestPolicy = RequestPolicy
+
+    def test_max_queue_length_blocks_when_full(self):
+        policy = self._RequestPolicy(max_queue_length=3)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(queue_size=3),
+        )
+        self.assertFalse(d.allowed)
+        self.assertIn("队列已满", d.reason)
+
+    def test_max_queue_length_zero_unlimited(self):
+        policy = self._RequestPolicy(max_queue_length=0)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(queue_size=999),
+        )
+        self.assertTrue(d.allowed)
+
+    def test_max_queue_length_under_limit_allows(self):
+        policy = self._RequestPolicy(max_queue_length=10)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(queue_size=5),
+        )
+        self.assertTrue(d.allowed)
+
+
+class M24PerSongLimitTests(unittest.TestCase):
+    def test_per_song_max_blocks_at_limit(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(per_song_max_per_session=2)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(per_song_in_session=2),
+        )
+        self.assertFalse(d.allowed)
+        self.assertIn("已被点 2 次", d.reason)
+
+    def test_per_song_max_zero_unlimited(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(per_song_max_per_session=0)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(per_song_in_session=999),
+        )
+        self.assertTrue(d.allowed)
+
+
+class M24PerUserLimitTests(unittest.TestCase):
+    def test_per_user_max_blocks_at_limit(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(per_user_max_in_queue=2)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(per_user_in_queue=2),
+        )
+        self.assertFalse(d.allowed)
+        self.assertIn("队列里有 2 首", d.reason)
+
+    def test_per_user_max_under_limit_allows(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(per_user_max_in_queue=5)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(per_user_in_queue=2),
+        )
+        self.assertTrue(d.allowed)
+
+
+class M24CooldownTests(unittest.TestCase):
+    def test_cooldown_blocks_when_elapsed_under_threshold(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(cooldown_seconds_per_user=10)
+        svc = RequestPolicyService(policy=policy)
+        # 上次入队 3 秒前 → 还在冷却
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(cooldown_seconds_remaining=3.0),
+        )
+        self.assertFalse(d.allowed)
+        self.assertIn("冷却中", d.reason)
+        self.assertIn("7", d.reason)  # 10-3=7
+
+    def test_cooldown_allows_when_elapsed_exceeds_threshold(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(cooldown_seconds_per_user=10)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(cooldown_seconds_remaining=15.0),
+        )
+        self.assertTrue(d.allowed)
+
+    def test_cooldown_zero_unlimited(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(cooldown_seconds_per_user=0)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(cooldown_seconds_remaining=0.0),
+        )
+        self.assertTrue(d.allowed)
+
+    def test_cooldown_none_means_no_history_allows(self):
+        """第一次入队（无历史）→ 允许。"""
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(cooldown_seconds_per_user=10)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="fan_join",
+            snapshot=QueueSnapshot(cooldown_seconds_remaining=None),
+        )
+        self.assertTrue(d.allowed)
+
+
+class M24ManualAddBypassesTests(unittest.TestCase):
+    def test_manual_add_skips_all_4_checks(self):
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(
+            cooldown_seconds_per_user=10,
+            max_queue_length=1,
+            per_song_max_per_session=1,
+            per_user_max_in_queue=1,
+        )
+        svc = RequestPolicyService(policy=policy)
+        # 即使所有条件都超限，manual_add 必须允许
+        d = svc.decide_queue(
+            entitlement_kind="manual_add",
+            snapshot=QueueSnapshot(
+                queue_size=999,
+                cooldown_seconds_remaining=0.0,
+                per_song_in_session=999,
+                per_user_in_queue=999,
+            ),
+        )
+        self.assertTrue(d.allowed)
+
+    def test_bump_kind_still_goes_through_4_checks(self):
+        """high_value_gift / manual_bump 走 M2.4 检查 → 防止刷榜。"""
+        from core.data.live import RequestPolicy
+        policy = RequestPolicy(max_queue_length=1)
+        svc = RequestPolicyService(policy=policy)
+        d = svc.decide_queue(
+            entitlement_kind="high_value_gift",
+            snapshot=QueueSnapshot(queue_size=1),
+        )
+        self.assertFalse(d.allowed)
+
+
+class M24RuleDiffersTests(unittest.TestCase):
+    def test_differs_on_cooldown_change(self):
+        from core.data.live import RequestPolicy
+        a = RequestPolicy(cooldown_seconds_per_user=0)
+        b = RequestPolicy(cooldown_seconds_per_user=10)
+        self.assertTrue(RequestPolicyService(policy=a).rule_differs(b))
+
+    def test_differs_on_max_queue_change(self):
+        from core.data.live import RequestPolicy
+        a = RequestPolicy(max_queue_length=0)
+        b = RequestPolicy(max_queue_length=20)
+        self.assertTrue(RequestPolicyService(policy=a).rule_differs(b))
+
+    def test_not_differs_on_zero_change(self):
+        from core.data.live import RequestPolicy
+        a = RequestPolicy()
+        b = RequestPolicy(rule_version="rule_diff")
+        self.assertFalse(RequestPolicyService(policy=a).rule_differs(b))
+
+
+class M24ValidateTests(unittest.TestCase):
+    def test_negative_cooldown_rejected(self):
+        from core.data.live import RequestPolicy
+        with self.assertRaises(ValueError):
+            RequestPolicy(cooldown_seconds_per_user=-1).validate()
+
+    def test_zero_values_all_valid(self):
+        from core.data.live import RequestPolicy
+        RequestPolicy(
+            cooldown_seconds_per_user=0,
+            max_queue_length=0,
+            per_song_max_per_session=0,
+            per_user_max_in_queue=0,
+        ).validate()  # 不抛
+
+
 if __name__ == "__main__":
     unittest.main()

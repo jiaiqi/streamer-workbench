@@ -15,7 +15,7 @@ from __future__ import annotations
 import io
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime
 
 from fastapi import APIRouter, Request
@@ -34,6 +34,8 @@ from server.api.secondary_models import (
     LiveSessionRecordRequest,
     LiveSessionRecordResponse,
     LiveSessionSummary,
+    RequestPolicyResponse,
+    RequestPolicyUpdateRequest,
 )
 from server.dependencies import get_app_context
 from server.services.live import LiveServiceError
@@ -210,6 +212,68 @@ def api_live_sessions_record(
         refunded=result.refunded,
         refund_reason=result.refund_reason,
     )
+
+
+# =====================================================================
+# M2.4 点歌条件
+# =====================================================================
+
+@router.get(
+    "/api/live-sessions/{session_id}/policy",
+    response_model=RequestPolicyResponse,
+)
+def api_live_sessions_get_policy(session_id: str, req: Request):
+    """M2.4：获取当前会话的 RequestPolicy。"""
+    persistence = _service(req)
+    policy = persistence.get_policy(session_id)
+    if policy is None:
+        return api_error_response(
+            req, 404, ApiError("live_session_not_found",
+                                f"会话不存在：{session_id}"),
+        )
+    return RequestPolicyResponse(**asdict(policy))
+
+
+@router.post(
+    "/api/live-sessions/{session_id}/policy",
+    response_model=RequestPolicyResponse,
+)
+def api_live_sessions_update_policy(
+    session_id: str, payload: RequestPolicyUpdateRequest, req: Request,
+):
+    """M2.4：主播更新点歌条件（cooldown / max_queue / per_song / per_user）。
+
+    行为：
+    - 若新值与当前不同 → 生成新 rule_version，旧 RequestPolicy 保留在 history
+    - 若新值与当前相同 → 返回原 policy（不 bump version）
+    - 失败 → 400 + ApiError
+    """
+    persistence = _service(req)
+    try:
+        # 用现有 policy 作基底，覆盖 4 个新字段
+        current = persistence.get_policy(session_id)
+        if current is None:
+            return api_error_response(
+                req, 404, ApiError("live_session_not_found",
+                                    f"会话不存在：{session_id}"),
+            )
+        merged = replace(
+            current,
+            cooldown_seconds_per_user=payload.cooldown_seconds_per_user,
+            max_queue_length=payload.max_queue_length,
+            per_song_max_per_session=payload.per_song_max_per_session,
+            per_user_max_in_queue=payload.per_user_max_in_queue,
+        )
+        updated = persistence.update_policy(session_id, new_policy=merged)
+    except ValueError as exc:
+        return api_error_response(
+            req, 400, ApiError("invalid_policy", str(exc)),
+        )
+    except LiveServiceError as exc:
+        return api_error_response(
+            req, 400, ApiError("live_service_error", str(exc)),
+        )
+    return RequestPolicyResponse(**asdict(updated))
 
 
 @router.post("/api/live-sessions/{session_id}/close", response_model=LiveSessionSummary)

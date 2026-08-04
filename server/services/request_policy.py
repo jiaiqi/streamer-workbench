@@ -36,11 +36,21 @@ class UnknownEntitlementKind(RequestPolicyServiceError):
 
 @dataclass(frozen=True)
 class QueueSnapshot:
-    """决策时的队列快照。"""
+    """决策时的队列快照。
+
+    M2.4 新增 3 字段（用于 cooldown / max_queue / per_song / per_user 决策）：
+    - cooldown_seconds_remaining: 同用户最近一次入队到现在的秒数，None = 同用户无历史
+    - per_user_in_queue: 该用户当前在队列里的条数
+    - per_song_in_session: 该歌曲当前在队列 + 已演唱累计数（已唱也计，防止刷榜）
+    """
 
     queue_size: int = 0          # 当前队尾已加入数
     current_song_position: int = 0  # 当前演唱歌曲位置（不可替换）
     recent_bumps_in_a_row: int = 0   # 最近连续插队计数（不含当前/过去插队）
+    # M2.4 三个统计字段
+    cooldown_seconds_remaining: float | None = None  # 距上次同用户入队秒数；None=无历史
+    per_user_in_queue: int = 0                       # 该用户当前在队条数
+    per_song_in_session: int = 0                     # 该歌本场累计条数（含已唱）
 
 
 class RequestPolicyService:
@@ -78,8 +88,14 @@ class RequestPolicyService:
         Returns:
             PolicyDecision (allowed, requires_broadcaster_confirmation, degraded, reason)
         """
-        # 空 kind 视为主播手动加歌 — 不消耗额度
+        # 空 kind 视为主播手动加歌 — 不消耗额度（也不走点歌条件冷却/上限）
         kind = entitlement_kind or "manual_add"
+
+        # M2.4 点歌条件：4 检查（0=不限；主播手动加跳过）
+        if kind != "manual_add":
+            m2_4 = self._check_m2_4_conditions(kind=kind, snapshot=snapshot)
+            if m2_4 is not None:
+                return m2_4
 
         # 普通手动加：不需要确认
         if kind in {"manual_add"}:
@@ -119,6 +135,56 @@ class RequestPolicyService:
 
         raise UnknownEntitlementKind(f"未知 entitlement_kind：{entitlement_kind}")
 
+    def _check_m2_4_conditions(
+        self, *, kind: str, snapshot: QueueSnapshot,
+    ) -> PolicyDecision | None:
+        """M2.4 点歌条件检查。返回 None 表示通过；返回 PolicyDecision(allowed=False) 表示拒绝。
+
+        检查顺序（按「业务严重度」从高到低）：
+        1. max_queue_length — 队列满
+        2. per_song_max_per_session — 单歌被点超限
+        3. per_user_max_in_queue — 单用户霸屏
+        4. cooldown_seconds_per_user — 冷却中
+        """
+        p = self._policy
+
+        # 1) 队列总长上限
+        if p.max_queue_length > 0 and snapshot.queue_size >= p.max_queue_length:
+            return PolicyDecision(
+                allowed=False,
+                reason=f"队列已满（{snapshot.queue_size}/{p.max_queue_length}）",
+                rule_version=p.rule_version,
+            )
+
+        # 2) 单歌累计上限
+        if p.per_song_max_per_session > 0 and snapshot.per_song_in_session >= p.per_song_max_per_session:
+            return PolicyDecision(
+                allowed=False,
+                reason=f"本场这首歌已被点 {snapshot.per_song_in_session} 次，达到上限 {p.per_song_max_per_session}",
+                rule_version=p.rule_version,
+            )
+
+        # 3) 单用户已点上限
+        if p.per_user_max_in_queue > 0 and snapshot.per_user_in_queue >= p.per_user_max_in_queue:
+            return PolicyDecision(
+                allowed=False,
+                reason=f"你已在队列里有 {snapshot.per_user_in_queue} 首，达到上限 {p.per_user_max_in_queue}",
+                rule_version=p.rule_version,
+            )
+
+        # 4) 冷却（仅对非主播手动加）
+        if (p.cooldown_seconds_per_user > 0
+                and snapshot.cooldown_seconds_remaining is not None
+                and snapshot.cooldown_seconds_remaining < p.cooldown_seconds_per_user):
+            wait = p.cooldown_seconds_per_user - snapshot.cooldown_seconds_remaining
+            return PolicyDecision(
+                allowed=False,
+                reason=f"冷却中：还需 {int(wait)} 秒后才能再点",
+                rule_version=p.rule_version,
+            )
+
+        return None
+
     def decide_bump_position(self, snapshot: QueueSnapshot) -> int:
         """根据 policy 与队列快照，给出「插队目标位置」。
 
@@ -146,4 +212,12 @@ class RequestPolicyService:
                 != new_policy.fairness_max_consecutive_bumps
             or self._policy.bump_requires_broadcaster
                 != new_policy.bump_requires_broadcaster
+            # M2.4 点歌条件
+            or self._policy.cooldown_seconds_per_user
+                != new_policy.cooldown_seconds_per_user
+            or self._policy.max_queue_length != new_policy.max_queue_length
+            or self._policy.per_song_max_per_session
+                != new_policy.per_song_max_per_session
+            or self._policy.per_user_max_in_queue
+                != new_policy.per_user_max_in_queue
         )

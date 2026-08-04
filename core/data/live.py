@@ -68,7 +68,8 @@ class SongRequest:
         if not self.requester_id and not self.requester_name.strip():
             raise ValueError("requester_name 不能为纯空白")
         # idempotent: 同一 (session, song, requester_name) + entitlement 不应重复
-        if self.entitlement_kind and not self.entitlement_id:
+        # manual_add 是主播手动加歌（不核销权益），允许空 entitlement_id
+        if self.entitlement_kind and self.entitlement_kind != "manual_add" and not self.entitlement_id:
             raise ValueError("entitlement_kind 必须配套 entitlement_id")
 
 
@@ -131,7 +132,14 @@ class PerformanceRecord:
 
 @dataclass(frozen=True)
 class RequestPolicy:
-    """主播运营规则。新规则修改 → 新 rule_version，不回写历史。"""
+    """主播运营规则。新规则修改 → 新 rule_version，不回写历史。
+
+    M2.4 增点歌条件 4 字段（值 0 表示「不限」）：
+    - cooldown_seconds_per_user: 同一用户两次入队最小间隔（秒）
+    - max_queue_length: 队列总长上限（不含正在演唱）
+    - per_song_max_per_session: 单歌单场累计被点上限
+    - per_user_max_in_queue: 单用户在场已点上限
+    """
 
     rule_version: str = field(default_factory=lambda: _new_id("rule"))
     created_at: str = field(default_factory=_now_iso)
@@ -147,6 +155,11 @@ class RequestPolicy:
     fairness_max_consecutive_bumps: int = 3  # 连续插队上限，超过需主播说明
     # 默认有效期
     entitlement_session_window_hours: int = 4  # 单场权益默认有效期
+    # M2.4 点歌条件：0 = 不限
+    cooldown_seconds_per_user: int = 0       # 同用户点歌间隔（秒）
+    max_queue_length: int = 0                # 队列总长上限
+    per_song_max_per_session: int = 0         # 单歌单场被点上限
+    per_user_max_in_queue: int = 0            # 单用户在场已点上限
 
     def validate(self) -> None:
         if not self.rule_version:
@@ -157,6 +170,15 @@ class RequestPolicy:
         ):
             if n < 1:
                 raise ValueError("quota 必须 >= 1")
+        # M2.4 边界：所有 0 = 不限；非 0 必须 >= 1
+        for name, val in (
+            ("cooldown_seconds_per_user", self.cooldown_seconds_per_user),
+            ("max_queue_length", self.max_queue_length),
+            ("per_song_max_per_session", self.per_song_max_per_session),
+            ("per_user_max_in_queue", self.per_user_max_in_queue),
+        ):
+            if val < 0:
+                raise ValueError(f"{name} 必须 >= 0（0 表示不限）")
         if self.bump_default_target < 1:
             raise ValueError("bump_default_target 必须 >= 1")
         if self.fairness_max_consecutive_bumps < 1:

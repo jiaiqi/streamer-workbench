@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, List, Optional
 
@@ -134,6 +134,30 @@ class LiveService:
         return len(self._queue)
 
     @property
+    def policy(self) -> RequestPolicy:
+        """当前会话的 RequestPolicy。"""
+        return self._policy.policy
+
+    def update_policy(self, *, new_policy: RequestPolicy) -> RequestPolicy:
+        """M2.4：主播更新运营规则。
+
+        - 校验 new_policy
+        - 若与当前 policy 不同，生成新 rule_version（旧 policy 保留在 history，但当前指向 new）
+        - 返回新的 RequestPolicy（带新 rule_version）
+        - 若与当前完全相同（rule_differs=False），返回原 policy
+        """
+        with self._lock:
+            new_policy.validate()
+            if not self._policy.rule_differs(new_policy):
+                return self._policy.policy
+            new_policy = replace(new_policy, rule_version=f"rule_{uuid.uuid4().hex[:12]}")
+            new_policy.validate()
+            # 替换内部 service：旧 policy 不可变（frozen dataclass），新建一个
+            self._policy = RequestPolicyService(policy=new_policy)
+            self._session = replace(self._session, rule_version=new_policy.rule_version)
+            return new_policy
+
+    @property
     def performances(self) -> dict[str, PerformanceRecord]:
         return dict(self._performances)
 
@@ -242,10 +266,37 @@ class LiveService:
                 )
 
             # 决策
+            # M2.4 三个新统计：cooldown / per_user_in_queue / per_song_in_session
+            now = datetime.now().astimezone()
+            cooldown_remaining: float | None = None
+            per_user_in_queue = 0
+            per_song_in_session = 0
+            requester_key = requester_id or requester_name
+            for e in self._queue:
+                r = self._requests.get(e.request_id)
+                if r is None:
+                    continue
+                if (r.requester_id or r.requester_name) == requester_key:
+                    per_user_in_queue += 1
+                if r.song_id == song_id:
+                    per_song_in_session += 1
+                # 同用户最近一次入队到现在（包含刚加的）
+                if (cooldown_remaining is None
+                        and (r.requester_id or r.requester_name) == requester_key):
+                    try:
+                        last = datetime.fromisoformat(r.requested_at)
+                        elapsed = (now - last).total_seconds()
+                        cooldown_remaining = elapsed
+                    except ValueError:
+                        cooldown_remaining = None
+            # 注意：上面 loop 计算了 cooldown_remaining，但用 first match 即可
             snapshot = QueueSnapshot(
                 queue_size=len(self._queue),
                 current_song_position=self._current_position(),
                 recent_bumps_in_a_row=self._consecutive_bumps,
+                cooldown_seconds_remaining=cooldown_remaining,
+                per_user_in_queue=per_user_in_queue,
+                per_song_in_session=per_song_in_session,
             )
             decision = self._policy.decide_queue(
                 entitlement_kind=entitlement_kind, snapshot=snapshot,
