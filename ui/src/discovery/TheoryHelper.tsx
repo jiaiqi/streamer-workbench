@@ -91,7 +91,7 @@ export default function TheoryHelper({ dark, selectedKey, capo }: TheoryHelperPr
       </div>
 
       {/* 选中调的和弦提示 */}
-      {isHover && COMMON_CHORDS_BY_KEY[hoverKey ?? ""] && (
+      {hoverKey && COMMON_CHORDS_BY_KEY[hoverKey] && (
         <div className={`mt-3 p-2.5 rounded-lg text-xs ${dark ? "bg-zinc-800/60" : "bg-muted"}`}>
           <p className={`mb-1 ${dark ? "text-zinc-400" : "text-muted-foreground"}`}>
             <span className="font-semibold">{hoverKey}</span> 大调常用和弦
