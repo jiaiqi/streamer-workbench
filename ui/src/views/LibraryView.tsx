@@ -5,6 +5,7 @@ import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
 import TrashView from "../components/TrashView";
 import PlaylistImportDialog from "../components/PlaylistImportDialog";
+import ChartsBrowseDialog from "../components/ChartsBrowseDialog";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
 import { exportBySongIds, exportLibrary, importLibrary, listSnapshots, restoreSnapshot } from "../api/posters";
@@ -139,6 +140,8 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
   const [editTarget, setEditTarget] = useState<Song | "new" | null>(null);
   // M2.11 从歌单导入对话框
   const [playlistImportOpen, setPlaylistImportOpen] = useState(false);
+  // M2.12 榜单浏览对话框
+  const [chartsBrowseOpen, setChartsBrowseOpen] = useState(false);
   const [actionSong, setActionSong] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
@@ -625,6 +628,19 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
           </svg>
           从歌单导入
         </button>
+        {/* M2.12 榜单浏览 + 一键入库 */}
+        <button
+          onClick={() => setChartsBrowseOpen(true)}
+          disabled={statusFilter === "trash"}
+          data-testid="library-charts-browse-button"
+          className={`flex items-center gap-1.5 rounded-lg px-3 h-8 text-[13px] font-medium transition-colors cursor-pointer disabled:opacity-40 ${
+            dark ? "bg-zinc-800 text-zinc-300 border border-zinc-700/60 hover:bg-zinc-700" : "bg-background text-foreground border border-border hover:bg-muted"
+          }`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/>
+          </svg>
+          榜单浏览
+        </button>
         <button
           onClick={handleExportLibrary}
           data-testid="library-export-button"
@@ -964,6 +980,13 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
       <PlaylistImportDialog
         open={playlistImportOpen}
         onClose={() => setPlaylistImportOpen(false)}
+        onImported={refresh}
+      />
+
+      {/* M2.12 榜单浏览 + 一键入库 */}
+      <ChartsBrowseDialog
+        open={chartsBrowseOpen}
+        onClose={() => setChartsBrowseOpen(false)}
         onImported={refresh}
       />
 
