@@ -47,6 +47,8 @@ import LyricsPanel from "./LyricsPanel";
 import TabsPanel from "./TabsPanel";
 import PlayerBar from "./PlayerBar";
 import { Icon } from "../icons";
+import RecordingDialog from "../components/RecordingDialog";
+import { useRecordingIndicator, formatElapsed } from "../hooks/useRecording";
 
 export interface PlayViewProps {
   dark: boolean;
@@ -133,6 +135,9 @@ export default function PlayView({
   const [currentCapo, setCurrentCapo] = useState<number>(() => clampCapo(song?.capo_default ?? song?.capo ?? 0));
   // R9.4: 「+ 习惯」按钮状态
   const [saveCapoState, setSaveCapoState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // R8.2.x 录屏：顶栏红点（只读 state；Dialog 内部开完整 hook）
+  const [recordingOpen, setRecordingOpen] = useState(false);
+  const recordingIndicator = useRecordingIndicator();
 
   // 歌曲变更时重置 Capo（从 song.capo_default 取；fallback 到 song.capo）
   useEffect(() => {
@@ -520,6 +525,45 @@ export default function PlayView({
             联播 · {linkedRequesterName || "主播"}
           </span>
         )}
+        {/* R8.2.x: 录屏红点按钮（顶栏最右侧；非 Electron 模式自动隐藏） */}
+        {recordingIndicator.isElectron && (
+          <button
+            type="button"
+            data-testid="play-view-recording-button"
+            data-status={recordingIndicator.status}
+            onClick={() => setRecordingOpen(true)}
+            className={`shrink-0 rounded-lg px-2 py-1 text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              recordingIndicator.status === "recording"
+                ? dark
+                  ? "bg-red-500/20 text-red-300 hover:bg-red-500/30"
+                  : "bg-red-50 text-red-700 hover:bg-red-100"
+                : recordingIndicator.status === "paused"
+                  ? dark
+                    ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+                    : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  : dark
+                    ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    : "bg-muted text-muted-foreground hover:bg-border"
+            }`}
+            title={recordingIndicator.status === "recording" ? "正在录制" : "录屏（弹唱回放 + SRT 字幕）"}
+          >
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${
+                recordingIndicator.status === "recording" ? "bg-red-500 animate-pulse"
+                  : recordingIndicator.status === "paused" ? "bg-amber-500"
+                  : dark ? "bg-zinc-500" : "bg-muted-foreground"
+              }`}
+              aria-hidden="true"
+            />
+            {recordingIndicator.status === "recording" ? (
+              <span className="font-mono tabular-nums" data-testid="play-view-recording-timer">
+                {formatElapsed(recordingIndicator.elapsedMs)}
+              </span>
+            ) : (
+              "录制"
+            )}
+          </button>
+        )}
         {/* R9.1: 联动模式下「再唱一遍」按钮 — 重置 audio + 重置 recordSubmittedRef + 重新 play */}
         {linkedSessionId && linkedRequestId && (
           <button
@@ -624,6 +668,17 @@ export default function PlayView({
           const el = audioRef.current;
           if (el) el.currentTime = ms / 1000;
           setCurrentTimeMs(ms);
+        }}
+      />
+      {/* R8.2.x: 录屏 Dialog（内部用 useRecording；state 与顶栏共享 module store） */}
+      <RecordingDialog
+        open={recordingOpen}
+        onClose={() => setRecordingOpen(false)}
+        options={{
+          linkedSessionId: linkedSessionId ?? null,
+          linkedRequestId: linkedRequestId ?? null,
+          // 传 LRC 行供字幕事件采集
+          lines: lyricsLines ?? null,
         }}
       />
     </div>

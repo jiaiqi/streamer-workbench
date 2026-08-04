@@ -99,6 +99,29 @@ const PY_PORT = Number(process.env.STREAMER_PY_PORT) || 8765;
 const PY_HOST = process.env.STREAMER_PY_HOST || "127.0.0.1";
 const NO_SPAWN = process.env.STREAMER_NO_SPAWN === "1";
 
+// R8.2.x 录屏：解析 data_root 路径（与 Python 端 build_app_paths 一致）
+// - dev 模式：<REPO_ROOT>/data
+// - packaged：STREAMER_DATA_DIR env → 否则 platform_data_root
+function resolveDataRoot() {
+  if (process.env.STREAMER_DATA_DIR && process.env.STREAMER_DATA_DIR.trim()) {
+    return path.resolve(process.env.STREAMER_DATA_DIR);
+  }
+  if (isPackaged) {
+    // 平台默认
+    const home = require("os").homedir();
+    if (isWin) {
+      const appdata = process.env.APPDATA || path.join(home, "AppData", "Roaming");
+      return path.join(appdata, "streamer-workbench");
+    }
+    if (process.platform === "darwin") {
+      return path.join(home, "Library", "Application Support", "streamer-workbench");
+    }
+    const xdg = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+    return path.join(xdg, "streamer-workbench");
+  }
+  return path.join(REPO_ROOT, "data");
+}
+
 const VITE_URL = `http://localhost:${VITE_PORT}`;
 const PY_URL = `http://localhost:${PY_PORT}`;
 
@@ -437,6 +460,67 @@ ipcMain.handle("desktop:info", () => ({
   dataDir: process.env.STREAMER_DATA_DIR || null,
   pyUrl: PY_URL,
 }));
+
+// =====================================================================
+// R8.2.x 弹唱录屏（desktopCapturer + MediaRecorder + 1GB 自动切片 + SRT）
+// =====================================================================
+//
+// 流程：
+//   1. 渲染层 list-sources → 拿到 screen:xxx 选一个
+//   2. start：主进程拿 source → getUserMedia → MediaRecorder → 写到 data/recordings/
+//   3. 渲染层定时（每 5s）推 lrc 事件
+//   4. stop：关 recorder + 写 SRT（如果有 lrc 事件） → 返回 files
+//
+// 注：desktopCapturer 在 macOS 首次调用会触发系统级屏幕录制授权弹窗。
+// 拒绝后 getUserMedia 抛 NotAllowedError，我们捕获后返回 permission_denied。
+const { RecordingManager } = require("./recording/recorder");
+const recordingManager = new RecordingManager({
+  dataRoot: resolveDataRoot(),
+  log: (msg) => log(`recording: ${msg}`),
+  logErr: (msg) => logErr(`recording: ${msg}`),
+});
+log(`recording dataRoot: ${resolveDataRoot()}`);
+
+ipcMain.handle("recording:list-sources", async () => {
+  return recordingManager.listSources();
+});
+
+ipcMain.handle("recording:start", async (_evt, opts) => {
+  return recordingManager.start(opts || {});
+});
+
+ipcMain.handle("recording:pause", async (_evt, id) => {
+  return recordingManager.pause(id);
+});
+
+ipcMain.handle("recording:resume", async (_evt, id) => {
+  return recordingManager.resume(id);
+});
+
+ipcMain.handle("recording:append-lrc", async (_evt, params) => {
+  return recordingManager.appendLrc(params?.id, params?.events || []);
+});
+
+ipcMain.handle("recording:stop", async (_evt, id) => {
+  return recordingManager.stop(id);
+});
+
+ipcMain.handle("recording:get-state", async (_evt, id) => {
+  if (!id) return recordingManager.getActive();
+  return recordingManager.getState(id);
+});
+
+ipcMain.handle("recording:list-files", async (_evt, sessionId) => {
+  return recordingManager.listFiles(sessionId);
+});
+
+ipcMain.handle("recording:list-sessions", async () => {
+  return recordingManager.listAllSessions();
+});
+
+ipcMain.handle("recording:delete", async (_evt, sessionId) => {
+  return recordingManager.deleteFolder(sessionId);
+});
 
 // =====================================================================
 // 系统集成（P0 桌面平台特性首批：媒体播控 / 系统通知 / Dock Badge）
