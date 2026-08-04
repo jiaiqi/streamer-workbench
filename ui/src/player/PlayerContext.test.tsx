@@ -52,10 +52,14 @@ describe("PlayerContext", () => {
     expect(result.current.currentTimeMs).toBe(12345);
   });
 
-  it("Provider 包裹外的 usePlayer 抛错", () => {
-    expect(() => {
-      renderHook(() => usePlayer());
-    }).toThrow(/usePlayer must be used within PlayerProvider/);
+  it("Provider 包裹外的 usePlayer 降级为 no-op（不抛）", () => {
+    // P0 桌面集成后变更：usePlayer 在无 Provider 时返回 NOOP_PLAYER，
+    // 让 PlayView 等单测不必强制包 Provider。生产环境 App 顶层包了 Provider。
+    const { result } = renderHook(() => usePlayer());
+    expect(result.current.currentSongId).toBeNull();
+    expect(result.current.isPlaying).toBe(false);
+    // setCurrent 等是 no-op，不抛
+    expect(() => result.current.setCurrent("s1")).not.toThrow();
   });
 
   it("Provider 包裹下：多个组件共享同一 state", () => {

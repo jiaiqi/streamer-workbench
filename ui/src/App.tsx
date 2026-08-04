@@ -36,6 +36,7 @@ import { openQuickView, isElectron } from "./electron-bridge";
 import { useWorkspaceState } from "./workspace/useWorkspaceState";
 import { PlayerProvider, usePlayer, type PlayerMode } from "./player/PlayerContext";
 import MiniPlayer from "./components/MiniPlayer";
+import { useSystemIntegration } from "./hooks/useSystemIntegration";
 import { ToastProvider, useToast } from "./components/Toast";
 import ShortcutsPanel from "./components/ShortcutsPanel";
 import Onboarding, { resetOnboarded } from "./components/Onboarding";
@@ -319,6 +320,19 @@ function AppInner() {
       : null,
     [allSongs, player.currentSongId],
   );
+  const currentArtist = useMemo(
+    () => player.currentSongId
+      ? allSongs.find(s => s.id === player.currentSongId)?.artists.join(" / ") ?? null
+      : null,
+    [allSongs, player.currentSongId],
+  );
+  /* P0 桌面平台特性首批：订阅 PlayerContext 推主进程，菜单/通知/Dock badge 自动联动 */
+  useSystemIntegration({
+    currentTitle,
+    currentArtist,
+    notifySongChanged: true,
+    notifyQueueStarted: false,  // 由 LiveView 在首次有队列时主动置 true
+  });
   const handleMiniPlayerOpen = useCallback(() => setView("play"), []);
   const handleMiniPlayerClose = useCallback(() => {
     // 清 PlayerContext + 退出视图态：和 handlePlayBack 一致，但额外清 context

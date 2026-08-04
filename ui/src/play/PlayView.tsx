@@ -38,6 +38,7 @@
 ///   - 持久化：PATCH /api/songs/{id} 调 EDITABLE_FIELDS 白名单（capo_options/capo_default）
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api/client";
+import { usePlayer } from "../player/PlayerContext";
 import type { Song, SongsData } from "../types";
 import { parseLrc, distributePlainLyrics, findActiveLine } from "./lrc";
 import { parseChordpro } from "./chordpro";
@@ -207,6 +208,8 @@ export default function PlayView({
 
   // R8.1: audio 元素引用
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // P0 桌面平台特性：与 PlayerContext 双向同步 — 让外部播控（菜单/通知）能真正控制 audio
+  const playerCtx = usePlayer();
 
   // R8.1: 上报 playback 事件的辅助（fire-and-forget；失败静默）
   const reportEvent = useCallback((type: string, positionMs: number, durationMs: number = 0) => {
@@ -258,14 +261,17 @@ export default function PlayView({
     };
     const onPlay = () => {
       setIsPlaying(true);
+      playerCtx.setPlaying(true);
       reportEvent("playback_started", 0);
     };
     const onPause = () => {
       setIsPlaying(false);
+      playerCtx.setPlaying(false);
       reportEvent("playback_paused", el.currentTime * 1000);
     };
     const onEnded = () => {
       setIsPlaying(false);
+      playerCtx.setPlaying(false);
       reportEvent("playback_completed", el.duration * 1000, el.duration * 1000);
       // R8.2: 联动模式 — 弹唱结束自动标记「已唱」+ 回到 LiveView
       if (linkedSessionId && linkedRequestId) {
@@ -285,7 +291,23 @@ export default function PlayView({
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
     };
-  }, [reportEvent, markLinkedSung, onBack, linkedSessionId, linkedRequestId]);
+  }, [reportEvent, markLinkedSung, onBack, linkedSessionId, linkedRequestId, playerCtx]);
+
+  // P0 系统集成：PlayerContext 翻转 → audio 跟随
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playerCtx.isPlaying && el.paused) {
+      void el.play().catch(() => { /* autoplay blocked: 用户后续会点 play */ });
+    } else if (!playerCtx.isPlaying && !el.paused) {
+      el.pause();
+    }
+  }, [playerCtx.isPlaying]);
+
+  // P0 系统集成：timeupdate → 同步 currentTimeMs 到 PlayerContext（让主菜单 + 通知用）
+  useEffect(() => {
+    playerCtx.setCurrentTime(currentTimeMs);
+  }, [currentTimeMs, playerCtx]);
 
   // 估算总时长：优先 song.audio_duration_ms；否则用 audio 实际 duration；否则歌词行数 × 8 秒
   const [durationMs, setDurationMs] = useState(0);

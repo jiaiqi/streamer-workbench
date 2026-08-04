@@ -58,6 +58,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
 export function usePlayer(): PlayerState & PlayerActions {
   const ctx = useContext(PlayerContext);
-  if (!ctx) throw new Error("usePlayer must be used within PlayerProvider");
-  return ctx;
+  if (ctx) return ctx;
+  // 未包 PlayerProvider 的场景（如 PlayView 单测）→ 返回 no-op 默认值，
+  // 避免把 Provider 强绑到每个使用点。生产环境 App 顶层已包，这里只是降级。
+  // 注意：此分支下 setCurrent 等不会真正驱动全局状态。
+  return NOOP_PLAYER;
 }
+
+const NOOP_PLAYER: PlayerState & PlayerActions = {
+  currentSongId: null,
+  mode: "browse",
+  isPlaying: false,
+  currentTimeMs: 0,
+  setCurrent: () => {},
+  setMode: () => {},
+  setPlaying: () => {},
+  setCurrentTime: () => {},
+};

@@ -40,7 +40,17 @@
 //   - 端口被外部占用 → 复用
 //   - 端口空闲 + spawn 成功 → 启动后 quit 时双保险 kill
 //   - 启动后子进程异常退出 → 弹错并退出 Electron
-const { app, BrowserWindow, Menu, dialog, shell, ipcMain, protocol } = require("electron");
+//
+// 系统集成（P0 桌面平台特性首批 — MediaSession 替身 / 系统通知 / Dock Badge）：
+//   - 渲染层订阅 PlayerContext（isPlaying / currentSongId / currentTimeMs / duration），
+//     通过 IPC `player:state` 推给主进程
+//   - 主进程 macOS 平台：
+//       · `dock.setBadge(queueCount)`     - Dock 图标显示待唱数
+//       · `new Notification(...)`         - 切歌 / 直播开始时弹系统通知
+//       · 菜单栏「播控」菜单（上一首/暂停-继续/下一首） - 不开窗口也能控
+//   - 菜单点击 / 系统通知回调通过 `mainWin.webContents.send("player:control", cmd)` 派回渲染层
+//   - 其他平台 (win/linux) 仅保留菜单 + IPC，dock / notification no-op，不崩
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain, protocol, Notification } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -276,6 +286,18 @@ function buildMenu() {
         }]),
       ],
     },
+    {
+      id: "player-controls",
+      label: "播控",
+      submenu: [
+        { label: "⏸ 暂停", enabled: false, click: () => pushPlayerControl("pause") },
+        { label: "▶ 继续", enabled: false, click: () => pushPlayerControl("play") },
+        { label: "⏮ 上一首", enabled: false, click: () => pushPlayerControl("prev") },
+        { label: "⏭ 下一首", enabled: false, click: () => pushPlayerControl("next") },
+        { type: "separator" },
+        { label: "📋 待唱队列（空）", enabled: false },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -410,6 +432,195 @@ ipcMain.handle("desktop:info", () => ({
   dataDir: process.env.STREAMER_DATA_DIR || null,
   pyUrl: PY_URL,
 }));
+
+// =====================================================================
+// 系统集成（P0 桌面平台特性首批：媒体播控 / 系统通知 / Dock Badge）
+// =====================================================================
+//
+// 设计要点：
+// 1. 渲染层是唯一真相源（PlayerContext + LiveView 队列），主进程只做"窗口外的投影"
+// 2. 渲染层订阅 PlayerContext 后批量推 { isPlaying, currentSongId, currentTimeMs,
+//    durationMs, queueCount } → 主进程；用 `send` 而不是 `invoke`，避免阻塞渲染
+// 3. 主进程菜单/通知点击 → `mainWin.webContents.send("player:control", cmd)` 派回渲染
+// 4. 菜单不依赖渲染层状态实时刷新（避免每帧 IPC），仅 enable/disable
+// 5. 通知去重：同一首歌 / 同一队列变更 30s 内只发一次，避免刷屏
+//
+// 平台差异：
+// - macOS：dock badge + Notification + 菜单
+// - Windows / Linux：仅菜单 + Notification（无 dock badge，自动 no-op）
+//
+// 状态存储：
+const playerState = {
+  isPlaying: false,
+  currentSongId: null,
+  currentTitle: null,
+  currentArtist: null,
+  currentTimeMs: 0,
+  durationMs: 0,
+  queueCount: 0,         // 待唱 / 队列剩余
+  hasSong: false,        // 是否有当前歌（用于菜单 enable）
+};
+let lastNotificationKey = null;
+let lastNotificationAt = 0;
+
+function pushPlayerControl(cmd) {
+  // 菜单 / 通知 / 后续可能的全局快捷键都通过这条通道派回渲染层
+  const target = mainWin && !mainWin.isDestroyed() ? mainWin : BrowserWindow.getAllWindows()[0];
+  if (!target || target.isDestroyed()) return;
+  target.webContents.send("player:control", cmd);
+  log(`player:control → ${cmd}`);
+}
+
+function refreshPlayerMenu() {
+  // 仅重建播控子菜单（不重建整个 app menu，避免覆盖用户正在交互的菜单项）
+  const hasSong = !!playerState.hasSong;
+  const isPlaying = !!playerState.isPlaying;
+  const submenu = Menu.buildFromTemplate([
+    {
+      label: "⏮ 上一首",
+      enabled: hasSong,
+      click: () => pushPlayerControl("prev"),
+    },
+    {
+      label: isPlaying ? "⏸ 暂停" : "▶ 继续",
+      enabled: hasSong,
+      click: () => pushPlayerControl(isPlaying ? "pause" : "play"),
+    },
+    {
+      label: "⏭ 下一首",
+      enabled: hasSong,
+      click: () => pushPlayerControl("next"),
+    },
+    { type: "separator" },
+    {
+      label: playerState.queueCount > 0
+        ? `📋 待唱 ${playerState.queueCount} 首`
+        : "📋 待唱队列（空）",
+      enabled: false,  // 信息性，不响应点击（点 dock badge 也只是切到主窗口）
+    },
+  ]);
+  const menu = Menu.getApplicationMenu();
+  if (menu) {
+    const item = menu.getMenuItemById("player-controls");
+    if (item) {
+      item.submenu = submenu;
+      // Electron 自动同步；无需显式重 build
+    }
+  }
+}
+
+function applyDockBadge() {
+  if (process.platform !== "darwin" || !app.dock) return;
+  const n = playerState.queueCount;
+  try {
+    app.dock.setBadge(n > 0 ? String(n) : "");
+  } catch (err) {
+    logErr("dock.setBadge:", err.message);
+  }
+}
+
+function showSystemNotification(opts) {
+  // { title, body, tag? }
+  if (!Notification.isSupported || !Notification.isSupported()) {
+    log(`notification skipped (unsupported): ${opts.title}`);
+    return;
+  }
+  // 30s 内同 tag 去重
+  const now = Date.now();
+  const key = `${opts.tag || "default"}::${opts.title}::${opts.body}`;
+  if (key === lastNotificationKey && now - lastNotificationAt < 30_000) {
+    log(`notification dedup: ${opts.title}`);
+    return;
+  }
+  lastNotificationKey = key;
+  lastNotificationAt = now;
+  try {
+    const n = new Notification({
+      title: opts.title,
+      body: opts.body || "",
+      silent: false,
+    });
+    n.on("click", () => {
+      // 点击通知 → 切到主窗口
+      const target = mainWin && !mainWin.isDestroyed() ? mainWin : BrowserWindow.getAllWindows()[0];
+      if (target) {
+        if (target.isMinimized()) target.restore();
+        target.show();
+        target.focus();
+      }
+    });
+    if (opts.tag === "song_changed") {
+      n.on("action", (_e, idx) => {
+        if (idx === "0") pushPlayerControl("pause");
+        else if (idx === "1") pushPlayerControl("next");
+      });
+    }
+    n.show();
+    log(`notification: ${opts.title}`);
+  } catch (err) {
+    logErr("notification.show:", err.message);
+  }
+}
+
+// IPC：渲染层 → 主进程（推 state）
+ipcMain.on("player:state", (_evt, state) => {
+  if (!state || typeof state !== "object") return;
+  const prev = { ...playerState };
+  Object.assign(playerState, {
+    isPlaying: !!state.isPlaying,
+    currentSongId: state.currentSongId ?? null,
+    currentTitle: state.currentTitle ?? null,
+    currentArtist: state.currentArtist ?? null,
+    currentTimeMs: Number(state.currentTimeMs) || 0,
+    durationMs: Number(state.durationMs) || 0,
+    queueCount: Number(state.queueCount) || 0,
+    hasSong: !!state.currentSongId,
+  });
+  // 菜单状态变化时刷新
+  if (prev.isPlaying !== playerState.isPlaying || prev.hasSong !== playerState.hasSong) {
+    refreshPlayerMenu();
+  }
+  // Dock badge 变化
+  if (prev.queueCount !== playerState.queueCount) {
+    applyDockBadge();
+  }
+  // 切歌通知（song id 变化 + 之前有歌 → 切了）
+  if (
+    state.notifySongChanged === true &&
+    prev.currentSongId &&
+    playerState.currentSongId &&
+    prev.currentSongId !== playerState.currentSongId
+  ) {
+    showSystemNotification({
+      tag: "song_changed",
+      title: `🎤 下一首：${playerState.currentTitle || "未知"}`,
+      body: playerState.currentArtist ? `歌手：${playerState.currentArtist}` : "",
+    });
+  }
+  // 直播开始通知（队列从 0 → >0 时，且首次）
+  if (
+    prev.queueCount === 0 && playerState.queueCount > 0 && state.notifyQueueStarted === true
+  ) {
+    showSystemNotification({
+      tag: "queue_started",
+      title: "📡 直播已开",
+      body: `待唱 ${playerState.queueCount} 首`,
+    });
+  }
+});
+
+// IPC：渲染层 → 主进程（手动触发通知，供 UI 上"提醒"按钮使用）
+ipcMain.handle("player:notify", async (_evt, opts) => {
+  showSystemNotification({
+    tag: opts?.tag || "manual",
+    title: opts?.title || "主播工作台",
+    body: opts?.body || "",
+  });
+  return { ok: true };
+});
+
+// IPC：测试用 — 当前 state 快照（vitest 集水）
+ipcMain.handle("player:getState", () => ({ ...playerState }));
 
 app.whenReady().then(async () => {
   // packaged mode 每次启动生成新 session token

@@ -351,6 +351,12 @@ export default function LiveView({
       .map(asQueueEntry)
       .filter((e): e is QueueEntry => e !== null)
       .sort((a, b) => a.position - b.position);
+
+  // P0 桌面平台特性：把待唱数推到 window 供主进程 dock badge
+  useEffect(() => {
+    window.__liveQueueCount = queueEntries.length;
+    window.dispatchEvent(new Event("live:queueCount"));
+  }, [queueEntries.length]);
   }, [detail]);
 
   const performances = useMemo<PerformanceRecord[]>(() => {
