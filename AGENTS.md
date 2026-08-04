@@ -35,6 +35,70 @@
 
 ---
 
+## 产品核心约束（不可妥协）
+
+> **铁律级**：本项目是"主播工作台 + 工具箱 + **纯离线优先**"。除显式标注"在线可选"的功能外，其他一切**必须能离线工作**。
+
+### 离线可用的功能域（默认范围）
+
+下列所有功能在 `navigator.onLine === false` / 网络断开 / 飞行模式下**必须 100% 工作**，断网时不应出现任何"网络不可用"提示、不可用遮罩或能力降级：
+
+- 曲库 CRUD：新增、编辑、删除、状态切换（draft/active/trash）
+- 曲库查询、排序、过滤、批量操作（L2.1）
+- 曲库导入导出（L2.3，本地 JSON 文件）
+- 自动快照 + 恢复（M2.3，本地 `data/backups/songs/`）
+- 加密备份包（M2.1，本地 `.songworkbench` 文件）
+- 海报工作台：创建 / 预览 / 渲染 PNG / 调参 / 切主题 / 切画布
+- 海报真保存（dialog:saveFile，原生 save 对话框，零网络）
+- 5 套布局：grid-wrap / magazine-flow / live-set / learning-report / fullscreen
+- 8 套主题（含月夜星河）— 全部本地字体 + 本地背景图
+- 直播会话（LiveSession）：创建 / 入队 / 标记已唱 / 关闭 / 复盘海报
+- 弹唱播放器（PlayView）：本地音频文件、ChordPro 曲谱、本地 LRC 歌词、Capo 转调、R9 全套吉他手特化
+- 速查子窗口（QuickView，Cmd+Shift+U）
+- 统计页（StatsView）：事件流、洞察 tab、点歌热度、最近演唱
+- 命令面板（Cmd+K）、全局快捷键、Onboarding、状态栏、帮助中心
+- M2.13 系统集成：播控菜单、系统通知、Dock Badge、LiveView 队列数联动
+- SettingsView：output_dir / default_canvas / default_theme / font_path / 备份设置 / 外观
+
+### 明确**在线可选**的功能域（不是离线故障，是设计如此）
+
+只有下列功能允许依赖外网，**且必须支持离线降级**（关掉 / 隐藏 / 提示 + 不阻塞）：
+
+| 功能 | 离线时行为 |
+|---|---|
+| M2.8/2.10 在线元数据（搜索、歌曲详情、艺人、专辑、歌单、歌词、榜单、相似） | 按钮 disabled（SongEditDialog「在线补全」）/ 列表空 + 提示 |
+| M2.11 公开歌单导入 | 「预览」按钮 disabled |
+| M2.12 榜单浏览 | 「榜单浏览」按钮 disabled / 列表显示"离线状态无法浏览" |
+| R8.2.x 录屏（如未来引入） | 不影响弹唱播放；录屏按钮 disabled |
+
+**重要**：在线元数据**不允许**反向写入到本地曲库时变成"必填"。Song 模型的 `title / artists / status / notes / tabs / audio_*` 等所有字段在离线时**必须能手工填完**。在线元数据只作为可选的"快速补全"加速器。
+
+### 离线检测与降级约定
+
+- 在线状态来源：`navigator.onLine`（L1.5 OnlineStatusBadge）
+- 全局 hook：`getOnlineState()` 同步读 + 监听 `online/offline` 事件实时更新
+- 渲染层按钮三态 disabled：`getOnlineState() === "online" && !saving && (title.trim() !== "")`
+- 后端 metadata 端点失败时：M2.6 `useApiError().runWithToast(fn, label)` 弹 toast + 行内错误双通道
+- 错误是"网络不可用"时用 `MetadataUnavailable` 错误三元（MetadataNotFound / MetadataUnavailable / MetadataRateLimited），不抛网络异常
+
+### CI 质量门要求
+
+任何新 PR 必须保证：
+1. 关闭网络（mock `navigator.onLine = false`）后所有"离线可用"功能的核心流程仍能跑通
+2. 浏览器开发模式（`cd ui && npm run dev`，无后端）打开后所有非元数据功能可用
+3. 引入新的在线依赖必须明确文档化"为什么离线不行 / 离线降级是什么"
+
+### 违反约束的判定
+
+如果你发现某功能：
+- 离线时直接报红 / 弹"网络错误" / 渲染失败
+- 把"在线可选数据"反向变成"必填"（如在线补全的封面 URL 没拉到导致保存失败）
+- 静默上传本地数据到云端而没明文用户授权
+
+那它就违反本节，**必须**修。改不动就先从"离线可用功能域"剔除该功能到"在线可选"，并在路线图里标 ✅降级。
+
+---
+
 ## 当前活跃规格与状态
 
 ### 规格文档

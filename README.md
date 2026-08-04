@@ -2,6 +2,15 @@
 
 面向音乐主播的内容与直播运营工作台。日常面管歌曲与学歌，创作面做海报与预设，直播面支持速查与点歌。**先可用、后惊艳**，前期保证拓展性。
 
+## 🚨 产品核心约束：纯离线优先
+
+> **除显式"在线可选"功能外，其他一切必须能离线工作。**
+
+- **离线可用**（100% 必须）：曲库 CRUD/批量/导入导出/快照/加密备份、海报创建渲染保存（5 套布局 8 套主题）、直播会话、弹唱播放器（PlayView 走本地音频 + ChordPro + LRC）、速查子窗口、统计、命令面板、播控菜单/通知/Dock Badge、SettingsView
+- **在线可选 + 必须离线降级**：M2.8–2.12 在线元数据 / 公开歌单导入 / 榜单浏览（M2.9 按钮三态 disabled + L1.5 OnlineStatusBadge 联动；M2.6 useApiError toast 双通道）
+- 禁止：在线补全数据变成"必填"、静默上传本地数据、离线时弹"网络不可用"遮罩
+- 详细规则见 `AGENTS.md`「产品核心约束（不可妥协）」章节
+
 > **进度快照（2026-08-04 下午）**：R0–R8 + R4 Runtime v1 + R9 吉他手特化首批 + M9.6b 5 秒撤销 toast + M0 蓝图 v0.1 首批 + M1 本地最小可用首批 + M2.1 加密备份 AES-256 真加密 + L1 体验打磨全 7 子项 + M2.5 综合洞察 + M2.6 错误全局 toast 化两批 + L2.1 批量操作第一批 + L2.2 批量导出 + L2.3 曲库导入导出 + M2.3 自动快照 + M2.7 在线元数据层骨架 + M2.8 NeteaseProvider 第一实现 + M2.9 LibraryView 在线补全 UI + M2.10 QQProvider 多源回退 + **M2.11 网易云/QQ 公开歌单导入**（PlaylistImportDialog + LibraryView 工具栏新按钮 + 16 vitest）+ **M2.12 榜单浏览 + 一键入库**（ChartsBrowseDialog + LibraryView 工具栏新按钮 + 12 vitest）+ **M2.13 macOS 桌面平台特性首批**（主进程播控菜单 + 系统通知 + Dock Badge 队列数 + PlayView ⇄ PlayerContext 双向同步；useSystemIntegration hook + 7 vitest；零新依赖）+ **M2.14 R3 回归 hotfix**（TheoryHelper isHover 块作用域 ReferenceError — 点学歌管理整个页面空白；改用 `hoverKey && COMMON_CHORDS_BY_KEY[hoverKey]` 直接判断 + 5 vitest 回归覆盖）全部收口。待推：R8.2.x 弹唱录屏 / M2.2 WebDAV 同步 / M2.4 点歌条件 / 海报 Share Sheet 分享 / Quick Look 预览 / M3 SQLite FTS5 / M4 Tauri 2 + PWA / R4 Runtime v2 / R7 桌面正式发布门。
 >
 > **测试基线**：Python 759 passed / 1 skipped（56 个测试文件）+ vitest 588/588（52 个测试文件）+ node:test 16/16 + 5 套金标准 35/35（grid-wrap 16 + magazine-flow 5 + live-set 5 + learning-report 5 + fullscreen-flow 4）；TSC 干净。
