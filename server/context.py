@@ -33,3 +33,4 @@ class AppContext:
     discovery_service: Any = None       # R3 学歌发现增量
     stats_service: Any = None           # R4 统计聚合增量
     metadata_router: Any = None         # M2.7+ 在线元数据 Router（multi-provider）
+    webdav_service: Any = None          # M2.2 WebDAV 同步服务

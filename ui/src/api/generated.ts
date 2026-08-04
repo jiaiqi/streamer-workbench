@@ -1,6 +1,11 @@
 // 此文件由 tools/generate_api_types.py 生成，请勿手工修改。
 // OpenAPI JSON 是临时中间产物；本文件随源码提交。
 
+export interface AlbumRequest {
+  "album_id": string;
+  "preferred_provider"?: string | null;
+}
+
 export interface AnalyzeQuery {
   "canvas_id"?: string;
   "grouping"?: string;
@@ -8,6 +13,11 @@ export interface AnalyzeQuery {
   "poster_id"?: string | null;
   "song_ids"?: Array<string> | null;
   "theme_id"?: string;
+}
+
+export interface ArtistRequest {
+  "artist_id": string;
+  "preferred_provider"?: string | null;
 }
 
 export interface AudioItemResponse {
@@ -51,6 +61,10 @@ export interface Body_api_audio_upload_api_songs__identity__audio_post {
 export interface Body_api_tab_upload_api_songs__identity__tabs_post {
   "file": string;
   [key: string]: unknown;
+}
+
+export interface ChartsRequest {
+  "preferred_provider"?: string | null;
 }
 
 export interface DataDirInspectRequest {
@@ -170,6 +184,31 @@ export interface ExportBatchResponse {
   "job_id": string;
   "ok"?: boolean;
   "total": number;
+  [key: string]: unknown;
+}
+
+export interface ExportByIdsFileResponse {
+  "duration_ms": number | null;
+  "filename": string;
+  "path": string;
+  "song_id": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface ExportByIdsRequest {
+  "avoid"?: boolean;
+  "canvas"?: string;
+  "layout"?: string;
+  "song_ids": Array<string>;
+  "theme": string;
+}
+
+export interface ExportByIdsResponse {
+  "files": Array<ExportByIdsFileResponse>;
+  "ok"?: boolean;
+  "total": number;
+  "total_ms": number | null;
   [key: string]: unknown;
 }
 
@@ -363,6 +402,90 @@ export interface LiveSessionSummary {
   [key: string]: unknown;
 }
 
+export interface LyricRequest {
+  "preferred_provider"?: string | null;
+  "song_id": string;
+}
+
+export interface MetadataAlbumResponse {
+  "album_id": string;
+  "artist": string;
+  "cover_url"?: string | null;
+  "release_date"?: string | null;
+  "songs"?: Array<MetadataHitResponse>;
+  "source": string;
+  "title": string;
+}
+
+export interface MetadataArtistResponse {
+  "artist_id": string;
+  "avatar_url"?: string | null;
+  "bio"?: string | null;
+  "name": string;
+  "songs"?: Array<MetadataHitResponse>;
+  "source": string;
+}
+
+export interface MetadataChartResponse {
+  "chart_id": string;
+  "cover_url"?: string | null;
+  "description"?: string | null;
+  "source": string;
+  "title": string;
+}
+
+export interface MetadataHitResponse {
+  "album"?: string | null;
+  "artist": string;
+  "cover_url"?: string | null;
+  "duration_ms"?: number | null;
+  "song_id": string;
+  "source": string;
+  "title": string;
+}
+
+export interface MetadataLyricResponse {
+  "lrc_text": string;
+  "song_id": string;
+  "source": string;
+  "translated_lrc"?: string | null;
+}
+
+export interface MetadataPlaylistResponse {
+  "cover_url"?: string | null;
+  "creator"?: string | null;
+  "description"?: string | null;
+  "play_count"?: number | null;
+  "playlist_id": string;
+  "songs"?: Array<MetadataHitResponse>;
+  "source": string;
+  "title": string;
+}
+
+export interface MetadataProviderListResponse {
+  "providers": Array<string>;
+}
+
+export interface MetadataSearchResponse {
+  "items"?: Array<MetadataHitResponse>;
+  "keyword": string;
+  "provider"?: string | null;
+  "type": string;
+}
+
+export interface MetadataSongDetailResponse {
+  "album"?: string | null;
+  "album_id"?: string | null;
+  "artist": string;
+  "artist_id"?: string | null;
+  "bpm"?: number | null;
+  "cover_url"?: string | null;
+  "duration_ms"?: number;
+  "song_id": string;
+  "source": string;
+  "title": string;
+}
+
 export interface OkResponse {
   "ok"?: boolean;
   [key: string]: unknown;
@@ -414,6 +537,11 @@ export interface PlaybackEventResponse {
   "ok"?: boolean;
   "type": string;
   [key: string]: unknown;
+}
+
+export interface PlaylistRequest {
+  "playlist_id": string;
+  "preferred_provider"?: string | null;
 }
 
 export interface PosterExportSettings {
@@ -664,6 +792,30 @@ export interface RenderDocumentResponse {
   [key: string]: unknown;
 }
 
+export interface RequestPolicyResponse {
+  "bump_default_target": number;
+  "bump_requires_broadcaster": boolean;
+  "cooldown_seconds_per_user"?: number;
+  "created_at": string;
+  "entitlement_session_window_hours": number;
+  "fairness_max_consecutive_bumps": number;
+  "fan_join_session_quota": number;
+  "gift_exchange_quota": number;
+  "high_value_gift_names"?: Array<string>;
+  "max_queue_length"?: number;
+  "member_daily_quota": number;
+  "per_song_max_per_session"?: number;
+  "per_user_max_in_queue"?: number;
+  "rule_version": string;
+}
+
+export interface RequestPolicyUpdateRequest {
+  "cooldown_seconds_per_user"?: number;
+  "max_queue_length"?: number;
+  "per_song_max_per_session"?: number;
+  "per_user_max_in_queue"?: number;
+}
+
 export interface RequestedSongItemResponse {
   "artist"?: string;
   "count"?: number;
@@ -671,6 +823,12 @@ export interface RequestedSongItemResponse {
   "song_id": string;
   "title": string;
   [key: string]: unknown;
+}
+
+export interface SearchRequest {
+  "keyword": string;
+  "limit"?: number;
+  "type"?: string;
 }
 
 export interface SettingsResponse {
@@ -699,6 +857,34 @@ export interface SettingsUpdateRequest {
 export interface SettingsUpdateResponse {
   "ok"?: boolean;
   "settings": SettingsResponse;
+  [key: string]: unknown;
+}
+
+export interface SimilarRequest {
+  "preferred_provider"?: string | null;
+  "song_id": string;
+}
+
+export interface SnapshotItemResponse {
+  "filename": string;
+  "modified_at": string;
+  "size_bytes": number;
+  [key: string]: unknown;
+}
+
+export interface SnapshotListResponse {
+  "items": Array<SnapshotItemResponse>;
+  "total": number;
+  [key: string]: unknown;
+}
+
+export interface SnapshotRestoreRequest {
+  "filename": string;
+}
+
+export interface SnapshotRestoreResponse {
+  "filename": string;
+  "ok"?: boolean;
   [key: string]: unknown;
 }
 
@@ -756,6 +942,29 @@ export interface SongEditableFields {
   "title"?: unknown | null;
 }
 
+export interface SongExportResponse {
+  "exported_at": string;
+  "schema_version": number;
+  "songs": Array<Record<string, unknown>>;
+  "version": number;
+  [key: string]: unknown;
+}
+
+export interface SongImportRequest {
+  "mode"?: string;
+  "songs": Array<SongCreateRequest>;
+}
+
+export interface SongImportResult {
+  "active": number;
+  "added": number;
+  "draft": number;
+  "errors": Array<string>;
+  "ok"?: boolean;
+  "skipped": number;
+  [key: string]: unknown;
+}
+
 export interface SongLegacyDeleteResponse {
   "active": number;
   "draft": number;
@@ -803,6 +1012,11 @@ export interface SongQueryRequest {
   "sort_by"?: string;
   "status"?: string;
   "unresolved"?: Array<string>;
+}
+
+export interface SongRequest {
+  "preferred_provider"?: string | null;
+  "song_id": string;
 }
 
 export interface SongResponse {
@@ -881,71 +1095,75 @@ export interface ValidationError {
   [key: string]: unknown;
 }
 
-// L2.2 批量按 ID 导出
-export interface ExportByIdsFileResponse {
-  "duration_ms": number | null;
-  "filename": string;
-  "path": string;
-  "song_id": string;
-  "title": string;
-  [key: string]: unknown;
+export interface WebDavClearRequest {
+  "master_password": string;
 }
 
-export interface ExportByIdsResponse {
-  "files": Array<ExportByIdsFileResponse>;
+export interface WebDavConfigResponse {
+  "configured": boolean;
+  "needs_unlock"?: boolean;
+  "remote_dir"?: string;
+  "updated_at"?: string;
+  "url"?: string;
+  "username"?: string;
+}
+
+export interface WebDavConfigSaveRequest {
+  "master_password": string;
+  "password"?: string;
+  "remote_dir": string;
+  "url": string;
+  "username"?: string;
+}
+
+export interface WebDavConfigSaveResponse {
   "ok"?: boolean;
-  "total": number;
-  "total_ms": number | null;
+  "updated_at": string;
   [key: string]: unknown;
 }
 
-// L2.3 导入导出
-export interface SongImportRequestBody {
-  "mode": "merge" | "replace";
-  "songs": Array<{
-    "title": string;
-    "artists"?: string[];
-    "key"?: string;
-    "capo"?: number | null;
-    "difficulty"?: string;
-    "tags"?: string[];
-    "pinyin"?: string;
-    "lyrics_lrc"?: string;
-    "lyrics_plain"?: string;
-    "notes"?: string;
-    "section"?: number | null;
-    "status"?: "active" | "draft";
-  }>;
+export interface WebDavMasterRequest {
+  "master_password": string;
+  "remote_name"?: string | null;
 }
 
-export interface SongImportResultResponse {
+export interface WebDavPullResponse {
+  "manifest"?: Record<string, unknown>;
   "ok"?: boolean;
-  "added": number;
-  "skipped": number;
-  "errors": string[];
-  "active": number;
-  "draft": number;
+  "remote_name": string;
   [key: string]: unknown;
 }
 
-export interface SongExportResponse {
-  "schema_version": number;
-  "version": number;
-  "songs": Array<Record<string, unknown>>;
-  "exported_at": string;
+export interface WebDavPushResponse {
+  "file_count": number;
+  "ok"?: boolean;
+  "remote_name": string;
+  "remote_path": string;
+  "total_bytes": number;
   [key: string]: unknown;
 }
 
-// L2.3 快照
-export interface SnapshotItem {
-  "filename": string;
-  "size_bytes": number;
-  "modified_at": string;
+export interface WebDavRemoteFile {
+  "href": string;
+  "last_modified": string;
+  "name": string;
+  "size": number;
+}
+
+export interface WebDavRemoteListResponse {
+  "files"?: Array<WebDavRemoteFile>;
   [key: string]: unknown;
 }
 
-export interface SnapshotListResponse {
-  "items": Array<SnapshotItem>;
-  "total": number;
+export interface WebDavTestRequest {
+  "password"?: string;
+  "url": string;
+  "username"?: string;
+}
+
+export interface WebDavTestResponse {
+  "message": string;
+  "ok": boolean;
+  "status"?: number;
   [key: string]: unknown;
 }

@@ -892,3 +892,83 @@ class RequestPolicyUpdateRequest(StrictRequest):
     max_queue_length: int = Field(default=0, ge=0)
     per_song_max_per_session: int = Field(default=0, ge=0)
     per_user_max_in_queue: int = Field(default=0, ge=0)
+
+
+# ── M2.2 WebDAV 同步 ─────────────────────────────────────────────
+
+class WebDavConfigResponse(BaseModel):
+    """GET /api/backup/webdav/config - 脱敏返回的当前配置。"""
+    model_config = ConfigDict(extra="forbid")
+    configured: bool
+    url: str = ""
+    username: str = ""
+    remote_dir: str = ""
+    updated_at: str = ""
+    needs_unlock: bool = False
+
+
+class WebDavConfigSaveRequest(StrictRequest):
+    """PUT /api/backup/webdav/config - 保存/更新 WebDAV 配置。
+
+    master_password：settings 主密码（用于加密）。
+    password：WebDAV 服务密码（明文传输 + 服务端加密存）。
+    """
+    url: str
+    username: str = ""
+    password: str = ""
+    remote_dir: str
+    master_password: str
+
+
+class WebDavConfigSaveResponse(BaseModel):
+    ok: bool = True
+    updated_at: str
+
+
+class WebDavClearRequest(StrictRequest):
+    master_password: str
+
+
+class WebDavTestRequest(StrictRequest):
+    """POST /api/backup/webdav/test - 用临时凭证测试连接（不写盘）。"""
+    url: str
+    username: str = ""
+    password: str = ""
+
+
+class WebDavTestResponse(BaseModel):
+    ok: bool
+    status: int = 0
+    message: str
+
+
+class WebDavMasterRequest(StrictRequest):
+    """list / push / pull / test-remote 都需要 master_password 解锁。"""
+    master_password: str
+    remote_name: str | None = None  # 仅 pull 使用
+
+
+class WebDavRemoteFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    href: str
+    size: int
+    last_modified: str
+
+
+class WebDavRemoteListResponse(BaseModel):
+    files: list[WebDavRemoteFile] = Field(default_factory=list)
+
+
+class WebDavPushResponse(BaseModel):
+    ok: bool = True
+    remote_path: str
+    remote_name: str
+    file_count: int
+    total_bytes: int
+
+
+class WebDavPullResponse(BaseModel):
+    ok: bool = True
+    remote_name: str
+    manifest: dict = Field(default_factory=dict)

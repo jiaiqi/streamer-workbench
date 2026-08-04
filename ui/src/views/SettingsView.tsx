@@ -3,6 +3,7 @@ import { ACCENT_OPTIONS, APPEARANCE_OPTIONS, normalizeAppearance } from "../appe
 import { apiRequest } from "../api/client";
 import type { SettingsUpdateResponse } from "../api/generated";
 import DataDirPanel from "../components/DataDirPanel";
+import WebDavPanel from "../components/WebDavPanel";
 import type { AppearanceSettings, Settings, Theme } from "../types";
 import { CANVAS_OPTIONS } from "../types";
 import { useApiError } from "../async/useApiError";
@@ -137,6 +138,8 @@ export default function SettingsView({
         </section>
 
         <DataDirPanel />
+
+        <WebDavPanel />
 
         <section className="settings-card">
           <div className="section-heading"><span>数据与安全</span></div>          <label className="field-label">自动备份保留份数<input className={`${fieldClass} short-field`} type="number" min={0} max={100} value={form.backup_count} onChange={event => setForm({ ...form, backup_count: Math.max(0, Math.min(100, Number(event.target.value) || 0)) })} /></label>
