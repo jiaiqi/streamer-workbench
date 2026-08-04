@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Song } from "../types";
 import { apiRequest } from "../api/client";
 import { toRequestFailure } from "../async/requestState";
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import ConfirmDialog from "./ConfirmDialog";
+import MetadataSearchDialog, { type MetadataSongDetail } from "./MetadataSearchDialog";
+import { getOnlineState } from "./OnlineStatusBadge";
 
 /* ---- 歌曲编辑对话框（增删改全字段，弹唱信息独立分组）----
    基于 shadcn/ui Dialog：自带焦点锁定、Escape、遮罩关闭与 aria 属性。
@@ -49,6 +51,20 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // M2.9 在线补全子对话框
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  // 跟踪网络状态（用于禁用「在线补全」按钮）
+  const [online, setOnline] = useState(() => getOnlineState() === "online");
+  useEffect(() => {
+    const sync = () => setOnline(getOnlineState() === "online");
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    sync();
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
 
   /** 尝试关闭：未改动直接关；改动先弹确认 */
   const tryClose = () => {
@@ -94,6 +110,32 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
     </div>
   );
 
+  // M2.9 处理「在线补全」返回值：填回表单 title + artists，并在 notes 追加来源记录
+  const handleMetadataPick = (detail: MetadataSongDetail) => {
+    setForm(f => {
+      const today = new Date().toISOString().slice(0, 10);
+      const metaLine = `[meta:${detail.source} song_id=${detail.song_id} ${today}]`;
+      const existing = (f.notes || "").trim();
+      const newNotes = existing
+        ? `${existing}\n${metaLine}`
+        : metaLine;
+      return {
+        ...f,
+        title: detail.title,
+        artists: detail.artist.split(/\s*\/\s*/).join("，"),
+        notes: newNotes,
+      };
+    });
+  };
+
+  const onlineDisabledReason = !online
+    ? "离线状态不可用"
+    : saving
+      ? "保存中不可用"
+      : !(form.title || "").trim()
+        ? "先填歌名再搜索"
+        : undefined;
+
   return (
     <>
     <Dialog open onOpenChange={open => { if (!open) tryClose(); }}>
@@ -106,8 +148,23 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
 
         <div className="space-y-3">
           {field("song-title", <>歌名 <span className="text-destructive">*</span></>,
-            <Input id="song-title" value={form.title ?? ""}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />)}
+            <div className="flex gap-2">
+              <Input id="song-title" value={form.title ?? ""}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                className="flex-1" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setMetadataOpen(true)}
+                disabled={onlineDisabledReason !== undefined}
+                title={onlineDisabledReason || "从网易云/QQ 等公开 API 搜索并补全 title + artists"}
+                data-testid="metadata-button"
+                className="shrink-0"
+              >
+                在线补全
+              </Button>
+            </div>)}
 
           <div className="grid grid-cols-2 gap-3">
             {field("song-artists", "歌手（逗号分隔）",
@@ -205,6 +262,14 @@ export default function SongEditDialog({ target, onClose, onSaved }: {
       description="关闭后已修改的内容将丢失，且无法恢复。"
       confirmLabel="放弃改动"
       confirmVariant="destructive"
+    />
+
+    {/* M2.9 在线补全：搜索 → 选 → 填回表单 */}
+    <MetadataSearchDialog
+      open={metadataOpen}
+      onClose={() => setMetadataOpen(false)}
+      onPick={handleMetadataPick}
+      keyword={form.title || ""}
     />
     </>
   );
