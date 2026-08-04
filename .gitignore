@@ -22,9 +22,14 @@ dist/
 build/
 *.spec
 
-# 编辑器
+# 编辑器 / 工具
 .vscode/
 .idea/
+.workbuddy/
+.trae-html-share-packages/
+
+# git worktree 元数据目录（不 commit）
+.worktrees/
 
 # 系统垃圾文件
 .DS_Store
