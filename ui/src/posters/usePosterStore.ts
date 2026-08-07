@@ -86,6 +86,10 @@ export interface PosterStoreActions {
   saveNow: () => Promise<PosterSaveResponse | null>;
   flush: () => Promise<void>;
   deleteCurrent: () => Promise<void>;
+  /** M3 P0: inline 重命名（PATCH /api/posters/{id}/name）。返回新名。 */
+  rename: (name: string) => Promise<string | null>;
+  /** M3 P0: 复制当前海报（POST /api/posters/{id}/duplicate）。返回新 id。 */
+  duplicate: () => Promise<string | null>;
   cancel: () => void;
   resetError: () => void;
   /** 撤销最近一次用户修改（自动保存防抖队列会被清掉避免覆盖撤销状态）。 */
@@ -377,6 +381,55 @@ export function usePosterStore(): PosterStore {
     }
   }, [refreshList, newDraft]);
 
+  // M3 P0: inline 重命名（PATCH /api/posters/{id}/name）
+  const rename = useCallback(async (name: string) => {
+    const id = currentRef.current.id;
+    if (!id) return null;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      safeSetError(toRequestFailure(new Error("名称不能为空"), "重命名失败"));
+      return null;
+    }
+    try {
+      const res = await apiRequest<{ ok: boolean; id: string;
+                                     revision: string; name: string }>(
+        `/api/posters/${id}/name`,
+        { method: "PATCH", body: { name: trimmed } },
+      );
+      // 更新列表中的 name + 当前 poster 缓存
+      setPosters(prev => prev.map(p => p.id === id
+        ? { ...p, name: trimmed, updated_at: new Date().toISOString() }
+        : p));
+      setCurrent(prev => prev ? { ...prev, name: trimmed } : prev);
+      return trimmed;
+    } catch (reason) {
+      if (isAbortError(reason)) return null;
+      safeSetError(toRequestFailure(reason, "重命名失败"));
+      return null;
+    }
+  }, []);
+
+  // M3 P0: 复制当前海报（POST /api/posters/{id}/duplicate）
+  const duplicate = useCallback(async () => {
+    const id = currentRef.current.id;
+    if (!id) return null;
+    try {
+      const res = await apiRequest<{ ok: boolean; id: string;
+                                     revision: string; updated_at: string }>(
+        `/api/posters/${id}/duplicate`,
+        { method: "POST" },
+      );
+      // 刷新列表（让新副本可见）+ 切到新副本
+      await refreshList();
+      await select(res.id);
+      return res.id;
+    } catch (reason) {
+      if (isAbortError(reason)) return null;
+      safeSetError(toRequestFailure(reason, "复制失败"));
+      return null;
+    }
+  }, [refreshList, select]);
+
   const resetError = useCallback(() => safeSetError(null), []);
 
   useEffect(() => {
@@ -406,11 +459,13 @@ export function usePosterStore(): PosterStore {
     canUndo, canRedo,
     posters,
     refreshList, select, newDraft, update, saveNow, flush, deleteCurrent,
+    rename, duplicate,  // M3 P0
     cancel, resetError, undo, redo, isDirty,
   }), [
     current, revision, status, lastSavedAt, error,
     canUndo, canRedo,
     posters, refreshList, select, newDraft, update, saveNow, flush,
-    deleteCurrent, cancel, resetError, undo, redo, isDirty,
+    deleteCurrent, rename, duplicate,
+    cancel, resetError, undo, redo, isDirty,
   ]);
 }

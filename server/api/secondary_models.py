@@ -972,3 +972,15 @@ class WebDavPullResponse(BaseModel):
     ok: bool = True
     remote_name: str
     manifest: dict = Field(default_factory=dict)
+
+
+# ── M3 海报 UI/UX（P0 缩略图 + 重命名 + 复制） ──────────────────────────
+
+class NamePatchRequest(StrictRequest):
+    """PATCH /api/posters/{id}/name - inline 重命名。
+
+    revision 可选：客户端应传当前 revision 以触发 CAS；
+    不传则用 last-known 覆盖（不推荐但允许向前兼容）。
+    """
+    name: str = Field(..., min_length=1, max_length=200)
+    revision: str | None = None
