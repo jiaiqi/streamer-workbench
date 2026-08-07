@@ -1,4 +1,4 @@
-/// R1a.5 + M3 P0 工作台左栏：海报文档区。
+/// R1a.5 + M3 P0/P1 工作台左栏：海报文档区。
 ///
 /// 新增（M3 P0）：
 /// - 缩略图（200x200 后端懒生成）
@@ -6,12 +6,19 @@
 /// - 排序下拉（更新时间 / 歌数 / 名称）
 /// - 右键菜单（重命名 / 复制 / 删除）
 /// - inline 重命名（双击名 → input + 失焦保存 / Esc 取消）
+///
+/// 新增（M3 P1）：
+/// - 缩略图 hover 浮层（300ms 触发，400x400 大图，右上角浮层）
+/// - 多选模式（顶部「选择」按钮切换；多选后工具栏批量删除/复制/换主题）
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { PosterStore } from "./usePosterStore";
 import LayoutPicker from "./LayoutPicker";
 import StatusBadge from "@/components/StatusBadge";
+import { useToast } from "@/components/Toast";
+import { apiRequest } from "@/api/client";
+import type { Theme } from "@/api/generated";
 
 interface PostersSidebarProps {
   store: PosterStore;
@@ -63,6 +70,25 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
+  // M3 P1: hover 浮层 + 多选模式
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [previewPos, setPreviewPos] = useState<{ x: number; y: number } | null>(null);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLElement>(null);
+  const toast = useToast();
+
+  // M3 P1: 拉 themes 一次（多选批量改主题用）
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest<Theme[]>("/api/themes")
+      .then(items => { if (!cancelled) setThemes(items); })
+      .catch(() => { /* 静默 — 批量改主题按钮降级为 disabled */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleNew = useCallback(() => {
     void store.flush();
@@ -76,6 +102,102 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
     }
     await store.deleteCurrent();
   }, [store]);
+
+  // ── M3 P1: hover 浮层（300ms 触发） ──
+  const handleThumbEnter = useCallback((id: string, target: HTMLElement) => {
+    if (renamingId) return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      // 计算浮层位置：相对 viewport
+      const rect = target.getBoundingClientRect();
+      setPreviewPos({
+        x: Math.min(window.innerWidth - 420, rect.right + 8),
+        y: Math.max(8, rect.top - 8),
+      });
+      setHoverId(id);
+    }, 300);
+  }, [renamingId]);
+
+  const handleThumbLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setHoverId(null);
+    setPreviewPos(null);
+  }, []);
+
+  useEffect(() => () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+  }, []);
+
+  // ── M3 P1: 多选模式 ──
+  const toggleMultiSelect = useCallback(() => {
+    setMultiSelectMode(v => {
+      if (v) setSelectedIds(new Set());
+      return !v;
+    });
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    // visiblePosters 在下面定义（useMemo）；通过 ref 闭包拿到
+    const all = store.posters
+      .filter(p => {
+        const term = search.trim().toLowerCase();
+        return term ? p.name.toLowerCase().includes(term) : true;
+      })
+      .sort((a, b) => {
+        if (sortBy === "name") return a.name.localeCompare(b.name, "zh-CN");
+        if (sortBy === "songs") return b.song_count - a.song_count;
+        return a.name.localeCompare(b.name);
+      })
+      .map(p => p.id);
+    setSelectedIds(new Set(all));
+  }, [store.posters, search, sortBy]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // ── M3 P1: 批量操作 handlers ──
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`删除选中的 ${selectedIds.size} 张海报？此操作不可撤销。`)) return;
+    const res = await store.batch("delete", Array.from(selectedIds));
+    if (res) {
+      toast.success(`已删除 ${res.deleted ?? 0} 张`,
+        res.failed?.length ? `${res.failed.length} 张失败` : undefined);
+      setSelectedIds(new Set());
+    }
+  }, [selectedIds, store, toast]);
+
+  const handleBatchDuplicate = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    const res = await store.batch("duplicate", Array.from(selectedIds));
+    if (res) {
+      toast.success(`已复制 ${res.duplicated ?? 0} 张`,
+        res.failed?.length ? `${res.failed.length} 张失败` : undefined);
+      setSelectedIds(new Set());
+    }
+  }, [selectedIds, store, toast]);
+
+  const handleBatchSetTheme = useCallback(async (theme: string) => {
+    if (selectedIds.size === 0) return;
+    const res = await store.batch("set_theme", Array.from(selectedIds), theme);
+    if (res) {
+      toast.success(`已改主题 ${res.updated ?? 0} 张`,
+        res.failed?.length ? `${res.failed.length} 张失败` : undefined);
+      setSelectedIds(new Set());
+    }
+  }, [selectedIds, store, toast]);
 
   // ── 过滤 + 排序 ──
   const visiblePosters = useMemo(() => {
@@ -228,7 +350,7 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
         )}
       </div>
 
-      {/* 搜索 + 排序（M3 P0） */}
+      {/* 搜索 + 排序 + 多选切换（M3 P0/P1） */}
       <div className="mt-3 flex items-center gap-1.5">
         <Input
           placeholder="搜索海报…"
@@ -248,7 +370,62 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
             <option key={m} value={m}>{SORT_LABEL[m]}</option>
           ))}
         </select>
+        <Button
+          type="button"
+          variant={multiSelectMode ? "default" : "outline"}
+          size="sm"
+          className="h-7 px-2 text-[11px]"
+          onClick={toggleMultiSelect}
+          data-testid="poster-multiselect-toggle"
+          title={multiSelectMode ? "退出多选" : "进入多选"}
+        >
+          {multiSelectMode ? "✕ 退出" : "☐ 选择"}
+        </Button>
       </div>
+
+      {/* M3 P1: 多选模式工具栏 */}
+      {multiSelectMode && (
+        <div
+          className={`mt-2 flex items-center gap-1 rounded-lg p-1.5 text-[11px] ${dark ? "bg-zinc-800/60" : "bg-muted"}`}
+          data-testid="poster-multiselect-toolbar"
+        >
+          <span className="tabular-nums px-1">{selectedIds.size} 项已选</span>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]"
+            onClick={selectAll} data-testid="poster-multiselect-all">全选</Button>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]"
+            onClick={clearSelection} disabled={selectedIds.size === 0}
+            data-testid="poster-multiselect-clear">清空</Button>
+          <span className="flex-1" />
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]"
+            onClick={handleBatchDuplicate} disabled={selectedIds.size === 0}
+            data-testid="poster-multiselect-duplicate"
+            title="复制选中为副本">⎘ 复制</Button>
+          <div className="relative">
+            <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]"
+              onClick={() => setThemePickerOpen(v => !v)} disabled={selectedIds.size === 0 || themes.length === 0}
+              data-testid="poster-multiselect-theme"
+              title="批量改主题">🎨 主题</Button>
+            {themePickerOpen && (
+              <div
+                className={`absolute right-0 top-7 z-30 max-h-56 overflow-y-auto rounded-md border shadow-lg py-1 text-xs min-w-[140px] ${dark ? "bg-zinc-800 border-zinc-700" : "bg-popover border-border"}`}
+                onClick={e => e.stopPropagation()}
+              >
+                {themes.map(t => (
+                  <button key={t.id} type="button"
+                    className={`w-full text-left px-2 py-1 ${dark ? "hover:bg-zinc-700" : "hover:bg-muted"}`}
+                    onClick={() => { setThemePickerOpen(false); void handleBatchSetTheme(t.id); }}
+                    data-testid={`poster-multiselect-theme-${t.id}`}
+                  >{t.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-destructive"
+            onClick={handleBatchDelete} disabled={selectedIds.size === 0}
+            data-testid="poster-multiselect-delete"
+            title="批量删除">🗑 删除</Button>
+        </div>
+      )}
 
       <ul className="mt-2 space-y-1 max-h-56 overflow-y-auto" role="list" aria-label="已保存海报"
         data-testid="poster-list">
@@ -261,27 +438,53 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
         {visiblePosters.map(p => {
           const isCurrent = store.current.id === p.id;
           const isRenaming = renamingId === p.id;
+          const isSelected = selectedIds.has(p.id);
           return (
             <li key={p.id} className="group" data-testid={`poster-item-${p.id}`}>
               <div
                 role="button"
                 tabIndex={0}
                 aria-pressed={isCurrent}
-                onClick={() => { if (!isRenaming) void store.select(p.id); }}
+                onClick={() => {
+                  if (isRenaming) return;
+                  if (multiSelectMode) { toggleSelect(p.id); return; }
+                  void store.select(p.id);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setContextMenu({ x: e.clientX, y: e.clientY, id: p.id });
                 }}
-                onDoubleClick={() => startRename(p.id, p.name)}
+                onDoubleClick={() => {
+                  if (multiSelectMode) { toggleSelect(p.id); return; }
+                  startRename(p.id, p.name);
+                }}
                 className={`w-full text-left rounded-lg px-1.5 py-1.5 text-xs flex items-center gap-2 transition-colors cursor-pointer ${
-                  isCurrent
+                  isSelected
+                    ? (dark ? "bg-sky-500/15 ring-1 ring-sky-500/40" : "bg-sky-50 ring-1 ring-sky-200")
+                    : isCurrent
                     ? (dark ? "bg-emerald-500/15 ring-1 ring-emerald-500/40" : "bg-emerald-50 ring-1 ring-emerald-200")
                     : (dark ? "hover:bg-zinc-800/50" : "hover:bg-muted")
                 }`}
                 data-current={isCurrent ? "true" : "false"}
               >
-                {/* 缩略图（M3 P0） */}
-                <div className={`shrink-0 w-10 h-10 rounded overflow-hidden ${dark ? "bg-zinc-800" : "bg-muted"}`}>
+                {/* M3 P1: 多选 checkbox */}
+                {multiSelectMode && (
+                  <input
+                    type="checkbox"
+                    aria-label={`选择「${p.name}」`}
+                    checked={isSelected}
+                    onChange={() => toggleSelect(p.id)}
+                    onClick={e => e.stopPropagation()}
+                    className="shrink-0 accent-sky-500"
+                    data-testid={`poster-checkbox-${p.id}`}
+                  />
+                )}
+                {/* 缩略图（M3 P0 + P1 hover 浮层） */}
+                <div
+                  className={`shrink-0 w-10 h-10 rounded overflow-hidden ${dark ? "bg-zinc-800" : "bg-muted"}`}
+                  onMouseEnter={(e) => handleThumbEnter(p.id, e.currentTarget)}
+                  onMouseLeave={handleThumbLeave}
+                >
                   <img
                     src={`/api/posters/${p.id}/thumb`}
                     alt=""
@@ -341,6 +544,31 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
           );
         })}
       </ul>
+
+      {/* M3 P1: hover 浮层（400x400 大图，右上角） */}
+      {hoverId && previewPos && (
+        <div
+          role="dialog"
+          aria-label="海报预览"
+          className={`fixed z-50 rounded-lg overflow-hidden border shadow-2xl ${dark ? "bg-zinc-900 border-zinc-700" : "bg-card border-border"}`}
+          style={{
+            left: previewPos.x,
+            top: previewPos.y,
+            width: 400,
+            height: 400,
+          }}
+          data-testid="poster-preview-overlay"
+        >
+          <img
+            src={`/api/posters/${hoverId}/thumb?size=400`}
+            alt=""
+            width={400}
+            height={400}
+            className="w-full h-full object-contain"
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+        </div>
+      )}
 
       {/* 右键菜单 */}
       {contextMenu && (

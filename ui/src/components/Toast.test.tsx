@@ -13,10 +13,17 @@ function renderWithProvider(ui?: React.ReactNode) {
 }
 
 describe("Toast - useToast hook", () => {
-  it("useToast 必须在 ToastProvider 内使用", () => {
+  it("useToast 无 Provider 时返回 no-op API（容错）", () => {
+    const { result } = renderHook(() => useToast());
+    // 不抛错；show/success/error/warn/info/dismiss 都是 no-op
     expect(() => {
-      renderHook(() => useToast());
-    }).toThrow(/useToast must be used within ToastProvider/);
+      result.current.show({ message: "x" });
+      result.current.success("y");
+      result.current.error("z");
+      result.current.warn("w");
+      result.current.info("i");
+      result.current.dismiss("t1");
+    }).not.toThrow();
   });
 
   it("show() 返回 id + 渲染一条 toast", () => {

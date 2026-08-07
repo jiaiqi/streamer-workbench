@@ -116,7 +116,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 export function useToast(): ToastApi {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within ToastProvider");
+  if (!ctx) {
+    // 容错：未包 Provider 时返回 no-op API（单元测试 / 独立窗口如 QuickView）
+    return {
+      show: () => undefined,
+      dismiss: () => undefined,
+      success: () => undefined,
+      error: () => undefined,
+      warn: () => undefined,
+      info: () => undefined,
+    };
+  }
   return ctx;
 }
 

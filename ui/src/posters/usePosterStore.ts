@@ -27,10 +27,13 @@
 /// 防抖队列触发 save 时永远用最新值（不依赖 useCallback 闭包）。
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  batchPosters,
   deletePoster,
   getPoster,
   listPosters,
   savePoster,
+  type PosterBatchAction,
+  type PosterBatchResponse,
 } from "../api/posters";
 import type {
   PosterRequest,
@@ -90,6 +93,8 @@ export interface PosterStoreActions {
   rename: (name: string) => Promise<string | null>;
   /** M3 P0: 复制当前海报（POST /api/posters/{id}/duplicate）。返回新 id。 */
   duplicate: () => Promise<string | null>;
+  /** M3 P1: 批量操作（POST /api/posters/batch）。返回响应（含 failed 数组）。 */
+  batch: (action: PosterBatchAction, ids: string[], theme?: string) => Promise<PosterBatchResponse | null>;
   cancel: () => void;
   resetError: () => void;
   /** 撤销最近一次用户修改（自动保存防抖队列会被清掉避免覆盖撤销状态）。 */
@@ -430,6 +435,40 @@ export function usePosterStore(): PosterStore {
     }
   }, [refreshList, select]);
 
+  // M3 P1: 批量操作（POST /api/posters/batch）
+  const batch = useCallback(async (
+    action: PosterBatchAction,
+    ids: string[],
+    theme?: string,
+  ): Promise<PosterBatchResponse | null> => {
+    if (!ids || ids.length === 0) return null;
+    try {
+      const res = await batchPosters({ action, ids, theme });
+      // 失败明细写到 store.error 便于 UI 展示
+      if (res.failed && res.failed.length > 0) {
+        const ok = res.deleted ?? res.duplicated ?? res.updated ?? 0;
+        if (ok === 0) {
+          safeSetError(toRequestFailure(
+            new Error(`${ids.length} 个全部失败：${res.failed[0]?.error}`),
+            `批量${action}失败`,
+          ));
+        }
+      }
+      // 列表必刷新（删除/复制/换主题都改 list）
+      await refreshList();
+      // 若当前被删，切到草稿
+      if (action === "delete" && currentRef.current.id &&
+          ids.includes(currentRef.current.id)) {
+        newDraft();
+      }
+      return res;
+    } catch (reason) {
+      if (isAbortError(reason)) return null;
+      safeSetError(toRequestFailure(reason, `批量${action}失败`));
+      return null;
+    }
+  }, [refreshList, newDraft]);
+
   const resetError = useCallback(() => safeSetError(null), []);
 
   useEffect(() => {
@@ -460,12 +499,13 @@ export function usePosterStore(): PosterStore {
     posters,
     refreshList, select, newDraft, update, saveNow, flush, deleteCurrent,
     rename, duplicate,  // M3 P0
+    batch,              // M3 P1
     cancel, resetError, undo, redo, isDirty,
   }), [
     current, revision, status, lastSavedAt, error,
     canUndo, canRedo,
     posters, refreshList, select, newDraft, update, saveNow, flush,
-    deleteCurrent, rename, duplicate,
+    deleteCurrent, rename, duplicate, batch,
     cancel, resetError, undo, redo, isDirty,
   ]);
 }

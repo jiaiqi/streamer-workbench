@@ -43,6 +43,41 @@ export function deletePoster(
   });
 }
 
+// ── M3 P1 批量操作 ────────────────────────────────────────────
+
+export type PosterBatchAction = "delete" | "duplicate" | "set_theme";
+
+export interface PosterBatchRequest {
+  action: PosterBatchAction;
+  ids: string[];
+  /** 仅 set_theme 时必填；其他 action 忽略。 */
+  theme?: string;
+}
+
+export interface PosterBatchResponse {
+  ok: boolean;
+  action: PosterBatchAction;
+  /** delete 成功数 */
+  deleted?: number;
+  /** duplicate 成功数 */
+  duplicated?: number;
+  /** set_theme 成功数 */
+  updated?: number;
+  /** duplicate 新生成的 id 列表（顺序对应 ids） */
+  new_ids?: string[];
+  /** 部分失败明细（id + error） */
+  failed: { id: string; error: string }[];
+}
+
+export function batchPosters(
+  payload: PosterBatchRequest,
+): Promise<PosterBatchResponse> {
+  return apiRequest<PosterBatchResponse>("/api/posters/batch", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export function resolvePoster(
   posterId: string,
 ): Promise<PosterResolveResponse> {

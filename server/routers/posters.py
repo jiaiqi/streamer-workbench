@@ -6,9 +6,11 @@
 - GET    /api/posters/{id}         读取完整 PosterDocument
 - DELETE /api/posters/{id}         软删除
 - POST   /api/posters/{id}/resolve 解析 SongSource → 歌曲快照列表
-- GET    /api/posters/{id}/thumb   200x200 缩略图（后端懒生成；P0 UX）
+- GET    /api/posters/{id}/thumb   缩略图（?size=200|400|600，默认 200；M3 P1 快速预览）
 - PATCH  /api/posters/{id}/name    inline 重命名
 - POST   /api/posters/{id}/duplicate 复制（生成新 id + "(副本)" 名称）
+- PATCH  /api/posters/{id}/order   拖拽排序：设置 order_index
+- POST   /api/posters/batch        批量操作：action=delete|duplicate|set_theme
 
 并发写由 expected_revision CAS 在 service 层处理；HTTP 层只做翻译。
 """
@@ -26,6 +28,7 @@ from server.api.handlers import api_error_response
 from server.api.secondary_models import (
     NamePatchRequest,
     OkResponse,
+    PosterBatchRequest,
     PosterRequest,
     PosterResolveResponse,
     PosterResponse,
@@ -132,6 +135,11 @@ def api_posters_resolve(poster_id: str, req: Request):
 THUMB_SIZE = (200, 200)
 THUMB_QUALITY = 85  # JPEG 质量（如果用 JPEG；当前 PIL PNG 不需要）
 
+# M3 P1 快速预览放大镜：支持 200 / 400 / 600 三档
+# 200 走磁盘缓存（.thumb.png），400 / 600 走内存即时放大（不落盘避免大文件占盘）
+THUMB_PREVIEW_SIZES = {200, 400, 600}
+THUMB_DEFAULT_PREVIEW = 400  # hover 浮层默认尺寸
+
 
 def _thumb_path(paths, poster_id: str) -> Path:
     """缩略图缓存路径：data/posters/{id}/.thumb.png。"""
@@ -186,24 +194,39 @@ def _generate_thumb(req: Request, poster_id: str) -> bytes:
     response_class=Response,
     responses={200: {"content": {"image/png": {}}}},
 )
-def api_poster_thumb(poster_id: str, req: Request):
-    """返回 200x200 缩略图（PNG）。首次请求懒生成；命中缓存直接读。
+def api_poster_thumb(poster_id: str, req: Request, size: int = 200):
+    """返回缩略图（PNG）。?size=200|400|600，默认 200（M3 P1 快速预览放大镜）。
 
     缓存策略：
-    - 路径 data/posters/{id}/.thumb.png
-    - 若文件存在且 mtime 比 data/posters/{id}/poster.json 新 → 命中
-    - 否则重新生成（覆盖旧文件）
+    - 200 走磁盘缓存 data/posters/{id}/.thumb.png + mtime 失效
+    - 400/600 从 200 缓存即时放大（不落盘，避免大文件占盘）
+
+    设计权衡：
+    - 不缓存大尺寸 → 重新放大耗时 < 50ms（200 缓存是 200x200，4 倍面积放大很快）
+    - 不支持 600+ → 避免无限尺寸爆炸；用户真要看 1080p 全图直接渲染整张
     """
     from PIL import Image
+    # size 参数白名单校验：非法值兜底到 200
+    if size not in THUMB_PREVIEW_SIZES:
+        size = 200
     context = get_app_context(req)
     paths = context.paths
     thumb = _thumb_path(paths, poster_id)
     poster_json = paths.posters_dir / poster_id / "poster.json"
     # 缓存命中：thumb 存在 + 不比 poster.json 旧
     if thumb.exists() and poster_json.exists() and thumb.stat().st_mtime >= poster_json.stat().st_mtime:
-        return Response(thumb.read_bytes(), media_type="image/png",
+        cached = thumb.read_bytes()
+        if size == 200:
+            return Response(cached, media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=86400"})
+        # 大尺寸：内存即时放大
+        enlarged = _enlarge_thumb(cached, size)
+        if enlarged is None:
+            return Response(cached, media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=86400"})
+        return Response(enlarged, media_type="image/png",
                         headers={"Cache-Control": "public, max-age=86400"})
-    # 缓存失效或不存在：重新生成
+    # 缓存失效或不存在：重新生成 200
     try:
         png_bytes = _generate_thumb(req, poster_id)
     except PosterNotFound as error:
@@ -216,15 +239,41 @@ def api_poster_thumb(poster_id: str, req: Request):
         return api_error_response(
             req, 500,
             ApiError("thumb_generate_failed", "无可用主题渲染缩略图"))
-    # 落盘缓存（如果目录不存在则跳过缓存但仍返回）
+    # 落盘缓存（200 永远落盘；400/600 永不落盘）
     try:
         thumb.parent.mkdir(parents=True, exist_ok=True)
         thumb.write_bytes(png_bytes)
     except OSError:
         # 缓存写入失败（只读盘？）不阻塞响应
         pass
-    return Response(png_bytes, media_type="image/png",
+    if size == 200:
+        return Response(png_bytes, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+    # 大尺寸：内存即时放大
+    enlarged = _enlarge_thumb(png_bytes, size)
+    if enlarged is None:
+        return Response(png_bytes, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+    return Response(enlarged, media_type="image/png",
                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+def _enlarge_thumb(png_bytes: bytes, size: int) -> bytes | None:
+    """从 200 缓存即时放大到 size×size（LANCZOS 重采样）。
+
+    返回 None 表示输入 PNG 解析失败（上层 fallback 返原图）。
+    """
+    from PIL import Image
+    try:
+        img = Image.open(BytesIO(png_bytes))
+        img.load()
+        img = img.convert("RGBA")
+        img = img.resize((size, size), Image.Resampling.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, "PNG", optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return None
 
 
 @router.patch("/api/posters/{poster_id}/name", response_model=OkResponse)
@@ -273,4 +322,84 @@ def api_poster_duplicate(poster_id: str, req: Request):
         "revision": result.revision,
         "updated_at": result.poster.updated_at,
     }
+
+
+# ── M3 海报 UI/UX（P1 批量操作） ────────────────────────────────
+
+@router.post("/api/posters/batch")
+def api_poster_batch(payload: PosterBatchRequest, req: Request):
+    """M3 P1 批量操作。
+
+    行为：
+    - delete: 逐个调 delete；返回 {ok, deleted, failed}
+    - duplicate: 逐个 save_payload（id 移除 + 名称追加「(副本)」）；返回 {ok, duplicated, new_ids, failed}
+    - set_theme: 逐个 update theme_id；返回 {ok, updated, failed}
+
+    设计权衡：
+    - 顺序执行而非并发（避免磁盘 IO 尖峰；单 batch < 200 个，体感 < 5s）
+    - 部分失败不中断后续（容错）；failed 数组逐个记录
+    - 错误码 422 = 整批参数错（ids 全非法 / set_theme 缺 theme）
+    """
+    import re as _re
+    context = get_app_context(req)
+    payload_dict = _payload_dict(payload)
+    action = payload_dict["action"]
+    ids = payload_dict["ids"]
+    theme = payload_dict.get("theme")
+    poster_id_re = _re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # 防御：只允许安全 id
+    cleaned: list[str] = []
+    for raw in ids:
+        if isinstance(raw, str) and poster_id_re.match(raw):
+            cleaned.append(raw)
+    if not cleaned:
+        return api_error_response(
+            req, 422,
+            ApiError("invalid_poster_ids", "ids 全部为非法 poster_id"))
+    if action == "set_theme" and not theme:
+        return api_error_response(
+            req, 422,
+            ApiError("missing_theme", "set_theme 必须提供 theme 字段"))
+    failed: list[dict] = []
+    succeeded_count = 0
+    new_ids: list[str] = []
+    for pid in cleaned:
+        try:
+            if action == "delete":
+                context.poster_service.delete(pid)
+                succeeded_count += 1
+            elif action == "duplicate":
+                poster, _rev = context.poster_service.get_with_revision(pid)
+                new_payload = poster.to_dict()
+                new_payload.pop("id", None)
+                new_payload["revision"] = None
+                new_payload["name"] = f"{poster.name}（副本）"
+                r = context.poster_service.save(new_payload)
+                new_ids.append(r.poster.id)
+                succeeded_count += 1
+            elif action == "set_theme":
+                poster, _rev = context.poster_service.get_with_revision(pid)
+                if not theme or theme not in context.themes:
+                    failed.append({"id": pid, "error": f"未知主题: {theme!r}"})
+                    continue
+                updated = poster.to_dict()
+                updated["revision"] = _rev
+                updated["theme_id"] = theme
+                context.poster_service.save(updated)
+                succeeded_count += 1
+        except PosterNotFound:
+            failed.append({"id": pid, "error": "not_found"})
+        except PosterServiceError as error:
+            failed.append({"id": pid, "error": str(error) or "service_error"})
+        except Exception as error:  # noqa: BLE001  (单元素失败不中断整批)
+            failed.append({"id": pid, "error": str(error) or "unknown_error"})
+    result: dict = {"ok": True, "action": action}
+    if action == "delete":
+        result["deleted"] = succeeded_count
+    elif action == "duplicate":
+        result["duplicated"] = succeeded_count
+        result["new_ids"] = new_ids
+    elif action == "set_theme":
+        result["updated"] = succeeded_count
+    result["failed"] = failed
+    return result
 
