@@ -984,3 +984,24 @@ class NamePatchRequest(StrictRequest):
     """
     name: str = Field(..., min_length=1, max_length=200)
     revision: str | None = None
+
+
+# ── M3 海报 UI/UX（P1 批量操作） ────────────────────────────────────
+
+from typing import Literal  # noqa: E402  (位置无副作用)
+
+
+class PosterBatchRequest(StrictRequest):
+    """POST /api/posters/batch - 批量操作。
+
+    action:
+    - delete: 删除 ids 中所有海报
+    - duplicate: 复制 ids 中所有海报（新 id + 「(副本)」名称）
+    - set_theme: 把 ids 中所有海报的 theme_id 改为 theme（M3 P1 首批：仅批量改主题）
+
+    ids 非空，且元素必须是合法 poster_id（避免 path traversal）。
+    """
+    action: Literal["delete", "duplicate", "set_theme"]
+    ids: list[str] = Field(..., min_length=1, max_length=200)
+    # set_theme 时必填；其他 action 忽略
+    theme: str | None = None

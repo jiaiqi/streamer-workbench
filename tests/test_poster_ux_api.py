@@ -1,10 +1,11 @@
-"""M3 海报 UI/UX P0 后端 API 测试。
+"""M3 海报 UI/UX P0/P1 后端 API 测试。
 
 覆盖：
-- GET /api/posters/{id}/thumb 懒生成 + 缓存命中
+- GET /api/posters/{id}/thumb 懒生成 + 缓存命中 + size 参数（200/400/600）
 - PATCH /api/posters/{id}/name inline 重命名
 - POST /api/posters/{id}/duplicate 复制
 - DELETE /api/export/jobs/{job_id} 取消导出任务
+- POST /api/posters/batch 批量 delete / duplicate / set_theme（含部分失败容错）
 """
 from __future__ import annotations
 
@@ -285,4 +286,187 @@ class CancelExportApiTests(unittest.TestCase):
                     status, body, _ = await _request(
                         app, "DELETE", "/api/export/jobs/nonexistent")
                     assert status == 404
+        _run(scenario())
+
+
+# ── M3 P1 缩略图 size 参数 ─────────────────────────────────────────
+
+class ThumbSizeApiTests(unittest.TestCase):
+    """GET /api/posters/{id}/thumb?size=200|400|600"""
+
+    def test_thumb_default_size_is_200(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid = await _create_poster(app)
+                    status, body, _ = await _request_binary(
+                        app, "GET", f"/api/posters/{pid}/thumb")
+                    assert status == 200, body[:200]
+                    # 200 cache 落盘为 200x200 PNG
+                    assert body[:4] == b"\x89PNG"
+        _run(scenario())
+
+    def test_thumb_size_400_returns_larger_png(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid = await _create_poster(app)
+                    # 先请求 200 让 cache 落盘
+                    await _request_binary(app, "GET", f"/api/posters/{pid}/thumb")
+                    s_200, b_200, _ = await _request_binary(
+                        app, "GET", f"/api/posters/{pid}/thumb?size=200")
+                    s_400, b_400, _ = await _request_binary(
+                        app, "GET", f"/api/posters/{pid}/thumb?size=400")
+                    assert s_200 == 200 and s_400 == 200
+                    assert b_400[:4] == b"\x89PNG"
+                    # 400 PNG 应明显比 200 PNG 大（同样 200x200 → 400x400）
+                    assert len(b_400) > len(b_200), (
+                        f"400 PNG 应比 200 大；200={len(b_200)} 400={len(b_400)}")
+        _run(scenario())
+
+    def test_thumb_size_invalid_falls_back_to_200(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid = await _create_poster(app)
+                    # 非法 size（999）应兜底到 200
+                    status, body, _ = await _request_binary(
+                        app, "GET", f"/api/posters/{pid}/thumb?size=999")
+                    assert status == 200, body[:200]
+                    assert body[:4] == b"\x89PNG"
+        _run(scenario())
+
+
+# ── M3 P1 批量操作 ────────────────────────────────────────────
+
+class PosterBatchApiTests(unittest.TestCase):
+    """POST /api/posters/batch - delete / duplicate / set_theme"""
+
+    def test_batch_delete_all(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    ids = [await _create_poster(app, f"批删{i}") for i in range(3)]
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "delete", "ids": ids})
+                    assert status == 200, body
+                    assert body["action"] == "delete"
+                    assert body["deleted"] == 3
+                    assert body["failed"] == []
+                    # 列表应为空
+                    s2, list_body, _ = await _request(
+                        app, "GET", "/api/posters")
+                    assert s2 == 200
+                    assert all(p["id"] not in ids for p in list_body)
+        _run(scenario())
+
+    def test_batch_delete_partial_failure(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid_real = await _create_poster(app, "真实")
+                    ids = [pid_real, "nonexistent_id_1", "nonexistent_id_2"]
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "delete", "ids": ids})
+                    assert status == 200, body
+                    assert body["deleted"] == 1
+                    assert len(body["failed"]) == 2
+                    assert all(f["error"] == "not_found" for f in body["failed"])
+        _run(scenario())
+
+    def test_batch_duplicate_creates_copies(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid = await _create_poster(app, "原版")
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "duplicate", "ids": [pid]})
+                    assert status == 200, body
+                    assert body["duplicated"] == 1
+                    new_id = body["new_ids"][0]
+                    assert new_id != pid
+                    # 原版 + 副本 = 2 张
+                    s2, list_body, _ = await _request(
+                        app, "GET", "/api/posters")
+                    assert len(list_body) == 2
+                    copy = next(p for p in list_body if p["id"] == new_id)
+                    assert "（副本）" in copy["name"] or "(副本)" in copy["name"]
+        _run(scenario())
+
+    def test_batch_set_theme_updates_all(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    ids = [await _create_poster(app, f"换主题{i}") for i in range(2)]
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "set_theme", "ids": ids, "theme": "月夜星河"})
+                    assert status == 200, body
+                    assert body["updated"] == 2
+                    # 验证每张的主题已改
+                    for pid in ids:
+                        s2, post, _ = await _request(
+                            app, "GET", f"/api/posters/{pid}")
+                        assert post["theme_id"] == "月夜星河"
+        _run(scenario())
+
+    def test_batch_set_theme_unknown_theme_fails_all(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    ids = [await _create_poster(app, f"x{i}") for i in range(2)]
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "set_theme", "ids": ids, "theme": "不存在的"})
+                    assert status == 200, body
+                    assert body["updated"] == 0
+                    assert len(body["failed"]) == 2
+        _run(scenario())
+
+    def test_batch_set_theme_missing_theme_422(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid = await _create_poster(app, "y")
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "set_theme", "ids": [pid]})
+                    assert status == 422
+                    assert body.get("error", {}).get("code") == "missing_theme"
+        _run(scenario())
+
+    def test_batch_invalid_ids_422(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "delete", "ids": ["../etc/passwd", ""]})
+                    assert status == 422
+                    assert body.get("error", {}).get("code") == "invalid_poster_ids"
+        _run(scenario())
+
+    def test_batch_unknown_action_422(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid = await _create_poster(app, "z")
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "nuke", "ids": [pid]})
+                    assert status == 422
         _run(scenario())

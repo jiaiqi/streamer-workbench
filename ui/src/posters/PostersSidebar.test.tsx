@@ -69,6 +69,9 @@ function makeFakeStore(overrides: Partial<PosterStore> = {}): PosterStore {
     isDirty: false,
     rename: vi.fn(async (name: string) => name),
     duplicate: vi.fn(async () => "new_poster_id"),
+    batch: vi.fn(async () => ({
+      ok: true, action: "delete", deleted: 0, failed: [],
+    })),
     undo: vi.fn(noop),
     redo: vi.fn(noop),
     canUndo: true,
@@ -341,10 +344,12 @@ describe("PostersSidebar - inline rename", () => {
     const user = userEvent.setup();
     render(<PostersSidebar store={store} dark={false} />);
     fireEvent.doubleClick(getItemDiv("poster_1"));
+    // 等 startRename 内部 setTimeout(focus, 30ms) 完成
+    await new Promise((r) => setTimeout(r, 50));
     const input = screen.getByTestId("poster-rename-input-poster_1");
     await user.clear(input);
     await user.type(input, "新名字{enter}");
-    await waitFor(() => expect(store.rename).toHaveBeenCalledWith("新名字"));
+    await waitFor(() => expect(store.rename).toHaveBeenCalledWith("新名字"), { timeout: 2000 });
   });
 
   it("失焦提交当前海报", async () => {
@@ -422,5 +427,156 @@ describe("PostersSidebar - 缩略图", () => {
     expect(fallback).toBeTruthy();
     expect(fallback.style.display).toBe("flex");
     expect(fallback.textContent).toBe("已"); // "已保存1" 的首字符
+  });
+});
+
+describe("PostersSidebar - hover 浮层（M3 P1）", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("hover 缩略图 300ms 后出现 400x400 浮层", async () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const thumb = screen.getByTestId("poster-thumb-poster_1").parentElement!;
+    fireEvent.mouseEnter(thumb);
+    // 立即看不到（300ms 未到）
+    expect(screen.queryByTestId("poster-preview-overlay")).toBeNull();
+    // 快进 300ms
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(screen.queryByTestId("poster-preview-overlay")).toBeTruthy();
+    const img = screen.getByTestId("poster-preview-overlay").querySelector("img")!;
+    expect((img as HTMLImageElement).getAttribute("src")).toBe("/api/posters/poster_1/thumb?size=400");
+  });
+
+  it("mouseLeave 取消未触发的浮层", () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const thumb = screen.getByTestId("poster-thumb-poster_1").parentElement!;
+    fireEvent.mouseEnter(thumb);
+    // 100ms 时离开 — 浮层不应出现
+    act(() => { vi.advanceTimersByTime(100); });
+    fireEvent.mouseLeave(thumb);
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(screen.queryByTestId("poster-preview-overlay")).toBeNull();
+  });
+
+  it("mouseLeave 关闭已出现的浮层", () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const thumb = screen.getByTestId("poster-thumb-poster_1").parentElement!;
+    fireEvent.mouseEnter(thumb);
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(screen.queryByTestId("poster-preview-overlay")).toBeTruthy();
+    fireEvent.mouseLeave(thumb);
+    expect(screen.queryByTestId("poster-preview-overlay")).toBeNull();
+  });
+});
+
+describe("PostersSidebar - 多选 + 批量操作（M3 P1）", () => {
+  it("顶部「选择」按钮切换多选模式", async () => {
+    const user = userEvent.setup();
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    // 默认无工具栏
+    expect(screen.queryByTestId("poster-multiselect-toolbar")).toBeNull();
+    // 点 toggle
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    expect(screen.getByTestId("poster-multiselect-toolbar")).toBeTruthy();
+    // 再点退出
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    expect(screen.queryByTestId("poster-multiselect-toolbar")).toBeNull();
+  });
+
+  it("多选模式下显示 checkbox，点击切换选中", async () => {
+    const user = userEvent.setup();
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    // 多选时 checkbox 应出现
+    const cb1 = screen.getByTestId("poster-checkbox-poster_1") as HTMLInputElement;
+    const cb2 = screen.getByTestId("poster-checkbox-poster_2") as HTMLInputElement;
+    expect(cb1).toBeTruthy();
+    expect(cb1.checked).toBe(false);
+    await user.click(cb1);
+    expect(cb1.checked).toBe(true);
+    await user.click(cb2);
+    expect(cb2.checked).toBe(true);
+    // 工具栏显示 2 项已选
+    expect(screen.getByTestId("poster-multiselect-toolbar").textContent).toContain("2 项已选");
+  });
+
+  it("「全选」勾选所有可见项", async () => {
+    const user = userEvent.setup();
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    await user.click(screen.getByTestId("poster-multiselect-all"));
+    expect(screen.getByTestId("poster-multiselect-toolbar").textContent).toContain("3 项已选");
+  });
+
+  it("「清空」清空所有选中", async () => {
+    const user = userEvent.setup();
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    await user.click(screen.getByTestId("poster-multiselect-all"));
+    await user.click(screen.getByTestId("poster-multiselect-clear"));
+    expect(screen.getByTestId("poster-multiselect-toolbar").textContent).toContain("0 项已选");
+  });
+
+  it("点击「批量复制」调 store.batch(action='duplicate', ids=[...])", async () => {
+    const user = userEvent.setup();
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    fireEvent.click(screen.getByTestId("poster-checkbox-poster_1"));
+    fireEvent.click(screen.getByTestId("poster-checkbox-poster_2"));
+    // 等 React 状态更新同步
+    await new Promise(r => setTimeout(r, 10));
+    await user.click(screen.getByTestId("poster-multiselect-duplicate"));
+    await waitFor(() => expect(store.batch).toHaveBeenCalledTimes(1));
+    expect(store.batch).toHaveBeenCalledWith("duplicate",
+      expect.arrayContaining(["poster_1", "poster_2"]));
+  });
+
+  it("点击「批量删除」先 confirm + 调 store.batch(action='delete')", async () => {
+    confirmSpy.mockReturnValue(true);
+    const user = userEvent.setup();
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    fireEvent.click(screen.getByTestId("poster-checkbox-poster_1"));
+    await user.click(screen.getByTestId("poster-multiselect-delete"));
+    await waitFor(() => {
+      expect(window.confirm).toHaveBeenCalled();
+      expect(store.batch).toHaveBeenCalledWith("delete", ["poster_1"]);
+    });
+  });
+
+  it("点击「批量删除」确认取消时不调 store.batch", async () => {
+    confirmSpy.mockReturnValue(false);
+    const user = userEvent.setup();
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    await user.click(screen.getByTestId("poster-checkbox-poster_1"));
+    await user.click(screen.getByTestId("poster-multiselect-delete"));
+    expect(window.confirm).toHaveBeenCalled();
+    expect(store.batch).not.toHaveBeenCalled();
+  });
+
+  it("多选模式下点击列表项不切换 current", async () => {
+    const user = userEvent.setup();
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    await user.click(screen.getByText("已保存1"));
+    expect(store.select).not.toHaveBeenCalled();
+  });
+
+  it("多选模式下双击列表项不进入 inline rename", async () => {
+    const user = userEvent.setup();
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    await user.click(screen.getByTestId("poster-multiselect-toggle"));
+    fireEvent.doubleClick(screen.getByText("已保存1"));
+    expect(screen.queryByTestId("poster-rename-input-poster_1")).toBeNull();
   });
 });
