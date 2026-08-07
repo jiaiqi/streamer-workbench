@@ -55,3 +55,5 @@ site/landing/public/og-image.png
 data/live-sessions/
 palettes/
 skins/
+node_modules
+node_modules/

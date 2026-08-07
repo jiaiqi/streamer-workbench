@@ -20,9 +20,14 @@ const revealInFinder = vi.fn();
 const shareToMacOS = vi.fn();
 const isMacOSShareSupported = vi.fn();
 
-vi.mock("../api/client", () => ({
-  apiRequest: (...args: unknown[]) => apiRequest(...args),
-}));
+vi.mock("../api/client", async () => {
+  // 复用真实 ApiClientError（toRequestFailure 在错误处理路径会 instanceof 检测）
+  const actual = await vi.importActual<typeof import("../api/client")>("../api/client");
+  return {
+    ...actual,
+    apiRequest: (...args: unknown[]) => apiRequest(...args),
+  };
+});
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -128,9 +133,9 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
     fireEvent.click(document.querySelector("button.primary-action")!);
     // 等待 done 状态显示（poll 300ms + setState）
     await waitFor(() => {
-      expect(getByTestId("export-copy-clipboard-button")).toBeTruthy();
-      expect(getByTestId("export-reveal-finder-button")).toBeTruthy();
-      expect(getByTestId("export-mac-share-button")).toBeTruthy();
+      expect(getByTestId("export-copy-clipboard")).toBeTruthy();
+      expect(getByTestId("export-reveal-finder")).toBeTruthy();
+      expect(getByTestId("export-mac-share")).toBeTruthy();
     }, { timeout: 3000 });
   });
 
@@ -142,13 +147,13 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
     fireEvent.click(document.querySelector("button.primary-action")!);
     // 等到复制按钮 enabled（说明 PNG 加载完成、sharePngLoading=false）
     await waitFor(() => {
-      expect((getByTestId("export-copy-clipboard-button") as HTMLButtonElement).disabled).toBe(false);
+      expect((getByTestId("export-copy-clipboard") as HTMLButtonElement).disabled).toBe(false);
     }, { timeout: 2000 });
-    const macBtn = getByTestId("export-mac-share-button") as HTMLButtonElement;
+    const macBtn = getByTestId("export-mac-share") as HTMLButtonElement;
     expect(macBtn.disabled).toBe(true);
     // 复制和 finder 跨平台可用
-    expect((getByTestId("export-copy-clipboard-button") as HTMLButtonElement).disabled).toBe(false);
-    expect((getByTestId("export-reveal-finder-button") as HTMLButtonElement).disabled).toBe(false);
+    expect((getByTestId("export-copy-clipboard") as HTMLButtonElement).disabled).toBe(false);
+    expect((getByTestId("export-reveal-finder") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("点击「复制到剪贴板」调 streamer.copyImageToClipboard", async () => {
@@ -156,13 +161,13 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
       <ExportDialog {...baseProps} open onClose={() => {}} />,
     );
     fireEvent.click(document.querySelector("button.primary-action")!);
-    await waitFor(() => expect(getByTestId("export-copy-clipboard-button")).toBeTruthy());
+    await waitFor(() => expect(getByTestId("export-copy-clipboard")).toBeTruthy());
     // 等待 fetch /api/render 完成（sharePng 落地、sharePngLoading 变 false）
     await waitFor(() => {
-      const btn = getByTestId("export-copy-clipboard-button") as HTMLButtonElement;
+      const btn = getByTestId("export-copy-clipboard") as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     }, { timeout: 2000 });
-    fireEvent.click(getByTestId("export-copy-clipboard-button"));
+    fireEvent.click(getByTestId("export-copy-clipboard"));
     await waitFor(() => {
       expect(copyImageToClipboard).toHaveBeenCalledTimes(1);
       const arg = copyImageToClipboard.mock.calls[0][0];
@@ -179,10 +184,10 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
     fireEvent.click(document.querySelector("button.primary-action")!);
     // 等 PNG 加载完
     await waitFor(() => {
-      expect((getByTestId("export-copy-clipboard-button") as HTMLButtonElement).disabled).toBe(false);
+      expect((getByTestId("export-copy-clipboard") as HTMLButtonElement).disabled).toBe(false);
     }, { timeout: 2000 });
     expect(() => {
-      fireEvent.click(getByTestId("export-copy-clipboard-button"));
+      fireEvent.click(getByTestId("export-copy-clipboard"));
     }).not.toThrow();
     // 等 handler 的 await + setSharePending(null) 完成 → 按钮重新 enabled
     await waitFor(() => expect(toastError).toHaveBeenCalled());
@@ -194,9 +199,9 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
     );
     fireEvent.click(document.querySelector("button.primary-action")!);
     await waitFor(() => {
-      expect((getByTestId("export-mac-share-button") as HTMLButtonElement).disabled).toBe(false);
+      expect((getByTestId("export-mac-share") as HTMLButtonElement).disabled).toBe(false);
     }, { timeout: 2000 });
-    fireEvent.click(getByTestId("export-mac-share-button"));
+    fireEvent.click(getByTestId("export-mac-share"));
     await waitFor(() => {
       expect(shareToMacOS).toHaveBeenCalledTimes(1);
       const arg = shareToMacOS.mock.calls[0][0];
@@ -211,8 +216,8 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
       <ExportDialog {...baseProps} open onClose={() => {}} />,
     );
     fireEvent.click(document.querySelector("button.primary-action")!);
-    await waitFor(() => expect(getByTestId("export-mac-share-button")).toBeTruthy());
-    fireEvent.click(getByTestId("export-mac-share-button"));
+    await waitFor(() => expect(getByTestId("export-mac-share")).toBeTruthy());
+    fireEvent.click(getByTestId("export-mac-share"));
     expect(shareToMacOS).not.toHaveBeenCalled();
   });
 
@@ -224,9 +229,9 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
     );
     fireEvent.click(document.querySelector("button.primary-action")!);
     await waitFor(() => {
-      expect((getByTestId("export-mac-share-button") as HTMLButtonElement).disabled).toBe(false);
+      expect((getByTestId("export-mac-share") as HTMLButtonElement).disabled).toBe(false);
     }, { timeout: 2000 });
-    fireEvent.click(getByTestId("export-mac-share-button"));
+    fireEvent.click(getByTestId("export-mac-share"));
     await waitFor(() => expect(toastWarn).toHaveBeenCalled());
   });
 
@@ -236,10 +241,10 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
       <ExportDialog {...baseProps} open onClose={() => {}} />,
     );
     fireEvent.click(document.querySelector("button.primary-action")!);
-    await waitFor(() => expect(getByTestId("export-copy-clipboard-button")).toBeTruthy());
+    await waitFor(() => expect(getByTestId("export-copy-clipboard")).toBeTruthy());
     await waitFor(() => {
-      expect((getByTestId("export-copy-clipboard-button") as HTMLButtonElement).disabled).toBe(true);
-      expect((getByTestId("export-mac-share-button") as HTMLButtonElement).disabled).toBe(true);
+      expect((getByTestId("export-copy-clipboard") as HTMLButtonElement).disabled).toBe(true);
+      expect((getByTestId("export-mac-share") as HTMLButtonElement).disabled).toBe(true);
     });
   });
 
@@ -249,11 +254,11 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
       <ExportDialog {...baseProps} open onClose={() => {}} />,
     );
     fireEvent.click(document.querySelector("button.primary-action")!);
-    await waitFor(() => expect(getByTestId("export-copy-clipboard-button")).toBeTruthy());
+    await waitFor(() => expect(getByTestId("export-copy-clipboard")).toBeTruthy());
     // 浏览器模式：按钮不抛错，handler 内部 if (!window.streamer?.copyImageToClipboard) return
     expect(() => {
-      fireEvent.click(getByTestId("export-copy-clipboard-button"));
-      fireEvent.click(getByTestId("export-reveal-finder-button"));
+      fireEvent.click(getByTestId("export-copy-clipboard"));
+      fireEvent.click(getByTestId("export-reveal-finder"));
     }).not.toThrow();
   });
 

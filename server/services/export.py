@@ -69,16 +69,35 @@ class ExportJobManager(MutableMapping):
         owned_input = replace(job_input, cancel_event=cancel_event)
         thread = threading.Thread(target=run_export_job, args=(owned_input,), daemon=True)
         with self._lock:
-            self._threads.append((thread, cancel_event))
+            # 关联 job_id → thread + cancel event，便于 cancel(job_id) 精确定位
+            self._threads.append((thread, cancel_event, owned_input.snapshot.job_id))
         thread.start()
+
+    def cancel(self, job_id: str) -> bool:
+        """取消指定 job（设置 cancel_event；线程在下个循环检测后停止）。
+
+        返回 True 表示发出了取消信号；False 表示 job 不存在或已完成。
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return False
+            if job.get("status") in ("done", "error", "cancelled", "cancelling"):
+                return False
+            for thread, cancel_event, tid in self._threads:
+                if tid == job_id:
+                    cancel_event.set()
+                    self._jobs[job_id]["status"] = "cancelling"
+                    return True
+            return False
 
     def close(self, timeout: float = 5.0) -> None:
         deadline = time.monotonic() + timeout
         with self._lock:
             workers = tuple(self._threads)
-        for _, cancel_event in workers:
+        for _, cancel_event, _ in workers:
             cancel_event.set()
-        for thread, _ in workers:
+        for thread, _, _ in workers:
             thread.join(max(0.0, deadline - time.monotonic()))
         with self._lock:
             self._threads = [worker for worker in self._threads if worker[0].is_alive()]
@@ -262,6 +281,10 @@ class ExportApplicationService:
 
     def job(self, job_id: str) -> dict | None:
         return self._jobs.get(job_id)
+
+    def cancel_job(self, job_id: str) -> bool:
+        """取消正在跑的批量导出；返回 True 表示发出取消信号。"""
+        return self._jobs.cancel(job_id)
 
     def export_by_song_ids(self, spec: ExportByIdsSpec) -> ExportByIdsResult:
         """L2.2: 按 song_ids 列表，每首选中歌曲渲染成 1 张 PNG（page=1）存盘。"""

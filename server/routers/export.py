@@ -18,6 +18,7 @@ from server.api.secondary_models import (
     ExportOpenResponse,
     ExportRequest,
     ExportResponse,
+    OkResponse,
 )
 from server.dependencies import get_app_context
 from server.services.export import (
@@ -113,6 +114,20 @@ def api_export_job(job_id: str, req: Request):
         return api_error_response(
             req, 404, ApiError("export_job_not_found", f"未知任务：{job_id}"))
     return job
+
+
+@router.delete("/api/export/jobs/{job_id}", response_model=OkResponse)
+def api_export_job_cancel(job_id: str, req: Request):
+    """M3 P0：取消正在跑的批量导出。
+
+    返回 ok 表示成功发送取消信号；job_id 不存在或已完成返 404。
+    """
+    cancelled = get_app_context(req).export_service.cancel_job(job_id)
+    if not cancelled:
+        return api_error_response(
+            req, 404, ApiError("export_job_not_found_or_done",
+                               f"无法取消（不存在或已完成）：{job_id}"))
+    return {"ok": True}
 
 
 @router.post("/api/export/open", response_model=ExportOpenResponse)
