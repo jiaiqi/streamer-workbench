@@ -49,7 +49,7 @@
 > - **M1 本地最小可用首批** — M1.1 全局找歌 8 字段加权排序（title 完全匹配 100 / 前缀 80 / artists 60 / pinyin 50 / lyrics 40 / tags 30 / key 20 / 兜底 10），13 项 vitest。M1.2 CommandPalette 加 `songResults` slot（虚拟 Command 与命令并列），5 项 vitest。M1.3 PlayerContext 顶层 Provider（`PlayerProvider` + `usePlayer` hook + 3 模式 `live / practice / browse` + state `currentSongId / mode / isPlaying / currentTimeMs`），8 项 vitest；App 拆 `App` + `AppInner`，handlePlaySong 接受可选 `mode` 覆盖。M1.4 MiniPlayer 全局底栏（`ui/src/components/MiniPlayer.tsx`：模式徽章 + 歌名 + mm:ss 进度 + 「打开弹唱 →」/ ✕ 两按钮），9 项 vitest；非 play 视图 + 无模态时常驻。M1.5 LibraryView 展开面板加「试听」按钮（与小 ▶ 图标互补），6 项 vitest。M1.6a LRC 同步验证（audio.timeupdate → LyricsPanel.findActiveLine 链路已在 R8.1 走通，补 3 项 PlayView 测试），3 项 vitest。M1.6b 吉他谱锚点（TabsPanel 接受 `lyricsActiveIndex` prop，优先用 LRC 索引，LyricsPanel 与 TabsPanel 共用 activeIndex → chord 高亮真正跟歌词同步），TabsPanel 5 项 + PlayView 3 项 = 8 项 vitest。M1.7 渐进式海报（`useWorkspaceState` 导出 `nextPreviewSrc / prevPreviewSrc`，App 挂两个 hidden `<img>` 触发浏览器预取 → 翻页 0ms 切换），hook 5 项 + App 1 项 = 6 项 vitest。
 > - **R2.5+Electron** — 桌面壳（macOS arm64）+ PyInstaller 后端单文件 + electron-builder 打包 + 置顶速查窗 (Cmd/Ctrl+Shift+U)。
 >
-> **下一步**：M3 P2 拖拽排序 + ExportLogPanel 升级为可点历史抽屉；Quick Look 预览（macOS 海报挑选体验）；M3 SQLite FTS5 全文检索 + 学习看板 + 精力分级；M4 Tauri 2 桌面壳 + PWA；R4 Runtime v2；R7 桌面正式发布门。
+> **下一步**：M3 P2 拖拽排序 + ExportLogPanel 升级为可点历史抽屉；M3 SQLite FTS5 全文检索 + 学习看板 + 精力分级；M4 Tauri 2 桌面壳 + PWA；R4 Runtime v2；R7 桌面正式发布门。
 >
 > 文档入口见 [`AGENTS.md`](AGENTS.md)、[`HANDOFF.md`](HANDOFF.md) 与 [`design/产品优化方案终版-0727/README.md`](design/产品优化方案终版-0727/README.md)。
 >

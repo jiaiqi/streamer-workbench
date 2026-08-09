@@ -68,6 +68,24 @@ contextBridge.exposeInMainWorld("streamer", {
       // navigator.userAgent 在 Electron renderer 里有 "Mac OS X"
       /mac/i.test(navigator.userAgent);
   },
+  /**
+   * M3 海报 UI/UX：macOS Quick Look 预览。
+   * 主进程把 PNG bytes 写 tmp + spawn qlmanage -p 弹原生 Quick Look 面板。
+   * 非 darwin 返回 `{ ok: false, code: "unsupported" }`。
+   * @param {{ data: ArrayBuffer, posterId?: string }} params
+   * @returns {Promise<{ ok: boolean, code?: string, error?: string, path?: string }>}
+   */
+  quickLookPoster(params) {
+    return ipcRenderer.invoke("quicklook:open-poster", params || {});
+  },
+  /**
+   * 当前主进程是否支持 Quick Look（仅 darwin）。
+   * @returns {boolean}
+   */
+  isQuickLookSupported() {
+    return navigator.platform.toLowerCase().includes("mac") ||
+      /mac/i.test(navigator.userAgent);
+  },
 
   // ===== 系统集成首批（桌面平台特性 P0） =====
   /**
