@@ -13,10 +13,13 @@
 ///   - 极简列表：kind 标签 + subject + count + 相对时间 + 文件名（hover）
 ///   - 自动静默刷新：mount 拉一次 + 每 30s 拉一次（5 条就够，无需交互）
 ///   - kind 过滤（可选）：通过 `kindFilter` 限定只显示某一类
+///   - 行可点击 → 弹 ExportLogDrawer 显示完整信息 + 操作（Finder / 复制路径）
 import { useCallback, useEffect, useState } from "react";
 import { listExportLog } from "../api/client";
 import type { ExportLogEntryResponse } from "../api/generated";
-import { Icon } from "../icons";
+import { isElectron } from "../electron-bridge";
+import { useToast } from "../components/Toast";
+import ExportLogDrawer from "./ExportLogDrawer";
 
 /* ---- 常量 ---- */
 const DEFAULT_LIMIT = 5;
@@ -103,6 +106,9 @@ export default function ExportLogPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);  // 触发相对时间刷新
+  // M3 P3: 行可点击 → 弹 ExportLogDrawer
+  const [drawerItem, setDrawerItem] = useState<ExportLogEntryResponse | null>(null);
+  const toast = useToast();
 
   const fetchOnce = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -207,8 +213,19 @@ export default function ExportLogPanel({
               key={item.event_id}
               data-testid={`${testId}-item`}
               data-kind={item.kind}
-              className={`flex items-center gap-2 ${inline ? "px-1 py-0.5" : "px-3 py-1.5"}`}
-              title={item.filename || item.subject || ""}
+              className={`flex items-center gap-2 ${inline ? "px-1 py-0.5" : "px-3 py-1.5"} cursor-pointer transition-colors ${
+                inline ? "hover:opacity-80" : (dark ? "hover:bg-zinc-800/40" : "hover:bg-muted/60")
+              }`}
+              title={`${item.filename || item.subject || ""}（点击查看详情）`}
+              onClick={() => setDrawerItem(item)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setDrawerItem(item);
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
               <span
                 data-testid={`${testId}-kind`}
@@ -233,6 +250,20 @@ export default function ExportLogPanel({
       </ul>
       {/* 折叠底部内边距 */}
       {!inline && <div className="h-1" aria-hidden="true" />}
+      {/* M3 P3: 行点击 → 弹抽屉显示完整信息 + 操作 */}
+      {drawerItem && (
+        <ExportLogDrawer
+          item={drawerItem}
+          dark={dark}
+          onClose={() => setDrawerItem(null)}
+          onToast={(kind, message) => {
+            if (kind === "success") toast.success(message);
+            else if (kind === "error") toast.error(message);
+            else if (kind === "warn") toast.warn(message);
+            else toast.info(message);
+          }}
+        />
+      )}
     </div>
   );
 }
