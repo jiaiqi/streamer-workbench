@@ -13,6 +13,12 @@ declare global {
         defaultName: string;
         mimeType?: string;
       }): Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
+      // M3 海报 UI/UX：macOS Quick Look 预览（写 tmp + qlmanage -p）
+      quickLookPoster?(params: {
+        data: ArrayBuffer;
+        posterId?: string;
+      }): Promise<{ ok: boolean; code?: string; error?: string; path?: string }>;
+      isQuickLookSupported?(): boolean;
     };
   }
 }

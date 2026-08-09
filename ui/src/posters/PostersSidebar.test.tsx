@@ -1,4 +1,20 @@
-/// PostersSidebar 单元测试：覆盖「新建/选中/删除/搜索/排序/右键/inline rename/缩略图/重做」。
+/// PostersSidebar 单元测试：覆盖「新建/选中/删除/搜索/排序/右键/inline rename/缩略图/重做/拖拽/Quick Look」。
+
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+const toastWarn = vi.fn();
+const toastInfo = vi.fn();
+vi.mock("@/components/Toast", () => ({
+  useToast: () => ({
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: (...args: unknown[]) => toastError(...args),
+    warn: (...args: unknown[]) => toastWarn(...args),
+    info: (...args: unknown[]) => toastInfo(...args),
+    show: () => undefined,
+    dismiss: () => undefined,
+  }),
+}));
+
 ///
 /// M3 P0 新增覆盖：
 /// - 搜索框过滤（按 name 子串，大小写不敏感）
@@ -702,5 +718,111 @@ act(() => { fireEvent.dragStart(sourceDiv, { dataTransfer: dt }); });
     fireEvent.dragStart(sourceDiv, { dataTransfer: dt });
     fireEvent.drop(targetLi, { dataTransfer: dt });
     expect(store.batch).not.toHaveBeenCalled();
+  });
+});
+
+describe("PostersSidebar - Quick Look 预览（M3）", () => {
+  beforeEach(() => {
+    // 默认无 Electron 环境（window.streamer 不存在）
+    delete (window as { streamer?: unknown }).streamer;
+  });
+  afterEach(() => {
+    delete (window as { streamer?: unknown }).streamer;
+  });
+
+  it("右键菜单显示 Quick Look 预览项", () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const item = screen.getByTestId("poster-item-poster_1");
+    const div = (item as HTMLElement).firstElementChild as HTMLElement;
+    fireEvent.contextMenu(div);
+    expect(screen.getByTestId("poster-context-quicklook")).toBeTruthy();
+  });
+
+  it("浏览器模式（无 streamer）下 Quick Look 按钮 disabled + 提示", async () => {
+    const user = userEvent.setup();
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const item = screen.getByTestId("poster-item-poster_1");
+    const div = (item as HTMLElement).firstElementChild as HTMLElement;
+    fireEvent.contextMenu(div);
+    const btn = screen.getByTestId("poster-context-quicklook") as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    await user.click(btn);
+    // 无反应（disabled 不调 onClick）
+  });
+
+  it("Electron 模式点击 → fetch 600x600 + 调 streamer.quickLookPoster", async () => {
+    const user = userEvent.setup();
+    const quickLookSpy = vi.fn(async () => ({ ok: true, path: "/tmp/x.png" }));
+    (window as { streamer?: unknown }).streamer = {
+      quickLookPoster: quickLookSpy,
+      isQuickLookSupported: () => true,
+    };
+    // mock fetch
+    const fakeBuf = new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer;
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => fakeBuf,
+    }));
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const item = screen.getByTestId("poster-item-poster_1");
+    const div = (item as HTMLElement).firstElementChild as HTMLElement;
+    fireEvent.contextMenu(div);
+    const btn = screen.getByTestId("poster-context-quicklook") as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    await user.click(btn);
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith("/api/posters/poster_1/thumb?size=600", expect.any(Object));
+      expect(quickLookSpy).toHaveBeenCalledWith({
+        data: expect.any(ArrayBuffer),
+        posterId: "poster_1",
+      });
+    });
+  });
+
+  it("Quick Look 失败 → toast.error", async () => {
+    const user = userEvent.setup();
+    const quickLookSpy = vi.fn(async () => ({ ok: false, error: "boom" }));
+    (window as { streamer?: unknown }).streamer = {
+      quickLookPoster: quickLookSpy,
+      isQuickLookSupported: () => true,
+    };
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer,
+    })) as unknown as typeof fetch;
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const item = screen.getByTestId("poster-item-poster_1");
+    const div = (item as HTMLElement).firstElementChild as HTMLElement;
+    fireEvent.contextMenu(div);
+    const btn = screen.getByTestId("poster-context-quicklook") as HTMLButtonElement;
+    console.log("btn.disabled?", btn.disabled, "streamer?", typeof window.streamer);
+    await user.click(btn);
+    await waitFor(() => {
+      expect(quickLookSpy).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith("Quick Look 失败", expect.stringContaining("boom"));
+    });
+  });
+
+  it("Quick Look 平台不支持 → toast.warn", async () => {
+    const user = userEvent.setup();
+    (window as { streamer?: unknown }).streamer = {
+      quickLookPoster: vi.fn(async () => ({ ok: false, code: "unsupported" })),
+      isQuickLookSupported: () => false,
+    };
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer,
+    })) as unknown as typeof fetch;
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const item = screen.getByTestId("poster-item-poster_1");
+    const div = (item as HTMLElement).firstElementChild as HTMLElement;
+    fireEvent.contextMenu(div);
+    await user.click(screen.getByTestId("poster-context-quicklook"));
+    await waitFor(() => {
+      expect(toastWarn).toHaveBeenCalledWith("当前平台不支持 Quick Look", expect.any(String));
+    });
   });
 });

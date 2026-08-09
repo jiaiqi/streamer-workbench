@@ -19,6 +19,7 @@ import StatusBadge from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { apiRequest } from "@/api/client";
 import type { Theme } from "@/api/generated";
+import { isElectron } from "@/electron-bridge";
 
 interface PostersSidebarProps {
   store: PosterStore;
@@ -272,6 +273,35 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
       toast.success(`已重排 ${res.reordered ?? 0} 张`, undefined);
     }
   }, [dragId, dropTarget, search, store, toast]);
+
+  // ── Quick Look 预览（macOS only） ──
+  const handleQuickLook = useCallback(async (id: string) => {
+    setContextMenu(null);
+    if (!isElectron() || !window.streamer?.quickLookPoster) {
+      toast.warn("Quick Look 不可用", "仅 macOS 桌面端支持");
+      return;
+    }
+    try {
+      // 拉 600x600 大图（Quick Look 缩放 + 标题栏用）
+      const res = await fetch(`/api/posters/${id}/thumb?size=600`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+      const buf = await res.arrayBuffer();
+      const result = await window.streamer.quickLookPoster({ data: buf, posterId: id });
+      if (!result.ok) {
+        if (result.code === "unsupported") {
+          toast.warn("当前平台不支持 Quick Look", "仅 macOS 可用");
+        } else {
+          toast.error("Quick Look 失败", result.error ?? "未知错误");
+        }
+      } else {
+        toast.success("已弹出 Quick Look 预览", "按空格查看下一张");
+      }
+    } catch (err) {
+      toast.error("Quick Look 失败", err instanceof Error ? err.message : "未知错误");
+    }
+  }, [toast]);
 
   const handleBatchSetTheme = useCallback(async (theme: string) => {
     if (selectedIds.size === 0) return;
@@ -723,6 +753,19 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
             data-testid="poster-context-duplicate"
           >
             ⎘ 复制副本
+          </button>
+          {/* M3 海报 UI/UX：macOS Quick Look 预览（其他平台 disabled） */}
+          <button
+            type="button" role="menuitem"
+            className={`w-full text-left px-3 py-1.5 ${dark ? "hover:bg-zinc-700" : "hover:bg-muted"} ${
+              !isElectron() ? "opacity-50" : ""
+            }`}
+            onClick={() => void handleQuickLook(contextMenu.id)}
+            disabled={!isElectron()}
+            title={isElectron() ? "弹 macOS Quick Look 面板" : "仅 macOS 桌面端支持"}
+            data-testid="poster-context-quicklook"
+          >
+            👁 Quick Look 预览
           </button>
           <div className={`my-0.5 border-t ${dark ? "border-zinc-700" : "border-border"}`} />
           <button

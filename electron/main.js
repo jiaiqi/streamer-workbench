@@ -729,7 +729,7 @@ ipcMain.handle("player:getState", () => ({ ...playerState }));
 // - Windows：剪贴板 / Explorer 打开（无原生 share sheet，UI 上 disabled）
 // - Linux：剪贴板 / 文件管理器打开（无原生 share sheet，UI 上 disabled）
 const os = require("os");
-const { execFile } = require("child_process");
+const { execFile, spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -739,6 +739,22 @@ function tempPosterPath(defaultName) {
   const safe = (defaultName || "poster").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 60);
   const id = crypto.randomBytes(6).toString("hex");
   return path.join(os.tmpdir(), `streamer-poster-${id}-${safe}.png`);
+}
+
+// M3 海报 UI/UX：macOS Quick Look 预览 — 写临时 PNG + spawn qlmanage -p
+const _quicklookTmp = new Set();
+
+function tempQuickLookPath(posterId) {
+  const safe = String(posterId || "poster").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 60);
+  const id = crypto.randomBytes(6).toString("hex");
+  return path.join(os.tmpdir(), `streamer-quicklook-${id}-${safe}.png`);
+}
+
+function cleanupQuickLookTmp() {
+  for (const p of _quicklookTmp) {
+    try { fs.unlinkSync(p); } catch { /* noop */ }
+  }
+  _quicklookTmp.clear();
 }
 
 /**
@@ -846,6 +862,50 @@ ipcMain.handle("share:macosSheet", async (_evt, params) => {
   }
 });
 
+/**
+ * M3 海报 UI/UX：macOS Quick Look 预览
+ * - write 600x600 PNG 到 tmp
+ * - spawn qlmanage -p <path> 弹原生 Quick Look 面板
+ * - tmp 文件保留到 before-quit 时统一清理（qlmanage 子进程可能仍持有）
+ */
+ipcMain.handle("quicklook:open-poster", async (_evt, params) => {
+  if (process.platform !== "darwin") {
+    return { ok: false, code: "unsupported", error: "macOS only" };
+  }
+  try {
+    const { data, posterId } = params || {};
+    if (!data) return { ok: false, error: "missing data" };
+    const buf = Buffer.from(data);
+    const img = nativeImage.createFromBuffer(buf);
+    if (img.isEmpty()) return { ok: false, error: "invalid image buffer" };
+    const filePath = tempQuickLookPath(posterId);
+    fs.writeFileSync(filePath, buf);
+    _quicklookTmp.add(filePath);
+    log(`quicklook:open-poster tmp file ${filePath} (${buf.length} bytes)`);
+    return await new Promise((resolve) => {
+      // qlmanage -p 弹 Quick Look 预览窗口（独立进程；detached 避免主进程阻塞）
+      const child = spawn("qlmanage", ["-p", filePath], {
+        detached: true,
+        stdio: "ignore",
+      });
+      child.on("error", (err) => {
+        logErr("qlmanage spawn:", err.message);
+        resolve({ ok: false, error: err.message });
+      });
+      child.unref();
+      // qlmanage -p 启动通常 < 500ms；给 2s 等待错误反馈
+      setTimeout(() => resolve({ ok: true, path: filePath }), 2000);
+    });
+  } catch (err) {
+    logErr("quicklook:open-poster:", err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("quicklook:is-supported", () => {
+  return { supported: process.platform === "darwin", platform: process.platform };
+});
+
 app.whenReady().then(async () => {
   // packaged mode 每次启动生成新 session token
   if (isPackaged) {
@@ -901,6 +961,8 @@ app.on("before-quit", () => {
   if (pyProc && !pyProc.killed) {
     try { pyProc.kill(); } catch { /* noop */ }
   }
+  // 清理 Quick Look 临时文件
+  try { cleanupQuickLookTmp(); } catch { /* noop */ }
 });
 
 app.on("will-quit", () => {
