@@ -45,7 +45,7 @@ export function deletePoster(
 
 // ── M3 P1 批量操作 ────────────────────────────────────────────
 
-export type PosterBatchAction = "delete" | "duplicate" | "set_theme";
+export type PosterBatchAction = "delete" | "duplicate" | "set_theme" | "reorder";
 
 export interface PosterBatchRequest {
   action: PosterBatchAction;
@@ -63,6 +63,8 @@ export interface PosterBatchResponse {
   duplicated?: number;
   /** set_theme 成功数 */
   updated?: number;
+  /** reorder 成功数 */
+  reordered?: number;
   /** duplicate 新生成的 id 列表（顺序对应 ids） */
   new_ids?: string[];
   /** 部分失败明细（id + error） */

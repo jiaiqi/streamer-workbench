@@ -470,3 +470,55 @@ class PosterBatchApiTests(unittest.TestCase):
                         {"action": "nuke", "ids": [pid]})
                     assert status == 422
         _run(scenario())
+
+    # ── M3 P2 拖拽排序（reorder action） ──
+
+    def test_batch_reorder_writes_order_index(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    ids = [await _create_poster(app, f"reorder{i}") for i in range(3)]
+                    # 把 [a, b, c] 重排为 [c, a, b]（a→idx=1, b→idx=2, c→idx=0）
+                    target_order = [ids[2], ids[0], ids[1]]
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "reorder", "ids": target_order})
+                    assert status == 200, body
+                    assert body["reordered"] == 3
+                    assert body["failed"] == []
+                    # list 应按新顺序
+                    s2, listed, _ = await _request(app, "GET", "/api/posters")
+                    listed_ids = [p["id"] for p in listed]
+                    assert listed_ids == target_order
+        _run(scenario())
+
+    def test_batch_reorder_partial_failure_does_not_block(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    pid = await _create_poster(app, "alive")
+                    # 数组中含不存在 id
+                    status, body, _ = await _request(
+                        app, "POST", "/api/posters/batch",
+                        {"action": "reorder", "ids": ["nope1", pid, "nope2"]})
+                    assert status == 200, body
+                    assert body["reordered"] == 1
+                    assert len(body["failed"]) == 2
+        _run(scenario())
+
+    def test_batch_reorder_writes_to_manifest(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    ids = [await _create_poster(app, f"mf{i}") for i in range(2)]
+                    await _request(app, "POST", "/api/posters/batch",
+                        {"action": "reorder", "ids": [ids[1], ids[0]]})
+                    # 验证单 poster get 后 order_index 持久化
+                    s2, post, _ = await _request(app, "GET", f"/api/posters/{ids[1]}")
+                    assert post.get("order_index") == 0
+                    s3, post2, _ = await _request(app, "GET", f"/api/posters/{ids[0]}")
+                    assert post2.get("order_index") == 1
+        _run(scenario())

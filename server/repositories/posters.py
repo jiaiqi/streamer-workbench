@@ -129,6 +129,10 @@ class FilePosterRepository(PosterRepository):
             created_at=info.get("created_at", ""),
             updated_at=info.get("updated_at", ""),
             song_count=int(info.get("song_count", 0)),
+            # M3 P2: 从 manifest entry 读 order_index（None 表示未排序）
+            order_index=(int(info["order_index"])
+                         if isinstance(info.get("order_index"), int)
+                         else None),
         )
 
     def _read_poster_file(self, poster_id: str) -> PosterDocument:
@@ -152,6 +156,8 @@ class FilePosterRepository(PosterRepository):
             "created_at": doc.created_at,
             "updated_at": doc.updated_at,
             "song_count": len(doc.selected_song_ids),
+            # M3 P2: order_index 持久化到 manifest 便于 list 排序；None 时不写 key
+            **({"order_index": int(doc.order_index)} if doc.order_index is not None else {}),
         }
         return manifest
 
@@ -165,10 +171,16 @@ class FilePosterRepository(PosterRepository):
             summaries = []
             for pid in manifest:
                 summaries.append(self._summary(pid, manifest[pid]))
-            summaries.sort(
-                key=lambda s: (s.updated_at, s.id),
-                reverse=True,
-            )
+            # M3 P2 排序（多轮 stable sort 累积）：
+            # 1) id desc（最新 sort 的 key 优先；前次顺序在组内保留）
+            # 2) order_index 升序（None 用 10^12 推到末尾段）
+            # 3) updated_at desc
+            # 设计权衡：依赖 Python sort 稳定特性，比 cmp_to_key 简单
+            summaries.sort(key=lambda s: s.id, reverse=True)
+            summaries.sort(key=lambda s: (
+                s.order_index if s.order_index is not None else 10**12,
+            ))
+            summaries.sort(key=lambda s: s.updated_at, reverse=True)
             return StoredSnapshot(value=tuple(summaries), revision="manifest")
 
     def get(self, poster_id: str) -> StoredSnapshot[PosterDocument] | None:

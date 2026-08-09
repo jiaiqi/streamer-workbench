@@ -77,6 +77,9 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [themes, setThemes] = useState<Theme[]>([]);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  // M3 P2: 拖拽排序状态
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: "before" | "after" } | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLElement>(null);
   const toast = useToast();
@@ -189,6 +192,87 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
     }
   }, [selectedIds, store, toast]);
 
+  // ── M3 P2 拖拽排序 handlers ──
+  const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, id: string) => {
+    if (multiSelectMode) {
+      // 多选模式不参与拖拽
+      e.preventDefault();
+      return;
+    }
+    setDragId(id);
+    try { e.dataTransfer.effectAllowed = "move"; } catch { /* jsdom stub */ }
+    try { e.dataTransfer.setData("text/plain", id); } catch { /* jsdom stub */ }
+  }, [multiSelectMode]);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLLIElement>, targetId: string) => {
+    // 从 dataTransfer.types 兜底（jsdom 不传 dataTransfer 时 types 为空）
+    const types = (() => { try { return e.dataTransfer.types; } catch { return [] as unknown[]; } })();
+    const isDragging = Array.isArray(types) ? types.length > 0
+      : (types as { contains?: (s: string) => boolean })?.contains?.("text/plain");
+    if (!isDragging) return;
+    const sourceId = (() => {
+      try { return e.dataTransfer.getData("text/plain"); } catch { return ""; }
+    })() || dragId;
+    if (!sourceId || sourceId === targetId) return;
+    e.preventDefault();
+    try { e.dataTransfer.dropEffect = "move"; } catch { /* jsdom stub */ }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const pos: "before" | "after" = e.clientY < midY ? "before" : "after";
+    console.log("DBG setDropTarget", { targetId, pos, dragId, sourceId, midY, clientY: e.clientY, rect });
+    setDropTarget((prev) =>
+      prev && prev.id === targetId && prev.pos === pos ? prev : { id: targetId, pos }
+    );
+  }, [dragId]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLLIElement>, targetId: string) => {
+    // 只在离开整个 li 时清除；进入子元素不算 leave
+    const related = e.relatedTarget as Node | null;
+    if (related && e.currentTarget.contains(related)) return;
+    setDropTarget((prev) => (prev?.id === targetId ? null : prev));
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDragId(null);
+    setDropTarget(null);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent<HTMLLIElement>, targetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData("text/plain") || dragId;
+    if (!sourceId || sourceId === targetId) {
+      setDragId(null);
+      setDropTarget(null);
+      return;
+    }
+    // 用当前 store.posters（保留后端顺序 — sortBy=name/songs 也用同基线）作为提交基准
+    const term = search.trim().toLowerCase();
+    const baseList = term
+      ? store.posters.filter(p => p.name.toLowerCase().includes(term))
+      : store.posters;
+    const currentOrder = baseList.map(p => p.id);
+    const fromIdx = currentOrder.indexOf(sourceId);
+    const toIdxRaw = currentOrder.indexOf(targetId);
+    if (fromIdx < 0 || toIdxRaw < 0) {
+      setDragId(null);
+      setDropTarget(null);
+      return;
+    }
+    // 移除被拖项
+    currentOrder.splice(fromIdx, 1);
+    // 计算 drop 后插入位置
+    const pos = dropTarget?.id === targetId ? dropTarget.pos : "after";
+    let insertIdx = currentOrder.indexOf(targetId);
+    if (pos === "after") insertIdx += 1;
+    currentOrder.splice(insertIdx, 0, sourceId);
+    setDragId(null);
+    setDropTarget(null);
+    const res = await store.batch("reorder", currentOrder);
+    if (res) {
+      toast.success(`已重排 ${res.reordered ?? 0} 张`, undefined);
+    }
+  }, [dragId, dropTarget, search, store, toast]);
+
   const handleBatchSetTheme = useCallback(async (theme: string) => {
     if (selectedIds.size === 0) return;
     const res = await store.batch("set_theme", Array.from(selectedIds), theme);
@@ -205,11 +289,14 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
     const filtered = term
       ? store.posters.filter(p => p.name.toLowerCase().includes(term))
       : store.posters;
+    if (sortBy === "updated") {
+      // 默认：直接用后端顺序（order_index asc，None 排到末尾，再按 updated_at desc）
+      return filtered;
+    }
     const sorted = [...filtered].sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name, "zh-CN");
       if (sortBy === "songs") return b.song_count - a.song_count;
-      // 默认 updated：后端 PosterSummary 暂无 updated_at 字段，按 name 倒序做 fallback
-      return a.name.localeCompare(b.name);
+      return 0;
     });
     return sorted;
   }, [store.posters, search, sortBy]);
@@ -440,11 +527,34 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
           const isRenaming = renamingId === p.id;
           const isSelected = selectedIds.has(p.id);
           return (
-            <li key={p.id} className="group" data-testid={`poster-item-${p.id}`}>
+            <li
+              key={p.id}
+              className="group relative"
+              data-testid={`poster-item-${p.id}`}
+              onDragOver={(e) => handleDragOver(e, p.id)}
+              onDragLeave={(e) => handleDragLeave(e, p.id)}
+              onDrop={(e) => void handleDrop(e, p.id)}
+            >
+              {/* M3 P2 拖拽插入线指示 */}
+              {dropTarget?.id === p.id && dropTarget.pos === "before" && (
+                <div
+                  className="absolute left-0 right-0 -top-px h-0.5 bg-sky-500 pointer-events-none"
+                  data-testid={`drop-indicator-before-${p.id}`}
+                />
+              )}
+              {dropTarget?.id === p.id && dropTarget.pos === "after" && (
+                <div
+                  className="absolute left-0 right-0 -bottom-px h-0.5 bg-sky-500 pointer-events-none"
+                  data-testid={`drop-indicator-after-${p.id}`}
+                />
+              )}
               <div
                 role="button"
                 tabIndex={0}
                 aria-pressed={isCurrent}
+                draggable={!multiSelectMode && !isRenaming}
+                onDragStart={(e) => handleDragStart(e, p.id)}
+                onDragEnd={handleDragEnd}
                 onClick={() => {
                   if (isRenaming) return;
                   if (multiSelectMode) { toggleSelect(p.id); return; }
@@ -464,6 +574,8 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
                     : isCurrent
                     ? (dark ? "bg-emerald-500/15 ring-1 ring-emerald-500/40" : "bg-emerald-50 ring-1 ring-emerald-200")
                     : (dark ? "hover:bg-zinc-800/50" : "hover:bg-muted")
+                } ${
+                  dragId === p.id ? "opacity-50" : ""
                 }`}
                 data-current={isCurrent ? "true" : "false"}
               >

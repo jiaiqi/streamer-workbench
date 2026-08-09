@@ -181,6 +181,8 @@ class PosterDocument:
     created_at: str = ""
     updated_at: str = ""
     optional_session_ref: Optional[str] = None  # 仅引用，不参与生命周期
+    # M3 P2: 拖拽排序 — 数字越小越靠前；None 表示未排序（按 updated_at desc 兜底）
+    order_index: Optional[int] = None
 
     @staticmethod
     def default(name: str = "未命名海报") -> "PosterDocument":

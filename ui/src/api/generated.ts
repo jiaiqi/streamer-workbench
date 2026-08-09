@@ -634,6 +634,8 @@ export interface PosterSummaryResponse {
   "song_count": number;
   "theme_id": string;
   "updated_at": string;
+  /** M3 P2: 拖拽排序用的 order_index；未排序时为 undefined */
+  "order_index"?: number | null;
   [key: string]: unknown;
 }
 
