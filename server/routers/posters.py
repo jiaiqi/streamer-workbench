@@ -362,7 +362,7 @@ def api_poster_batch(payload: PosterBatchRequest, req: Request):
     failed: list[dict] = []
     succeeded_count = 0
     new_ids: list[str] = []
-    for pid in cleaned:
+    for idx, pid in enumerate(cleaned):
         try:
             if action == "delete":
                 context.poster_service.delete(pid)
@@ -386,6 +386,14 @@ def api_poster_batch(payload: PosterBatchRequest, req: Request):
                 updated["theme_id"] = theme
                 context.poster_service.save(updated)
                 succeeded_count += 1
+            elif action == "reorder":
+                # M3 P2: 按数组下标写入 order_index（i 越大越靠后；用 0-based 整数）
+                poster, _rev = context.poster_service.get_with_revision(pid)
+                updated = poster.to_dict()
+                updated["revision"] = _rev
+                updated["order_index"] = idx  # idx 是 enumerate 给的全局下标
+                context.poster_service.save(updated)
+                succeeded_count += 1
         except PosterNotFound:
             failed.append({"id": pid, "error": "not_found"})
         except PosterServiceError as error:
@@ -400,6 +408,8 @@ def api_poster_batch(payload: PosterBatchRequest, req: Request):
         result["new_ids"] = new_ids
     elif action == "set_theme":
         result["updated"] = succeeded_count
+    elif action == "reorder":
+        result["reordered"] = succeeded_count
     result["failed"] = failed
     return result
 

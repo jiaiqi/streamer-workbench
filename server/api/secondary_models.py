@@ -196,6 +196,8 @@ class PosterResponse(PosterRequest):
     id: str
     created_at: str = ""
     updated_at: str = ""
+    # M3 P2: 拖拽排序字段
+    order_index: int | None = None
     # R1a.5：前端 CAS 自动保存所需的 revision（与服务端 sha256 hash 一致）
     revision: str = ""
 
@@ -997,11 +999,14 @@ class PosterBatchRequest(StrictRequest):
     action:
     - delete: 删除 ids 中所有海报
     - duplicate: 复制 ids 中所有海报（新 id + 「(副本)」名称）
-    - set_theme: 把 ids 中所有海报的 theme_id 改为 theme（M3 P1 首批：仅批量改主题）
+    - set_theme: 把 ids 中所有海报的 theme_id 改为 theme
+    - reorder: 按 ids 数组顺序写入每个 poster 的 order_index（M3 P2 拖拽排序）
+      — ids 必须是当前所有未删除 poster 的子集；服务端按数组下标分配 order_index
+      — 数组外的 poster 保持原 order_index（不会重排整库）
 
     ids 非空，且元素必须是合法 poster_id（避免 path traversal）。
     """
-    action: Literal["delete", "duplicate", "set_theme"]
+    action: Literal["delete", "duplicate", "set_theme", "reorder"]
     ids: list[str] = Field(..., min_length=1, max_length=200)
     # set_theme 时必填；其他 action 忽略
     theme: str | None = None

@@ -580,3 +580,127 @@ describe("PostersSidebar - 多选 + 批量操作（M3 P1）", () => {
     expect(screen.queryByTestId("poster-rename-input-poster_1")).toBeNull();
   });
 });
+
+describe("PostersSidebar - 拖拽排序（M3 P2）", () => {
+  // jsdom 没 DataTransfer，自己造一个 stub
+  function createDataTransfer() {
+    const data: Record<string, string> = {};
+    return {
+      types: ["text/plain"],
+      getData: (k: string) => data[k] ?? "",
+      setData: (k: string, v: string) => { data[k] = v; },
+      effectAllowed: "",
+      dropEffect: "",
+    } as unknown as DataTransfer;
+  }
+
+  it("非多选模式下，列表项可拖拽（draggable=true）", () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const div = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    expect(div.getAttribute("draggable")).toBe("true");
+  });
+
+  it("多选模式下 draggable=false（互斥）", () => {
+    const user = userEvent.setup();
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    // 进入多选
+    const toggle = screen.getByTestId("poster-multiselect-toggle");
+    fireEvent.click(toggle);
+    const div = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    expect(div.getAttribute("draggable")).toBe("false");
+  });
+
+  it("拖到目标项中部以上（before）→ dropTarget=before 指示线显示", async () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const targetLi = screen.getByTestId("poster-item-poster_2");
+    const targetRect = { top: 100, height: 40, bottom: 140, left: 0, right: 0, width: 0, x: 0, y: 0 } as DOMRect;
+    targetLi.getBoundingClientRect = () => targetRect;
+    const sourceDiv = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    const dt = createDataTransfer();
+    dt.setData("text/plain", "poster_1");
+    act(() => { fireEvent.dragStart(sourceDiv, { dataTransfer: dt }); });
+    // 手动 dispatch（确保 clientY 透传）
+    const dragOverEvent = new Event("dragover", { bubbles: true, cancelable: true }) as DragEvent;
+    Object.defineProperty(dragOverEvent, "clientY", { value: 105 });
+    Object.defineProperty(dragOverEvent, "dataTransfer", { value: dt });
+    act(() => { targetLi.dispatchEvent(dragOverEvent); });
+    await waitFor(() => expect(screen.getByTestId("drop-indicator-before-poster_2")).toBeTruthy());
+  });
+
+  it("拖到目标项中部以下（after）→ dropTarget=after 指示线显示", async () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const targetLi = screen.getByTestId("poster-item-poster_2");
+    const targetRect = { top: 100, height: 40, bottom: 140, left: 0, right: 0, width: 0, x: 0, y: 0 } as DOMRect;
+    targetLi.getBoundingClientRect = () => targetRect;
+    const sourceDiv = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    const dt = createDataTransfer();
+    dt.setData("text/plain", "poster_1");
+    act(() => { fireEvent.dragStart(sourceDiv, { dataTransfer: dt }); });
+    const dragOverEvent = new Event("dragover", { bubbles: true, cancelable: true }) as DragEvent;
+    Object.defineProperty(dragOverEvent, "clientY", { value: 130 });
+    Object.defineProperty(dragOverEvent, "dataTransfer", { value: dt });
+    act(() => { targetLi.dispatchEvent(dragOverEvent); });
+    await waitFor(() => expect(screen.getByTestId("drop-indicator-after-poster_2")).toBeTruthy());
+  });
+
+  it("drop → 调 store.batch(action='reorder', [...新顺序])", async () => {
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    // 拖 poster_1 拖到 poster_2 之后 → 顺序 [poster_2, poster_1, poster_3]
+    const sourceDiv = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    const targetLi = screen.getByTestId("poster-item-poster_2");
+    targetLi.getBoundingClientRect = () => ({ top: 100, height: 40, bottom: 140, left: 0, right: 0, width: 0, x: 0, y: 0 } as DOMRect);
+    // 模拟 DnD：dragStart source → dragOver target(after) → drop
+    const dt = createDataTransfer();
+act(() => { fireEvent.dragStart(sourceDiv, { dataTransfer: dt }); });
+    act(() => { fireEvent.dragOver(targetLi, { clientY: 130, dataTransfer: dt }); });
+    act(() => { fireEvent.drop(targetLi, { dataTransfer: dt }); });
+    await waitFor(() => {
+      expect(store.batch).toHaveBeenCalledWith("reorder",
+        expect.arrayContaining(["poster_2", "poster_1", "poster_3"]));
+    });
+  });
+
+  it("drop → store.batch 收到 3 个 id 全部", async () => {
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    const sourceDiv = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    const targetLi = screen.getByTestId("poster-item-poster_2");
+    targetLi.getBoundingClientRect = () => ({ top: 100, height: 40, bottom: 140, left: 0, right: 0, width: 0, x: 0, y: 0 } as DOMRect);
+    const dt = createDataTransfer();
+    act(() => { fireEvent.dragStart(sourceDiv, { dataTransfer: dt }); });
+    act(() => { fireEvent.dragOver(targetLi, { clientY: 130, dataTransfer: dt }); });
+    act(() => { fireEvent.drop(targetLi, { dataTransfer: dt }); });
+    await waitFor(() => {
+      const calls = store.batch.mock.calls.filter(c => c[0] === "reorder");
+      expect(calls.length).toBe(1);
+      const ids = calls[0][1];
+      expect(ids.length).toBe(3);
+      expect(new Set(ids)).toEqual(new Set(["poster_1", "poster_2", "poster_3"]));
+    });
+  });
+
+  it("drop 后 dragId 清空，指示线消失", () => {
+    render(<PostersSidebar store={makeFakeStore()} dark={false} />);
+    const sourceDiv = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    const targetLi = screen.getByTestId("poster-item-poster_2");
+    targetLi.getBoundingClientRect = () => ({ top: 100, height: 40, bottom: 140, left: 0, right: 0, width: 0, x: 0, y: 0 } as DOMRect);
+    const dt = createDataTransfer();
+    fireEvent.dragStart(sourceDiv, { dataTransfer: dt });
+    fireEvent.dragOver(targetLi, { clientY: 130, dataTransfer: dt, target: targetLi, currentTarget: targetLi });
+    expect(screen.getByTestId("drop-indicator-after-poster_2")).toBeTruthy();
+    fireEvent.drop(targetLi, { clientY: 130, dataTransfer: dt });
+    expect(screen.queryByTestId("drop-indicator-after-poster_2")).toBeNull();
+  });
+
+  it("拖到自身（source === target）→ 不调 store.batch", () => {
+    const store = makeFakeStore();
+    render(<PostersSidebar store={store} dark={false} />);
+    const sourceDiv = (screen.getByTestId("poster-item-poster_1") as HTMLElement).firstElementChild as HTMLElement;
+    const targetLi = screen.getByTestId("poster-item-poster_1");
+    const dt = createDataTransfer();
+    fireEvent.dragStart(sourceDiv, { dataTransfer: dt });
+    fireEvent.drop(targetLi, { dataTransfer: dt });
+    expect(store.batch).not.toHaveBeenCalled();
+  });
+});

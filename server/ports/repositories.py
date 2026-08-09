@@ -82,6 +82,8 @@ class PosterSummary:
     created_at: str
     updated_at: str
     song_count: int
+    # M3 P2: 拖拽排序用的 order_index（None 表示未排序，按 updated_at desc 排）
+    order_index: int | None = None
 
 
 class RepositoryError(Exception):
