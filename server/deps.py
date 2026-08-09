@@ -18,6 +18,10 @@ DEFAULT_SETTINGS = {
     "render_threads": 1,
     "appearanceMode": "system",
     "applicationAccentId": "bambooMoon",
+    # M2.4 WebDAV 自动同步默认（完整列表见 settings service）
+    "webdav_auto_sync_enabled": False,
+    "webdav_auto_sync_interval_minutes": 60,
+    "webdav_auto_sync_direction": "push",
 }
 
 

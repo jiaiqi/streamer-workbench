@@ -11,7 +11,7 @@
 /// - 凭证永不入 React state（密码字段保持 local state 不上报；提交后清空）
 /// - 主密码用于解锁 + 加密 settings 字段
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiClientError, apiRequest } from "../api/client";
 import { useApiError } from "../async/useApiError";
 import { useToast, type ToastApi } from "./Toast";
@@ -57,12 +57,12 @@ interface RemoteFile {
   href: string;
 }
 
-export default function WebDavPanel() {
+export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
   const { runWithToast } = useApiError();
   const toast = useSafeToast();
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [files, setFiles] = useState<RemoteFile[]>([]);
-  const [busy, setBusy] = useState<null | "test" | "list" | "push" | "pull" | "save" | "unlock" | "clear">(null);
+  const [busy, setBusy] = useState<null | "test" | "list" | "push" | "pull" | "save" | "unlock" | "clear" | "autosync">(null);
   const [inlineError, setInlineError] = useState("");
   const [online, setOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true,
@@ -77,6 +77,12 @@ export default function WebDavPanel() {
   });
   // 主密码（save / unlock / clear / push / pull 都用）
   const [masterPwd, setMasterPwd] = useState("");
+  // M2.4 自动同步状态
+  const [autoSync, setAutoSync] = useState<{
+    enabled: boolean; interval_minutes: number; direction: "push" | "pull" | "both";
+    last_at: string | null; last_status: string | null; last_error: string | null;
+    last_remote_name: string | null;
+  } | null>(null);
 
   // M2.15：监听离线
   useEffect(() => {
@@ -123,6 +129,103 @@ export default function WebDavPanel() {
       });
     return () => { active = false; };
   }, []);
+
+  // M2.4 拉自动同步状态（unlocked / locked 视图都用得到）
+  const refreshAutoSync = useCallback(async () => {
+    try {
+      const data = await apiRequest<{
+        enabled: boolean; interval_minutes: number;
+        direction: "push" | "pull" | "both";
+        last_at: string | null; last_status: string | null; last_error: string | null;
+        last_remote_name: string | null;
+      }>("/api/backup/webdav/auto-sync");
+      setAutoSync({
+        enabled: data.enabled,
+        interval_minutes: data.interval_minutes,
+        direction: data.direction,
+        last_at: data.last_at,
+        last_status: data.last_status,
+        last_error: data.last_error,
+        last_remote_name: data.last_remote_name,
+      });
+    } catch {
+      // 静默 — 自动同步是可选的
+    }
+  }, []);
+  useEffect(() => { void refreshAutoSync(); }, [refreshAutoSync]);
+
+  // M2.4: 自动同步相关 handlers
+  const handleAutoSyncChange = useCallback(async (patch: {
+    interval_minutes?: number; direction?: "push" | "pull" | "both";
+  }) => {
+    if (!guardOnline("修改自动同步设置")) return;
+    setBusy("autosync");
+    setInlineError("");
+    try {
+      await apiRequest("/api/backup/webdav/auto-sync", {
+        method: "POST", body: patch,
+      });
+      toast.success("自动同步设置已更新");
+      await refreshAutoSync();
+    } catch (reason) {
+      const failure = reason instanceof ApiClientError ? reason : null;
+      toast.error("更新失败", failure?.recovery ?? "请稍后重试");
+    } finally {
+      setBusy(null);
+    }
+  }, [refreshAutoSync, toast]);
+
+  const handleAutoSyncToggle = useCallback(async (enable: boolean) => {
+    if (!guardOnline(enable ? "启用自动同步" : "关闭自动同步")) return;
+    if (enable && !masterPwd) {
+      setInlineError("启用自动同步必须先填写主密码");
+      return;
+    }
+    setBusy("autosync");
+    setInlineError("");
+    try {
+      await apiRequest("/api/backup/webdav/auto-sync", {
+        method: "POST",
+        body: enable
+          ? { enabled: true, master_password: masterPwd }
+          : { enabled: false },
+      });
+      toast.success(enable ? "已启用自动同步" : "已关闭自动同步");
+      await refreshAutoSync();
+    } catch (reason) {
+      const failure = reason instanceof ApiClientError ? reason : null;
+      toast.error(enable ? "启用失败" : "关闭失败", failure?.recovery ?? "请稍后重试");
+    } finally {
+      setBusy(null);
+    }
+  }, [masterPwd, refreshAutoSync, toast]);
+
+  const handleAutoSyncRun = useCallback(async () => {
+    if (!guardOnline("立即同步")) return;
+    if (!masterPwd) {
+      setInlineError("立即同步必须先填写主密码");
+      return;
+    }
+    setBusy("autosync");
+    setInlineError("");
+    try {
+      const r = await apiRequest<{ ok: boolean; result: { error?: string } }>(
+        "/api/backup/webdav/auto-sync/run",
+        { method: "POST", body: { master_password: masterPwd } },
+      );
+      if (r.ok) {
+        toast.success("同步完成", "已写入远端 / 已从远端拉取");
+      } else {
+        toast.error("同步失败", r.result?.error ?? "未知错误");
+      }
+      await refreshAutoSync();
+    } catch (reason) {
+      const failure = reason instanceof ApiClientError ? reason : null;
+      toast.error("同步失败", failure?.recovery ?? "请稍后重试");
+    } finally {
+      setBusy(null);
+    }
+  }, [masterPwd, refreshAutoSync, toast]);
 
   const guardOnline = (action: string): boolean => {
     if (online) return true;
@@ -616,6 +719,91 @@ export default function WebDavPanel() {
               暂无远端备份，点「列出远端」或「推送新备份」开始
             </p>
           )}
+
+          {/* M2.4 自动同步 */}
+          <div className="grid gap-2 border-t pt-3" data-testid="webdav-autosync-section">
+            <div className="flex items-center justify-between">
+              <Label className="font-semibold">自动同步（M2.4）</Label>
+              <span className="text-[10px] text-muted-foreground" data-testid="webdav-autosync-status">
+                {autoSync?.enabled
+                  ? (autoSync.last_status === "success" ? `✅ 上次成功 ${autoSync.last_at ?? ""}`
+                     : autoSync.last_status === "failed" ? `❌ 上次失败 ${autoSync.last_at ?? ""}`
+                     : autoSync.last_status === "skipped" ? `⏸ 上次跳过 ${autoSync.last_at ?? ""}`
+                     : `⏳ 已启用（每 ${autoSync.interval_minutes} 分钟）`)
+                  : "未启用"}
+              </span>
+            </div>
+            {autoSync && autoSync.last_error && autoSync.last_status === "failed" && (
+              <p className="field-note warning-note text-[11px]"
+                data-testid="webdav-autosync-error">
+                错误：{autoSync.last_error}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-1.5">
+                <Label className="text-xs">间隔</Label>
+                <select
+                  className={`h-9 text-xs rounded-md border px-2 ${dark ? "bg-zinc-900 border-zinc-700" : "bg-background border-border"}`}
+                  value={autoSync?.interval_minutes ?? 60}
+                  disabled={busy === "autosync" || !online}
+                  onChange={e => void handleAutoSyncChange({
+                    interval_minutes: Number(e.target.value),
+                  })}
+                  data-testid="webdav-autosync-interval"
+                >
+                  <option value={15}>每 15 分钟</option>
+                  <option value={30}>每 30 分钟</option>
+                  <option value={60}>每 1 小时</option>
+                  <option value={180}>每 3 小时</option>
+                  <option value={360}>每 6 小时</option>
+                  <option value={720}>每 12 小时</option>
+                  <option value={1440}>每 24 小时</option>
+                </select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">方向</Label>
+                <select
+                  className={`h-9 text-xs rounded-md border px-2 ${dark ? "bg-zinc-900 border-zinc-700" : "bg-background border-border"}`}
+                  value={autoSync?.direction ?? "push"}
+                  disabled={busy === "autosync" || !online}
+                  onChange={e => void handleAutoSyncChange({
+                    direction: e.target.value as "push" | "pull" | "both",
+                  })}
+                  data-testid="webdav-autosync-direction"
+                >
+                  <option value="push">本地 → 远端（推荐）</option>
+                  <option value="pull">远端 → 本地（恢复）</option>
+                  <option value="both">双向</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {autoSync?.enabled ? (
+                <Button type="button" variant="outline"
+                  disabled={busy === "autosync" || !online || !masterPwd}
+                  onClick={() => void handleAutoSyncToggle(false)}
+                  data-testid="webdav-autosync-disable">
+                  关闭自动同步
+                </Button>
+              ) : (
+                <Button type="button"
+                  disabled={busy === "autosync" || !online || !masterPwd}
+                  onClick={() => void handleAutoSyncToggle(true)}
+                  data-testid="webdav-autosync-enable">
+                  启用自动同步
+                </Button>
+              )}
+              <Button type="button" variant="outline"
+                disabled={busy === "autosync" || !online || !masterPwd}
+                onClick={() => void handleAutoSyncRun()}
+                data-testid="webdav-autosync-run">
+                {busy === "autosync" ? "同步中…" : "立即同步一次"}
+              </Button>
+            </div>
+            <p className="field-note text-[10px] text-muted-foreground">
+              启用后主密码会加密保存在 settings（用于定时器自动解锁）；关闭时自动清除。
+            </p>
+          </div>
         </div>
       )}
 

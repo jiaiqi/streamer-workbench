@@ -1,4 +1,6 @@
-/// M2.2 WebDavPanel 单元测试。
+/// M2.2 WebDavPanel 单元测试 + M2.4 自动同步。
+import userEvent from "@testing-library/user-event";
+
 ///
 /// 覆盖：
 /// - 启动调 GET /api/backup/webdav/config
@@ -429,5 +431,209 @@ describe("WebDavPanel", () => {
     });
     // 错误状态无 testid 但 role=alert
     expect(getByTestId("webdav-panel").textContent).toContain("后端没起来");
+  });
+});
+
+describe("WebDavPanel - M2.4 自动同步", () => {
+  function setupUnlocked(_overrides: Record<string, unknown> = {}) {
+    // 模拟 enabled 状态可被 POST /auto-sync 改写
+    let enabled = false;
+    let interval_min = 60;
+    let direction: "push" | "pull" | "both" = "push";
+    apiRequest.mockImplementation((path: string, opts?: { body?: unknown }) => {
+      const [pathOnly] = path.split("?");
+      const method = (opts?.body !== undefined) ? "POST" : "GET";
+      if (pathOnly === "/api/backup/webdav/config") {
+        return Promise.resolve(SAMPLE_CONFIG);
+      }
+      if (pathOnly === "/api/backup/webdav/list") return Promise.resolve(SAMPLE_FILES);
+      if (pathOnly === "/api/backup/webdav/auto-sync") {
+        if (method === "POST" && opts?.body) {
+          const b = opts.body as Record<string, unknown>;
+          if (b.enabled === true) enabled = true;
+          if (b.enabled === false) enabled = false;
+          if (typeof b.interval_minutes === "number") interval_min = b.interval_minutes;
+          if (b.direction === "push" || b.direction === "pull" || b.direction === "both") {
+            direction = b.direction;
+          }
+        }
+        return Promise.resolve({
+          enabled, interval_minutes: interval_min, direction,
+          last_at: null, last_status: null, last_error: null, last_remote_name: null,
+        });
+      }
+      if (pathOnly === "/api/backup/webdav/auto-sync/run") {
+        return Promise.resolve({ ok: true, result: {} });
+      }
+      if (pathOnly === "/api/backup/webdav/push") return Promise.resolve(SAMPLE_PUSH);
+      if (pathOnly === "/api/backup/webdav/pull") return Promise.resolve(SAMPLE_PULL);
+      if (pathOnly === "/api/backup/webdav/test-saved") {
+        return Promise.resolve({ ok: true, status: 207, message: "ok" });
+      }
+      return Promise.resolve({});
+    });
+  }
+
+  // 辅助：等 unlocked + auto-sync 状态都落地
+  async function waitForUnlockedAndAutoSync(getByTestId: (id: string) => HTMLElement) {
+    await waitFor(() => expect(getByTestId("webdav-unlocked-section")).toBeTruthy());
+    await waitFor(() => {
+      const en = document.querySelector('[data-testid="webdav-autosync-enable"]');
+      const dis = document.querySelector('[data-testid="webdav-autosync-disable"]');
+      expect(en ?? dis).toBeTruthy();
+    });
+  }
+
+  it("unlocked 视图渲染自动同步 section + 默认未启用", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    expect(getByTestId("webdav-autosync-section")).toBeTruthy();
+    expect(getByTestId("webdav-autosync-status").textContent).toContain("未启用");
+    expect(getByTestId("webdav-autosync-enable")).toBeTruthy();
+    expect(document.querySelector('[data-testid="webdav-autosync-disable"]')).toBeNull();
+  });
+
+  it("自动同步启用时 status 文本反映成功状态", async () => {
+    apiRequest.mockImplementation((path: string) => {
+      const [pathOnly] = path.split("?");
+      if (pathOnly === "/api/backup/webdav/config") return Promise.resolve(SAMPLE_CONFIG);
+      if (pathOnly === "/api/backup/webdav/auto-sync") return Promise.resolve({
+        enabled: true, interval_minutes: 60, direction: "push",
+        last_at: "2026-08-09T10:30:00", last_status: "success",
+        last_error: null, last_remote_name: "song-20260809.songworkbench",
+      });
+      return Promise.resolve({});
+    });
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    const status = getByTestId("webdav-autosync-status");
+    expect(status.textContent).toContain("上次成功");
+    expect(getByTestId("webdav-autosync-disable")).toBeTruthy();
+    expect(document.querySelector('[data-testid="webdav-autosync-enable"]')).toBeNull();
+  });
+
+  it("自动同步失败时显示错误信息", async () => {
+    apiRequest.mockImplementation((path: string) => {
+      const [pathOnly] = path.split("?");
+      if (pathOnly === "/api/backup/webdav/config") return Promise.resolve(SAMPLE_CONFIG);
+      if (pathOnly === "/api/backup/webdav/auto-sync") return Promise.resolve({
+        enabled: true, interval_minutes: 60, direction: "push",
+        last_at: "2026-08-09T10:30:00", last_status: "failed",
+        last_error: "auth_failed: 401 Unauthorized", last_remote_name: null,
+      });
+      return Promise.resolve({});
+    });
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    const err = getByTestId("webdav-autosync-error");
+    expect(err.textContent).toContain("auth_failed: 401");
+  });
+
+  it("改间隔下拉 → POST /auto-sync 带 interval_minutes", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    const sel = getByTestId("webdav-autosync-interval") as HTMLSelectElement;
+    await userEvent.selectOptions(sel, "30");
+    await waitFor(() => {
+      const calls = apiRequest.mock.calls.filter(c => c[0] === "/api/backup/webdav/auto-sync"
+        && (c[1] as { method?: string })?.method === "POST");
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      const body = ((calls[calls.length - 1][1] as { body?: Record<string, unknown> }).body) ?? {};
+      expect(body.interval_minutes).toBe(30);
+    });
+  });
+
+  it("改方向下拉 → POST /auto-sync 带 direction", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    const sel = getByTestId("webdav-autosync-direction") as HTMLSelectElement;
+    await userEvent.selectOptions(sel, "both");
+    await waitFor(() => {
+      const calls = apiRequest.mock.calls.filter(c => c[0] === "/api/backup/webdav/auto-sync"
+        && (c[1] as { method?: string })?.method === "POST");
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      const body = ((calls[calls.length - 1][1] as { body?: Record<string, unknown> }).body) ?? {};
+      expect(body.direction).toBe("both");
+    });
+  });
+
+  it("启用自动同步：未填主密码时按钮 disabled", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    const enableBtn = getByTestId("webdav-autosync-enable") as HTMLButtonElement;
+    expect(enableBtn.disabled).toBe(true);
+  });
+
+  it("启用自动同步：填主密码后点击 → POST 启用带 master_password", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    fireEvent.change(getByTestId("webdav-input-master-password"),
+      { target: { value: "master123" } });
+    await userEvent.click(getByTestId("webdav-autosync-enable"));
+    await waitFor(() => {
+      const calls = apiRequest.mock.calls.filter(c => c[0] === "/api/backup/webdav/auto-sync"
+        && (c[1] as { method?: string })?.method === "POST");
+      const enableCall = calls.find(c => {
+        const b = ((c[1] as { body?: Record<string, unknown> }).body) ?? {};
+        return b.enabled === true;
+      });
+      expect(enableCall).toBeTruthy();
+      const body = ((enableCall![1] as { body?: Record<string, unknown> }).body) ?? {};
+      expect(body.master_password).toBe("master123");
+    });
+  });
+
+  it("关闭自动同步：POST enabled=false 不带 master_password", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    fireEvent.change(getByTestId("webdav-input-master-password"),
+      { target: { value: "master123" } });
+    await userEvent.click(getByTestId("webdav-autosync-enable"));
+    await waitFor(() => expect(getByTestId("webdav-autosync-disable")).toBeTruthy());
+    await userEvent.click(getByTestId("webdav-autosync-disable"));
+    await waitFor(() => {
+      const calls = apiRequest.mock.calls.filter(c => c[0] === "/api/backup/webdav/auto-sync"
+        && (c[1] as { method?: string })?.method === "POST");
+      const disableCall = calls.find(c => {
+        const b = ((c[1] as { body?: Record<string, unknown> }).body) ?? {};
+        return b.enabled === false;
+      });
+      expect(disableCall).toBeTruthy();
+      const body = ((disableCall![1] as { body?: Record<string, unknown> }).body) ?? {};
+      expect(body.master_password).toBeUndefined();
+    });
+  });
+
+  it("「立即同步一次」→ POST /auto-sync/run 带 master_password", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    fireEvent.change(getByTestId("webdav-input-master-password"),
+      { target: { value: "master123" } });
+    await userEvent.click(getByTestId("webdav-autosync-run"));
+    await waitFor(() => {
+      const calls = apiRequest.mock.calls.filter(c => c[0] === "/api/backup/webdav/auto-sync/run"
+        && (c[1] as { method?: string })?.method === "POST");
+      expect(calls.length).toBe(1);
+      const body = ((calls[0][1] as { body?: Record<string, unknown> }).body) ?? {};
+      expect(body.master_password).toBe("master123");
+    });
+  });
+
+  it("离线时启用按钮 disabled", async () => {
+    setupUnlocked();
+    const { getByTestId } = render(<WebDavPanel />);
+    await waitForUnlockedAndAutoSync(getByTestId);
+    fireEvent(window, new Event("offline"));
+    await waitFor(() => {
+      const enable = getByTestId("webdav-autosync-enable") as HTMLButtonElement;
+      expect(enable.disabled).toBe(true);
+    });
   });
 });

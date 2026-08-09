@@ -21,6 +21,13 @@ APPLICATION_ACCENT_IDS = frozenset({
 DEFAULT_APPEARANCE_MODE = "system"
 DEFAULT_APPLICATION_ACCENT_ID = "bambooMoon"
 
+# M2.4 WebDAV 自动同步字段
+AUTO_SYNC_DIRECTIONS = frozenset({"push", "pull", "both"})
+DEFAULT_AUTO_SYNC_DIRECTION = "push"
+DEFAULT_AUTO_SYNC_INTERVAL_MINUTES = 60
+MIN_AUTO_SYNC_INTERVAL_MINUTES = 1
+MAX_AUTO_SYNC_INTERVAL_MINUTES = 1440  # 24 小时
+
 
 class SettingsServiceError(Exception):
     """设置用例的稳定业务错误基类。"""
@@ -72,4 +79,33 @@ class SettingsApplicationService:
             settings["appearanceMode"] = DEFAULT_APPEARANCE_MODE
         if settings.get("applicationAccentId") not in APPLICATION_ACCENT_IDS:
             settings["applicationAccentId"] = DEFAULT_APPLICATION_ACCENT_ID
+
+        # M2.4 自动同步：宽松校验，错误兜底默认
+        enabled = settings.get("webdav_auto_sync_enabled")
+        if enabled is None:
+            settings["webdav_auto_sync_enabled"] = False
+        elif not isinstance(enabled, bool):
+            raise SettingsValidationFailed("webdav_auto_sync_enabled 必须是 bool")
+        interval = settings.get("webdav_auto_sync_interval_minutes")
+        if interval is None:
+            settings["webdav_auto_sync_interval_minutes"] = DEFAULT_AUTO_SYNC_INTERVAL_MINUTES
+        elif (not isinstance(interval, int) or isinstance(interval, bool)
+              or not MIN_AUTO_SYNC_INTERVAL_MINUTES <= interval <= MAX_AUTO_SYNC_INTERVAL_MINUTES):
+            raise SettingsValidationFailed(
+                f"webdav_auto_sync_interval_minutes 必须是 "
+                f"{MIN_AUTO_SYNC_INTERVAL_MINUTES}-{MAX_AUTO_SYNC_INTERVAL_MINUTES} 的整数"
+            )
+        direction = settings.get("webdav_auto_sync_direction")
+        if direction is None:
+            settings["webdav_auto_sync_direction"] = DEFAULT_AUTO_SYNC_DIRECTION
+        elif direction not in AUTO_SYNC_DIRECTIONS:
+            raise SettingsValidationFailed(
+                f"webdav_auto_sync_direction 必须是 {sorted(AUTO_SYNC_DIRECTIONS)} 之一"
+            )
+        # last_* 状态字段：nullable 字符串
+        for key in ("webdav_auto_sync_last_at", "webdav_auto_sync_last_status",
+                    "webdav_auto_sync_last_error", "webdav_auto_sync_last_remote_name"):
+            v = settings.get(key)
+            if v is not None and not isinstance(v, str):
+                raise SettingsValidationFailed(f"{key} 必须是字符串或 null")
         return settings
