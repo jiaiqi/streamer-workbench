@@ -34,3 +34,4 @@ class AppContext:
     stats_service: Any = None           # R4 统计聚合增量
     metadata_router: Any = None         # M2.7+ 在线元数据 Router（multi-provider）
     webdav_service: Any = None          # M2.2 WebDAV 同步服务
+    auto_sync_scheduler: Any = None     # M2.4 WebDAV 自动同步调度器

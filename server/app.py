@@ -185,10 +185,24 @@ def _lifespan(config: AppConfig, paths):
                 metadata_router=metadata_router,  # M2.7+/M2.8
                 webdav_service=webdav_service,    # M2.2
             )
+            # M2.4 自动同步调度器
+            from server.services.auto_sync import AutoSyncScheduler
+            auto_sync_scheduler = AutoSyncScheduler(
+                webdav_service=webdav_service,
+                settings_service=settings_service,
+            )
+            context.auto_sync_scheduler = auto_sync_scheduler
+            # 启动后台循环（如果 enabled）— 等 stop 时 await 完成
+            await auto_sync_scheduler.start()
             app.state.context = context
             try:
                 yield
             finally:
+                # M2.4 停止自动同步后台循环（await 确保 task 完整结束）
+                try:
+                    await auto_sync_scheduler.stop()
+                except Exception:
+                    logger.exception("停止 AutoSyncScheduler 失败")
                 app.state.export_jobs.close()
                 del app.state.context
         finally:
@@ -250,6 +264,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(metadata.router)
     from server.routers import webdav  # M2.2 WebDAV 同步
     app.include_router(webdav.router)
+    from server.routers import auto_sync as auto_sync_router  # M2.4 自动同步
+    app.include_router(auto_sync_router.router)
 
     @app.get("/api/health")
     def health(request: Request):

@@ -1005,3 +1005,22 @@ class PosterBatchRequest(StrictRequest):
     ids: list[str] = Field(..., min_length=1, max_length=200)
     # set_theme 时必填；其他 action 忽略
     theme: str | None = None
+
+
+# ── M2.4 WebDAV 自动同步 ────────────────────────────────────
+
+class AutoSyncSettingsRequest(StrictRequest):
+    """POST /api/backup/webdav/auto-sync - 启用 / 关闭 / 调间隔 / 调方向。
+
+    全部字段 optional；只更新传入的字段。
+    enabled=true 时必须同时提供 master_password（用于 scheduler 内部解锁）。
+    """
+    enabled: bool | None = None
+    interval_minutes: int | None = Field(default=None, ge=1, le=1440)
+    direction: Literal["push", "pull", "both"] | None = None
+    master_password: str | None = None
+
+
+class AutoSyncRunRequest(StrictRequest):
+    """POST /api/backup/webdav/auto-sync/run - 立即触发一次同步。"""
+    master_password: str = Field(..., min_length=1, max_length=200)

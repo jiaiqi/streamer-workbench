@@ -397,6 +397,119 @@ class WebDavSyncService:
             return {"ok": False, "status": 0, "message": str(exc)}
         return {**result, "remote_dir": cfg["remote_dir"]}
 
+    # ── M2.4 内部 push/pull（用已解密 cfg，避免上层再输主密码） ──
+
+    def push_internal(self, cfg: dict[str, Any]) -> dict[str, Any]:
+        """用已解密 cfg 直接 push。供 AutoSyncScheduler 调用。
+
+        cfg = {url, username, password, remote_dir}。
+        """
+        client = _make_client(cfg["url"], cfg["username"], cfg["password"])
+        remote_dir = cfg["remote_dir"]
+        backup_dir = _backup_subdir(remote_dir)
+        tmp_path = self._tmp_dir / _new_backup_name("autopush")
+        try:
+            manifest = export_backup(
+                output=tmp_path,
+                data_root=self._data_root,
+                password=None,
+            )
+            client.ensure_collection(remote_dir)
+            client.ensure_collection(backup_dir)
+            remote_name = tmp_path.name
+            remote_path = backup_dir + "/" + remote_name
+            client.upload(remote_path, tmp_path.read_bytes())
+            return {
+                "ok": True,
+                "remote_path": remote_path,
+                "remote_name": remote_name,
+                "file_count": manifest.get("file_count", 0),
+                "total_bytes": manifest.get("total_bytes", 0),
+            }
+        finally:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def list_remote_internal(self, cfg: dict[str, Any]) -> list[dict[str, Any]]:
+        """用已解密 cfg 列出远端 backup 子目录。"""
+        client = _make_client(cfg["url"], cfg["username"], cfg["password"])
+        backup_dir = _backup_subdir(cfg["remote_dir"])
+        client.ensure_collection(cfg["remote_dir"])
+        client.ensure_collection(backup_dir)
+        return client.list(backup_dir)
+
+    def pull_internal(self, cfg: dict[str, Any], remote_name: str) -> dict[str, Any]:
+        """用已解密 cfg 直接 pull 远端指定 .songworkbench。"""
+        if not _is_safe_backup_name(remote_name):
+            raise WebDavConfigInvalid(f"远端文件名不合法: {remote_name}")
+        client = _make_client(cfg["url"], cfg["username"], cfg["password"])
+        remote_dir = cfg["remote_dir"]
+        backup_dir = _backup_subdir(remote_dir)
+        remote_path = backup_dir + "/" + remote_name
+        tmp_path = self._tmp_dir / ("autopull-" + remote_name)
+        try:
+            payload = client.download(remote_path)
+            tmp_path.write_bytes(payload)
+            verify = backup_verify(tmp_path, password=None)
+            if not verify["ok"]:
+                raise WebDavLocalError(
+                    f"远端备份校验失败: missing={verify['missing']} "
+                    f"mismatched={len(verify['mismatched'])} 项"
+                )
+            result = import_backup(
+                input=tmp_path,
+                data_root=self._data_root,
+                password=None,
+            )
+            return {
+                "ok": True,
+                "remote_name": remote_name,
+                "added": result.get("added", 0),
+                "skipped": result.get("skipped", 0),
+            }
+        finally:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def auto_run_once(self, *, master_password: str) -> dict[str, Any]:
+        """执行一次自动同步：按 settings 中的 direction 跑 push/pull/both。
+
+        返回 {ok, ran, push: {...}, pull: {...}, error}。
+        """
+        cfg = self._unlock(master_password)
+        direction = (self._settings_service.get()
+                     .get("webdav_auto_sync_direction") or "push")
+        result: dict[str, Any] = {"ok": True, "ran": [direction]}
+        try:
+            if direction in ("push", "both"):
+                result["push"] = self.push_internal(cfg)
+            if direction in ("pull", "both"):
+                # 自动 pull：取远端最新一份（按 list 第一个）拉下来
+                items = self.list_remote_internal(cfg)
+                if not items:
+                    result["pull"] = {"ok": True, "skipped": "no_remote_files"}
+                else:
+                    latest = items[-1]  # list 一般按时间升序
+                    name = latest.get("name") or latest.get("href", "").rstrip("/").split("/")[-1]
+                    if not name or not _is_safe_backup_name(name):
+                        result["pull"] = {"ok": False, "skipped": "invalid_remote_name"}
+                    else:
+                        result["pull"] = self.pull_internal(cfg, name)
+        except (WebDavAuthError, WebDavAuthFailed) as exc:
+            result["ok"] = False
+            result["error"] = f"auth_failed: {exc}"
+        except (WebDavNetworkError, WebDavRemoteUnavailable) as exc:
+            result["ok"] = False
+            result["error"] = f"remote_unavailable: {exc}"
+        except (WebDavLocalError, Exception) as exc:  # noqa: BLE001
+            result["ok"] = False
+            result["error"] = f"local_error: {exc}"
+        return result
+
     # ── 内部 helpers ──
 
     def _unlock(self, master_password: str) -> dict[str, Any]:
