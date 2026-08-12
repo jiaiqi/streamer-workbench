@@ -2,6 +2,7 @@
 
 R4 Runtime v1：get_layout 支持按 DataChannel 过滤；list_layouts 返回
 每个 layout 的 supported_channels 字段，方便前端 / 文档展示。
+R4 Runtime v2：导出 LayoutPlan / LayoutAnalysis / PagePlan / SectionPlan / LayoutContext。
 M0.2 (蓝图 v0.1)：新增 fullscreen-flow（全屏柔光绕排版）。
 """
 from .grid_wrap import GridWrapLayout
@@ -10,6 +11,14 @@ from .live_set import LiveSetLayout
 from .learning_report import LearningReportLayout
 from .fullscreen_flow import FullscreenFlowLayout
 from .channel import DataChannel, CHANNELS, normalize_channel, is_supported
+from .plan import (
+    LayoutAnalysis,
+    LayoutPlan,
+    PagePlan,
+    SectionLayoutKind,
+    SectionPlan,
+)
+from .ctx import LayoutContext
 
 REGISTRY = {
     "grid-wrap": GridWrapLayout(),
@@ -65,4 +74,7 @@ def layout_params(layout_id: str):
 __all__ = [
     "REGISTRY", "get_layout", "list_layouts", "layout_params",
     "DataChannel", "CHANNELS", "normalize_channel", "is_supported",
+    # R4 Runtime v2
+    "LayoutAnalysis", "LayoutPlan", "PagePlan", "SectionPlan", "SectionLayoutKind",
+    "LayoutContext",
 ]

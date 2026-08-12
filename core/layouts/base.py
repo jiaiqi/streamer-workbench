@@ -15,12 +15,18 @@ P2 R4 通用化：ParamSpec 升级为全平台契约，UI 右侧 Inspector 通�
 R4 Runtime v1：LayoutPlugin 显式声明 supported_channels（见 channel.py）。
 新 layout 必须从 ("song_library" / "live_session" / "learning_report") 中
 至少选一个；不声明 = 默认空 tuple = 不被任何通道接受（防御性兜底）。
+
+R4 Runtime v2：统一 analyze(library, ctx: LayoutContext) -> LayoutAnalysis
+签名（替代旧 analyze(library, canvas, **kwargs)）。LayoutPlugin 基类给默认
+实现：返 LayoutAnalysis(page_count=plugin.pages or 1)，子类可 override。
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, List, Literal, Optional
 
 from .channel import DataChannel
+from .ctx import LayoutContext
+from .plan import LayoutAnalysis, LayoutPlan, PagePlan, SectionPlan
 
 
 # UI 渲染侧的 kind 枚举（Literal 比 string 更利于前端类型生成）
@@ -96,6 +102,51 @@ class LayoutPlugin(ABC):
     @abstractmethod
     def render_page(self, ctx, page: int, library) -> int:
         """把该页内容画到 ctx 画布上。返回内容结束 y（供质检/柔光校验）。"""
+
+    # ---- R4 Runtime v2: analyze / plan 三段式契约 ----
+    def analyze(self, library, ctx: LayoutContext) -> LayoutAnalysis:
+        """v2 统一签名：分析输入数据，返回 LayoutAnalysis。
+
+        默认实现：返 LayoutAnalysis(page_count=self.pages or 1)。
+        子类应 override 以反映"auto 分页"等真实分析。
+
+        v1 兼容：旧 layout 用 analyze(library, canvas, **kwargs) 旧签名；
+        仍可工作（v2 不删除旧签名，子类自己重写 v2 签名）。
+        """
+        fixed_pages = self.pages or 1
+        return LayoutAnalysis(page_count=fixed_pages)
+
+    def plan(self, library, ctx: LayoutContext) -> LayoutPlan:
+        """v2: 生成 LayoutPlan（完整输出计划）。
+
+        默认实现：调 analyze() + categorize()（旧签名，只传 library） +
+        简单组装为 LayoutPlan。子类可 override 以处理 parameters 或
+        提供更精确的 PagePlan（如 magazine-flow 的 axis/columns_per_section）。
+
+        v1 兼容：categorize() 旧签名只接 library（不接 parameters）；
+        默认 plan() 不传 parameters，magazine-flow 自己 override plan()。
+        """
+        analysis = self.analyze(library, ctx)
+        sections = self.categorize(library)  # 旧签名
+        pages: List[PagePlan] = []
+        for ps in sections:
+            page_plan = PagePlan(
+                page=ps.page,
+                sections=tuple(
+                    SectionPlan(label=sec["label"], song_titles=tuple(sec["songs"]))
+                    for sec in ps.sections
+                ),
+            )
+            pages.append(page_plan)
+        # 应用 param_overrides
+        overrides = dict(ctx.parameters) if ctx.parameters else {}
+        return LayoutPlan(
+            layout_id=self.id,
+            layout_version="1",
+            analysis=analysis,
+            pages=tuple(pages),
+            param_overrides=overrides,
+        )
 
     # ---- 额外颜色角色 ----
     # 排版可声明自己需要的扩展颜色（如卡片背景、装饰色）。

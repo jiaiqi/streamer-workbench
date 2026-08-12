@@ -26,6 +26,8 @@ from typing import Any, List, Mapping, Optional, Tuple
 
 from .base import LayoutPlugin, PageSections, ParamSpec
 from ..context import DrawContext
+from .ctx import LayoutContext
+from .plan import LayoutAnalysis
 from . import _common
 
 
@@ -150,17 +152,41 @@ class LearningReportLayout(LayoutPlugin):
             "supported_channels": list(self.supported_channels),
         }
 
-    def analyze(self, library, canvas, **kwargs) -> dict:
+    def analyze(self, library, ctx: LayoutContext, **kwargs) -> LayoutAnalysis:
+        """R4 Runtime v2: 统一签名 analyze(library, ctx)。
+
+        learning-report 固定 1 页；返 4 段统计（已学歌曲/时间线/歌手/天数）。
+
+        v1 兼容：ctx 可为 LayoutContext / CanvasSpec / duck-typed canvas-like。
+        """
+        from .ctx import LayoutContext
+        from ..spec import CanvasSpec
+        if not isinstance(ctx, LayoutContext):
+            if isinstance(ctx, CanvasSpec) or (
+                hasattr(ctx, "width") and hasattr(ctx, "height")
+            ):
+                pass  # 接受 duck-typed / CanvasSpec
+            else:
+                raise TypeError(
+                    f"ctx 期望 LayoutContext/CanvasSpec/canvas-like，得到 {type(ctx).__name__}"
+                )
         if not isinstance(library, LearningReportSnapshot):
-            return {
-                "page_count": 1,
-                "empty": True,
-                "degrade_reason": "library 不是 LearningReportSnapshot",
-            }
+            return LayoutAnalysis(
+                page_count=1,
+                degrade_reason="library 不是 LearningReportSnapshot",
+                sections_count=0,
+            )
         summary = library.analyze_summary()
-        summary["page_count"] = 1
-        summary["empty"] = library.is_empty
-        return summary
+        return LayoutAnalysis(
+            page_count=1,
+            sections_count=4,  # 已学歌曲/时间线/歌手/天数 4 段
+            total_songs=summary.get("songs_learned", 0),
+            max_density={
+                "songs_learned": summary.get("songs_learned", 0),
+                "timeline": summary.get("timeline", 0),
+                "artists": summary.get("artists", 0),
+            },
+        )
 
     def categorize(self, library) -> list[PageSections]:
         if not isinstance(library, LearningReportSnapshot):

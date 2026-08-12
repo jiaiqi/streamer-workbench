@@ -9,9 +9,14 @@ render_page 原样搬旧 compose() 的 page1/page2 主流程，保证渲染结�
   例「恋爱ing」是 5 字但旧脚本放在三字列表 → section=3
 - section 未标记的歌按字数自动分组（中文按 len(title)，含英文按分类规则）
 - 覆盖文件：songs.py 的 YI/ER/SAN/.../LONG_CN 列表维护 section 标记
+
+R4 Runtime v2：grid-wrap 显式实现 analyze() 返固定 2 页 LayoutAnalysis
+（继承 base 默认实现即可），但为 7 段（4+3）提供 sections_count 准确值。
 """
 from .base import LayoutPlugin, ParamSpec, PageSections
 from ..context import DrawContext
+from .ctx import LayoutContext
+from .plan import LayoutAnalysis
 
 
 def _group(library):
@@ -118,6 +123,24 @@ class GridWrapLayout(LayoutPlugin):
                 {"label": "长歌名/英文", "songs": g[7]},
             ]),
         ]
+
+    def analyze(self, library, ctx: LayoutContext) -> LayoutAnalysis:
+        """R4 Runtime v2: 统一签名 analyze(library, ctx)。
+
+        grid-wrap 固定 2 页（pages=2），7 个分类段（一/二/三/四/五/六/长）。
+        始终返 sections_count=7（无 library 依赖）；super_analyze 给
+        page_count 兜底（防御性：旧 ctx=None 路径仍能跑）。
+        """
+        from .ctx import LayoutContext
+        if not isinstance(ctx, LayoutContext):
+            # v1 兼容：ctx 缺省时返默认（防御性，不应触发）
+            return LayoutAnalysis(page_count=2, sections_count=7, axes_used=("chars",))
+        return LayoutAnalysis(
+            page_count=2,
+            sections_count=7,
+            axes_used=("chars",),
+            total_songs=len(library.mastered()) if hasattr(library, "mastered") else 0,
+        )
 
     def render_page(self, ctx: DrawContext, page: int, library) -> int:
         spec = ctx.spec
