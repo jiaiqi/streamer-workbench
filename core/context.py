@@ -42,6 +42,12 @@ class DrawContext:
     # 排版插件按需通过 setattr 或单测 fixture 注入。RenderDocument 路径会从
     # poster.parameters 取出后注入。
     parameters: Optional[dict] = None
+    # R4 Runtime v2: Palette/Skin 真实接线（双轨过渡）
+    # - palette: 可选；存在时 effective_style 优先取 palette.to_style()
+    # - skin: 可选；存在时 effective_style = skin.apply_to_style(style, palette)
+    # - 不传时 effective_style == style（v1 行为，0 像素差异）
+    palette: Optional["Palette"] = None   # type: ignore[name-defined]  # noqa: F821
+    skin: Optional["Skin"] = None         # type: ignore[name-defined]  # noqa: F821
 
     # ---- 排版公共能力 ----
 
@@ -54,8 +60,22 @@ class DrawContext:
         """分界线下右边界。"""
         return R_BELOW
 
+    @property
+    def effective_style(self) -> Style:
+        """R4 Runtime v2: 优先级 skin > palette > style。
+
+        - 无 skin/palette：返 self.style（v1 行为，0 像素差异）
+        - 有 palette 无 skin：返 palette.to_style()（双轨过渡走新值）
+        - 有 skin：返 skin.apply_to_style(self.style, self.palette)
+        """
+        if self.skin is not None:
+            return self.skin.apply_to_style(self.style, self.palette)
+        if self.palette is not None:
+            return self.palette.to_style()
+        return self.style
+
     def draw_label(self, x, y, text):
-        st = self.style
+        st = self.effective_style  # R4 Runtime v2: 双轨
         d = self.draw
         font_label = self.font_label
         tw = d.textlength(text, font=font_label)
@@ -70,7 +90,7 @@ class DrawContext:
     def draw_grid(self, songs, cols, y0, x0_area, x1_area):
         """全行分布：第一列文字从 x0_area 开始，最后一列在 x1_area 结束。
         返回栏 x 坐标列表。"""
-        st = self.style
+        st = self.effective_style  # R4 Runtime v2: 双轨
         d = self.draw
         font = self.font_song
         colws = []
@@ -91,7 +111,7 @@ class DrawContext:
     def draw_grid_wrap(self, songs, cols, y0, x0_area):
         """绕排版网格（同列减栏）。详见 streamer-workbench 项目结构设计 §6.2。
         返回实际占用行数。"""
-        st = self.style
+        st = self.effective_style  # R4 Runtime v2: 双轨
         d = self.draw
         spec = self.spec
         font = self.font_song

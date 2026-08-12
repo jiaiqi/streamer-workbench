@@ -343,7 +343,7 @@ class MagazineFlowLayout(LayoutPlugin):
         0 = 跟随顶级 ctx.parameters['columns'] (默认 2)。
         """
         axis = getattr(ctx, "axis", AXIS_NONE)
-        params = getattr(ctx, "parameters", {}) or {}
+        params = ctx.parameters or {}  # R4 Runtime v2: ctx.parameters 始终有值（V2.4 链路修复）
         page_sections = self.categorize(library, axis, parameters=params)
         if not page_sections:
             return 0

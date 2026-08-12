@@ -58,7 +58,13 @@
 - 统计页（StatsView）：事件流、洞察 tab、点歌热度、最近演唱
 - 命令面板（Cmd+K）、全局快捷键、Onboarding、状态栏、帮助中心
 - M2.13 系统集成：播控菜单、系统通知、Dock Badge、LiveView 队列数联动
-- R4 Runtime v2（V2.1 + V2.2 收口）：LayoutPlan / LayoutAnalysis / PagePlan / SectionPlan 数据结构 + LayoutContext；4 套 layout `analyze(library, ctx)` 统一签名；`engine.render_pages` 解耦写死 magazine_flow import；51 项新测试，1218 Python + 734 vitest 全过，16/16 金标准 0 像素差异，0 新依赖
+- R4 Runtime v2（V2.1 + V2.2 + V2.3 + V2.4 全部收口）：
+  - **V2.1** LayoutPlan / LayoutAnalysis / PagePlan / SectionPlan 数据结构 + LayoutContext
+  - **V2.2** 4 套 layout `analyze(library, ctx)` 统一签名 + `engine.render_pages` 解耦写死 magazine_flow import
+  - **V2.3** Palette/Skin 真实接线（`Palette.to_style()` + `Skin.from_palette_and_layout()` 工厂 + `Skin.apply_to_style()` + `DrawContext.effective_style` 双轨过渡 `skin > palette > style`）
+  - **V2.4** Parameters 真正流到 `ctx.parameters`（`engine.render_page` 接受 `parameters` 可选参 + `render_document` 透传 + 3 套 layout 删除 `getattr(ctx, "parameters", {})` fallback 改用 `ctx.parameters` 直读）
+  - 共 72 项新测试（25 plan + 26 runtime_v2 + 21 palette_skin_wiring）
+  - 1239 Python + 734 vitest 全过，16/16 金标准 0 像素差异，0 新依赖
 - SettingsView：output_dir / default_canvas / default_theme / font_path / 备份设置 / 外观
 
 ### 明确**在线可选**的功能域（不是离线故障，是设计如此）
