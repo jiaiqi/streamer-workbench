@@ -23,6 +23,44 @@ export function listPosters(): Promise<PosterSummaryResponse[]> {
   return apiRequest<PosterSummaryResponse[]>("/api/posters");
 }
 
+// ── R4 Runtime v2 v2.5: Theme × Layout 能力矩阵 ──
+
+export interface CompatibilityCheckResult {
+  compatible: boolean;
+  reason: string;
+}
+
+export interface CompatibilityMatrix {
+  layouts: string[];
+  themes: string[];
+  matrix: Record<string, Record<string, CompatibilityCheckResult>>;
+}
+
+export function checkCompatibility(
+  layoutId: string,
+  themeId: string,
+): Promise<CompatibilityCheckResult> {
+  return apiRequest<CompatibilityCheckResult>(
+    `/api/compatibility?layout_id=${encodeURIComponent(layoutId)}&theme_id=${encodeURIComponent(themeId)}`,
+  );
+}
+
+export function getCompatibilityMatrix(): Promise<CompatibilityMatrix> {
+  return apiRequest<CompatibilityMatrix>("/api/compatibility/matrix");
+}
+
+export function getCompatibleLayoutsForTheme(themeId: string): Promise<{ items: string[] }> {
+  return apiRequest<{ items: string[] }>(
+    `/api/compatibility/layouts?theme_id=${encodeURIComponent(themeId)}`,
+  );
+}
+
+export function getCompatibleThemesForLayout(layoutId: string): Promise<{ items: string[] }> {
+  return apiRequest<{ items: string[] }>(
+    `/api/compatibility/themes?layout_id=${encodeURIComponent(layoutId)}`,
+  );
+}
+
 export function getPoster(posterId: string): Promise<PosterResponse> {
   return apiRequest<PosterResponse>(`/api/posters/${posterId}`);
 }

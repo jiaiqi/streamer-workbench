@@ -46,6 +46,8 @@ def load_theme(theme_dir: str) -> Theme:
         styles=styles,
         font=cfg.get("font"),
         notes=cfg.get("notes", ""),
+        # R4 Runtime v2 v2.5: theme 端能力声明（缺省 = 全部兼容）
+        compatible_layouts=tuple(cfg.get("compatible_layouts", ())),
     )
 
 
