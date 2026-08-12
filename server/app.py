@@ -262,6 +262,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(audio.router)
     from server.routers import metadata  # M2.7+/M2.8 在线元数据
     app.include_router(metadata.router)
+    # R4 Runtime v2 v2.5: Theme × Layout 能力矩阵
+    from server.routers import compatibility
+    app.include_router(compatibility.router)
     from server.routers import webdav  # M2.2 WebDAV 同步
     app.include_router(webdav.router)
     from server.routers import auto_sync as auto_sync_router  # M2.4 自动同步

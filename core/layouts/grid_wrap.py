@@ -48,6 +48,12 @@ class GridWrapLayout(LayoutPlugin):
     # R4 Runtime v1: 走 SongLibrary 数据通道
     supported_channels = ("song_library",)
 
+    # R4 Runtime v2 v2.5: 演示 layout 端能力声明 — grid-wrap 排除「月夜星河」
+    # （呼应 theme 端月夜星河排除 grid-wrap；双端声明演示双向校验）
+    def compatible_themes(self) -> tuple:
+        return ("海洋柔光", "梦幻海洋", "卡通音符", "奶油玻璃", "奶油花园",
+                "轻复古唱片", "青提气泡")  # 不含「月夜星河」
+
     def params(self) -> list[ParamSpec]:
         return [
             ParamSpec("margin", "边距", "int", 58, min=0, max=200,

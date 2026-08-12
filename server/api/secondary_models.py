@@ -1029,3 +1029,26 @@ class AutoSyncSettingsRequest(StrictRequest):
 class AutoSyncRunRequest(StrictRequest):
     """POST /api/backup/webdav/auto-sync/run - 立即触发一次同步。"""
     master_password: str = Field(..., min_length=1, max_length=200)
+
+
+# ── R4 Runtime v2 v2.5: Theme × Layout 能力矩阵 ──
+
+class CompatibilityCheckResponse(BaseModel):
+    """单对 (layout_id, theme_id) 兼容性校验结果。"""
+    model_config = ConfigDict(extra="forbid")
+    compatible: bool
+    reason: str = ""
+
+
+class CompatibilityMatrixResponse(BaseModel):
+    """完整 layout × theme 兼容矩阵。"""
+    model_config = ConfigDict(extra="forbid")
+    layouts: list[str]
+    themes: list[str]
+    matrix: dict  # {layout_id: {theme_id: {compatible, reason}}}
+
+
+class CompatibilityListResponse(BaseModel):
+    """某 layout 兼容的 theme 列表 / 某 theme 兼容的 layout 列表。"""
+    model_config = ConfigDict(extra="forbid")
+    items: list[str]

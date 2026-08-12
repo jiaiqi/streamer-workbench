@@ -155,6 +155,18 @@ class LayoutPlugin(ABC):
     def extra_colors(self) -> dict:
         return {}
 
+    # ---- R4 Runtime v2: 能力矩阵 ----
+    def compatible_themes(self) -> tuple:
+        """v2 能力矩阵：声明该 layout 适配哪些 theme。
+
+        返回 theme id 元组（"海洋柔光" / "月夜星河" / ...）。
+        默认空 tuple = 全部兼容（v1 兼容）。
+        子类可 override：例如 live-set 排除某些过于花哨的主题。
+
+        校验逻辑见 core.layouts.compat.check_compatibility（双向校验）。
+        """
+        return ()
+
     # ---- 能力声明 (P1 R1a.3) ----
     # 每个 Layout 自报支持的画布比例、主题能力、分页策略与分类轴；
     # 这是 P1 R1a.3 grid-wrap 能力声明契约的入口。

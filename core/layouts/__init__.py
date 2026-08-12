@@ -4,6 +4,7 @@ R4 Runtime v1：get_layout 支持按 DataChannel 过滤；list_layouts 返回
 每个 layout 的 supported_channels 字段，方便前端 / 文档展示。
 R4 Runtime v2：导出 LayoutPlan / LayoutAnalysis / PagePlan / SectionPlan / LayoutContext。
 M0.2 (蓝图 v0.1)：新增 fullscreen-flow（全屏柔光绕排版）。
+R4 Runtime v2 v2.5：导出 compat 模块（Theme × Layout 能力矩阵）。
 """
 from .grid_wrap import GridWrapLayout
 from .magazine_flow import MagazineFlowLayout
@@ -19,6 +20,7 @@ from .plan import (
     SectionPlan,
 )
 from .ctx import LayoutContext
+from . import compat  # R4 Runtime v2 v2.5
 
 REGISTRY = {
     "grid-wrap": GridWrapLayout(),
@@ -77,4 +79,6 @@ __all__ = [
     # R4 Runtime v2
     "LayoutAnalysis", "LayoutPlan", "PagePlan", "SectionPlan", "SectionLayoutKind",
     "LayoutContext",
+    # R4 Runtime v2 v2.5
+    "compat",
 ]
