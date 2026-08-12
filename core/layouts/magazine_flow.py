@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from .base import LayoutPlugin, PageSections, ParamSpec
 from ..context import DrawContext
+from .ctx import LayoutContext
+from .plan import LayoutAnalysis, LayoutPlan, PagePlan, SectionPlan
 
 
 # ── 分类 axes ──
@@ -232,12 +234,33 @@ class MagazineFlowLayout(LayoutPlugin):
             "supported_channels": list(self.supported_channels),
         }
 
-    def analyze(self, library, canvas, axis: str = AXIS_NONE) -> dict:
-        """R1b: 暴露给 API 上层（如 /api/layouts/{id}/analyze）。
+    def analyze(self, library, ctx: "LayoutContext", axis: str = AXIS_NONE) -> LayoutAnalysis:
+        """R4 Runtime v2: 统一签名 analyze(library, ctx, axis)。
 
-        UI 据此显示「预估 3 页」与「按歌手分桶将溢出」。
+        ctx.parameters 可覆盖 axis 缺省值（ctx.parameters.get("axis", axis)）。
+        返回 LayoutAnalysis 反映真实分页预估。
+
+        v1 兼容：旧调用方 (analyze(library, canvas, axis=...)) 通过适配层
+        包装 ctx 即可；本签名是 v2 唯一对外契约。
         """
-        return analyze(library, axis=axis, canvas=canvas)
+        from .ctx import LayoutContext
+        if not isinstance(ctx, LayoutContext):
+            # v1 兼容：旧调用方传的是 canvas 而非 ctx；向上包装
+            from ..spec import CanvasSpec
+            if isinstance(ctx, CanvasSpec):
+                ctx = LayoutContext(canvas=ctx)
+            else:
+                raise TypeError(f"ctx 期望 LayoutContext 或 CanvasSpec，得到 {type(ctx).__name__}")
+        # axis 可由 ctx.parameters 覆盖
+        effective_axis = (ctx.parameters or {}).get("axis", axis) or AXIS_NONE
+        result = analyze(library, axis=effective_axis, canvas=ctx.canvas)
+        return LayoutAnalysis(
+            page_count=result.get("page_count", 1),
+            overflow=result.get("overflow", False),
+            degrade_reason=result.get("degrade_reason"),
+            axes_used=(effective_axis,) if effective_axis != AXIS_NONE else (),
+            total_songs=len(library.mastered()) if hasattr(library, "mastered") else 0,
+        )
 
     def categorize(self, library, axis: str = AXIS_NONE, *, parameters: dict | None = None) -> list[PageSections]:
         """分配歌曲到页。pages=auto：每页第一桶做刊头，其后每 N 首歌换页。
@@ -278,6 +301,40 @@ class MagazineFlowLayout(LayoutPlugin):
                 sections.append({"label": k, "songs": v, "columns": cols})
             pages.append(PageSections(page=page, sections=sections))
         return pages
+
+    def plan(self, library, ctx: LayoutContext) -> LayoutPlan:
+        """R4 Runtime v2: magazine-flow 自定义 plan()。
+
+        区别于 base 默认：
+        - axis 从 ctx.parameters['axis'] 取（默认 AXIS_NONE）
+        - columns_per_section / collapse_threshold 也从 ctx.parameters 取
+        - SectionPlan.columns 真实反映 columns_per_section 设置
+        """
+        from .plan import LayoutAnalysis, PagePlan, SectionPlan
+        analysis = self.analyze(library, ctx)
+        # axis 优先级：ctx.parameters > 旧签名 axis
+        params = dict(ctx.parameters or {})
+        axis = params.get("axis", AXIS_NONE)
+        # 调自己的 categorize（接 parameters）
+        page_sections = self.categorize(library, axis, parameters=params)
+        pages: list[PagePlan] = []
+        for ps in page_sections:
+            sections = tuple(
+                SectionPlan(
+                    label=sec["label"],
+                    song_titles=tuple(sec["songs"]),
+                    columns=sec.get("columns", 1) or 1,
+                )
+                for sec in ps.sections
+            )
+            pages.append(PagePlan(page=ps.page, sections=sections))
+        return LayoutPlan(
+            layout_id=self.id,
+            layout_version="1",
+            analysis=analysis,
+            pages=tuple(pages),
+            param_overrides=params,
+        )
 
     def render_page(self, ctx: DrawContext, page: int, library) -> int:
         """渲染指定页。第 1 页包含刊头。

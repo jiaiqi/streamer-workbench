@@ -448,7 +448,32 @@ def api_live_sessions_poster_analyze(session_id: str, req: Request):
     # 临时 canvas 给 analyze 用
     from core.spec import CanvasSpec
     canvas = CanvasSpec(width=1080, height=2400, margin=58)
-    report = plugin.analyze(snapshot, canvas)
+    # R4 Runtime v2: analyze 返 LayoutAnalysis（不可变 dataclass）；
+    # router 手动构造 dict（避开 asdict + MappingProxyType pickle 失败问题）。
+    # 保持 HTTP API 响应格式向后兼容：v1 字段（sung_count/queued_count/
+    # current_count/categories/empty）也加回。
+    analysis = plugin.analyze(snapshot, canvas)
+    buckets = snapshot.categorize()
+    report = {
+        "page_count": analysis.page_count,
+        "overflow": analysis.overflow,
+        "degrade_reason": analysis.degrade_reason,
+        "sections_count": analysis.sections_count,
+        "axes_used": list(analysis.axes_used),
+        "total_songs": analysis.total_songs,
+        "max_density": dict(analysis.max_density),
+        # v1 兼容字段
+        "empty": snapshot.total_count == 0,
+        "sung_count": snapshot.sung_count,
+        "queued_count": snapshot.queued_count,
+        "current_count": snapshot.current_count,
+        "categories": [
+            {"label": "当前演唱", "count": len(buckets["current"])},
+            {"label": "待唱", "count": len(buckets["queued"])},
+            {"label": "已唱", "count": len(buckets["sung"])},
+            {"label": "跳过/取消", "count": len(buckets["skipped"])},
+        ],
+    }
     report["session_id"] = session_id
     report["session_title"] = live.session.title
     return report

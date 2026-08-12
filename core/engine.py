@@ -106,8 +106,9 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
 
 def render_pages(theme: Theme, layout: LayoutPlugin, library,
                  spec: CanvasSpec, font_path: str, *,
-                 page_count: int | None = None) -> list[Image.Image]:
-    """R1b: 渲染多页并按序号返回 Image 列表。
+                 page_count: int | None = None,
+                 parameters: dict | None = None) -> list[Image.Image]:
+    """R1b + R4 Runtime v2: 渲染多页并按序号返回 Image 列表。
 
     page_count: 可显式指定；不指定则按 layout.pages（None = 自动）或 1 取。
     主要给 magazine-flow 自动分页使用——调用方需先用 layout.analyze()
@@ -116,19 +117,25 @@ def render_pages(theme: Theme, layout: LayoutPlugin, library,
     旧 layout（grid-wrap）固定 2 页，按 plugin.pages 渲染。
     新 layout（magazine-flow）以 page_count 覆盖。
 
-    上限：当 page_count > theme.styles 提供的样式数时，截断到样式数；
-    主流 7 套主题仅支持 2 个 style（兼容 grid-wrap），Magazine-flow
-    自动截断防止 KeyError——调用方应据此裁剪 page_count。
+    R4 Runtime v2：
+    - 解耦写死的 magazine_flow import；改用 layout.analyze() 统一签名
+    - parameters 透传给 LayoutContext；下游 plan()/render_page() 可读
+    - 上限：当 page_count > theme.styles 提供的样式数时，截断到样式数；
+      主流 7 套主题仅支持 2 个 style（兼容 grid-wrap），Magazine-flow
+      自动截断防止 KeyError——调用方应据此裁剪 page_count。
     """
     fixed = layout.pages
     if page_count is None:
         if fixed:
             page_count = fixed
         else:
-            # 兜底：自动分页由 layout.analyze 决定；若 layout 没实现则用 1
-            from .layouts.magazine_flow import analyze as _mf_analyze
+            # R4 Runtime v2: 改用 layout.analyze() 统一签名（替代写死的 magazine_flow import）
+            from .layouts.ctx import LayoutContext
             try:
-                page_count = _mf_analyze(library, axis="none", canvas=spec)["page_count"]
+                analysis = layout.analyze(library, LayoutContext(
+                    canvas=spec, parameters=parameters or {},
+                ))
+                page_count = analysis.page_count
             except Exception:
                 page_count = 1
     # 上限=theme.styles 支持的页数

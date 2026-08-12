@@ -132,8 +132,8 @@ class LiveSetLayoutEdgeCases(unittest.TestCase):
 
         snap = LiveSessionSnapshot()
         report = layout.analyze(snap, _Canvas())
-        self.assertEqual(report["page_count"], 1)
-        self.assertTrue(report["empty"])
+        self.assertEqual(report.page_count, 1)
+        self.assertEqual(report.sections_count, 4)  # 4 段设计（v2 不依赖数据）
 
     def test_analyze_wrong_library_type(self):
         layout = get_layout("live-set")
@@ -144,9 +144,9 @@ class LiveSetLayoutEdgeCases(unittest.TestCase):
             margin = 58
 
         report = layout.analyze("not a snapshot", _Canvas())
-        self.assertEqual(report["page_count"], 1)
-        self.assertTrue(report["empty"])
-        self.assertIsNotNone(report["degrade_reason"])
+        self.assertEqual(report.page_count, 1)
+        self.assertEqual(report.sections_count, 0)  # wrong type → degrade → 0 sections
+        self.assertIsNotNone(report.degrade_reason)
 
     def test_categorize_returns_one_page(self):
         layout = get_layout("live-set")

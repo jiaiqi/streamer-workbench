@@ -28,6 +28,8 @@ from typing import Any, List, Mapping, Optional
 
 from .base import LayoutPlugin, PageSections, ParamSpec
 from ..context import DrawContext
+from .ctx import LayoutContext
+from .plan import LayoutAnalysis
 from . import _common
 
 
@@ -182,30 +184,44 @@ class LiveSetLayout(LayoutPlugin):
             "supported_channels": list(self.supported_channels),
         }
 
-    def analyze(self, library: LiveSessionSnapshot, canvas, **kwargs) -> dict:
-        """live-set 自报单页容量；空数据仍能渲染（降级显示）。"""
+    def analyze(self, library: LiveSessionSnapshot, ctx: LayoutContext, **kwargs) -> LayoutAnalysis:
+        """R4 Runtime v2: 统一签名 analyze(library, ctx)。
+
+        live-set 固定 1 页；返回 4 个分类（当前演唱/待唱/已唱/跳过）的分析。
+
+        v1 兼容：ctx 可为 LayoutContext / CanvasSpec / duck-typed
+        canvas-like 对象（有 width/height/margin 字段）。
+        """
+        from .ctx import LayoutContext
+        from ..spec import CanvasSpec
+        if not isinstance(ctx, LayoutContext):
+            if isinstance(ctx, CanvasSpec) or (
+                hasattr(ctx, "width") and hasattr(ctx, "height")
+            ):
+                # 接受 CanvasSpec 或 duck-typed canvas；走 base 默认（live-set 不依赖 ctx 内容）
+                pass
+            else:
+                raise TypeError(
+                    f"ctx 期望 LayoutContext/CanvasSpec/canvas-like，得到 {type(ctx).__name__}"
+                )
         if not isinstance(library, LiveSessionSnapshot):
-            return {
-                "page_count": 1,
-                "empty": True,
-                "degrade_reason": "library 不是 LiveSessionSnapshot",
-            }
+            return LayoutAnalysis(
+                page_count=1,
+                degrade_reason="library 不是 LiveSessionSnapshot",
+                sections_count=0,
+            )
         buckets = library.categorize()
-        return {
-            "page_count": 1,
-            "empty": library.total_count == 0,
-            "total_songs": library.total_count,
-            "sung_count": library.sung_count,
-            "queued_count": library.queued_count,
-            "current_count": library.current_count,
-            "categories": [
-                {"label": "当前演唱", "count": len(buckets["current"])},
-                {"label": "待唱", "count": len(buckets["queued"])},
-                {"label": "已唱", "count": len(buckets["sung"])},
-                {"label": "跳过/取消", "count": len(buckets["skipped"])},
-            ],
-            "degrade_reason": None,
-        }
+        return LayoutAnalysis(
+            page_count=1,
+            sections_count=4,
+            total_songs=library.total_count,
+            max_density={
+                "sung_count": library.sung_count,
+                "queued_count": library.queued_count,
+                "current_count": library.current_count,
+                "skipped_count": len(buckets.get("skipped", [])),
+            },
+        )
 
     def categorize(self, library) -> list[PageSections]:
         """live-set 永远单页；返回 1 个空 section（render_page 不用）。"""

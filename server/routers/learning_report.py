@@ -141,7 +141,24 @@ def api_learning_report_analyze(
     )
     plugin = get_layout("learning-report")
     canvas = CanvasSpec(width=1080, height=2400, margin=58)
-    report = plugin.analyze(snapshot, canvas)
+    # R4 Runtime v2: analyze 返 LayoutAnalysis（不可变）；router 手动
+    # 构造 dict（避开 asdict + MappingProxyType pickle 失败问题）。
+    # 保持 HTTP API 响应格式向后兼容：v1 字段（empty + analyze_summary
+    # 全部字段）也加回。
+    analysis = plugin.analyze(snapshot, canvas)
+    summary = snapshot.analyze_summary()
+    report = {
+        "page_count": analysis.page_count,
+        "overflow": analysis.overflow,
+        "degrade_reason": analysis.degrade_reason,
+        "sections_count": analysis.sections_count,
+        "axes_used": list(analysis.axes_used),
+        "total_songs": analysis.total_songs,
+        "max_density": dict(analysis.max_density),
+        # v1 兼容字段
+        "empty": snapshot.is_empty,
+        **summary,  # 展开 analyze_summary 的所有字段
+    }
     report["period_label"] = snapshot.period_label
     report["period_start"] = snapshot.period_start
     report["period_end"] = snapshot.period_end
