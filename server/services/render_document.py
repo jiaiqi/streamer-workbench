@@ -141,9 +141,18 @@ def build_render_document(*, song_snapshot, theme: Theme, layout_id: str,
 
 
 def render_document(document: RenderDocument):
+    """R4 Runtime v2: 渲染 RenderDocument 单页。
+
+    V2.3：可接受 palette/skin（v2 阶段从 document.effective_palette/skin 读取，
+    当前实现 v2 阶段留 None — 走 v1 行为；v3 启用 Skin 路径）。
+    V2.4：document.parameters 真正流到 ctx.parameters（修复链路）。
+    """
     library = SongLibrary([song.materialize() for song in document.song_snapshots])
-    return render_page(document.theme.materialize(), get_layout(document.layout_id),
-                       library, document.canvas, document.page, document.font_path)
+    return render_page(
+        document.theme.materialize(), get_layout(document.layout_id),
+        library, document.canvas, document.page, document.font_path,
+        parameters=dict(document.parameters) if document.parameters else None,
+    )
 
 
 def _theme_revision(theme: ThemeSnapshot) -> str:

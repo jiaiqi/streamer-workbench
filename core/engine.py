@@ -6,9 +6,12 @@
 3. 画柔光层（避让版底边 1498+OFF，否则 1410+OFF）
 4. 构造 DrawContext，调 layout.render_page(ctx, page)
 5. 返回 RGB 图（保存/预览由调用方决定）
+
+R4 Runtime v2: render_page/render_pages 加 palette/skin/parameters 可选参。
 """
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from functools import lru_cache
+from typing import Optional
 
 from .spec import CanvasSpec
 from .style import Style
@@ -87,7 +90,18 @@ def clear_bg_cache():
 
 def render_page(theme: Theme, layout: LayoutPlugin, library,
                 spec: CanvasSpec, page: int, font_path: str,
-                skip_text: bool = False) -> Image.Image:
+                skip_text: bool = False,
+                palette: Optional["Palette"] = None,    # noqa: F821
+                skin: Optional["Skin"] = None,          # noqa: F821
+                parameters: dict | None = None) -> Image.Image:
+    """R4 Runtime v2: 渲染单页。
+
+    v1 兼容：所有新参数（palette/skin/parameters）默认 None，行为与 v1 一致。
+    v2 新增：
+      - palette: 可选 Palette；传入后 ctx.effective_style 走 palette.to_style()
+      - skin: 可选 Skin；传入后 ctx.effective_style 走 skin.apply_to_style(style, palette)
+      - parameters: dict；注入 ctx.parameters 供 layout 读取（V2.4 修复链路）
+    """
     st: Style = theme.styles[page]
     AVOID = bool(spec.avoid_zones)
 
@@ -97,8 +111,13 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
     font_label = _load_font(font_path, spec.font_label)
 
     d = ImageDraw.Draw(img)
-    ctx = DrawContext(draw=d, spec=spec, style=st,
-                      font_song=font, font_label=font_label)
+    ctx = DrawContext(
+        draw=d, spec=spec, style=st,
+        font_song=font, font_label=font_label,
+        parameters=parameters,  # R4 Runtime v2: V2.4 链路修复
+        palette=palette,        # R4 Runtime v2: V2.3 双轨
+        skin=skin,              # R4 Runtime v2: V2.3 双轨
+    )
     if not skip_text:
         layout.render_page(ctx, page, library)
     return img.convert("RGB")
@@ -107,7 +126,9 @@ def render_page(theme: Theme, layout: LayoutPlugin, library,
 def render_pages(theme: Theme, layout: LayoutPlugin, library,
                  spec: CanvasSpec, font_path: str, *,
                  page_count: int | None = None,
-                 parameters: dict | None = None) -> list[Image.Image]:
+                 parameters: dict | None = None,
+                 palette: Optional["Palette"] = None,    # noqa: F821
+                 skin: Optional["Skin"] = None) -> list[Image.Image]:
     """R1b + R4 Runtime v2: 渲染多页并按序号返回 Image 列表。
 
     page_count: 可显式指定；不指定则按 layout.pages（None = 自动）或 1 取。
@@ -120,6 +141,7 @@ def render_pages(theme: Theme, layout: LayoutPlugin, library,
     R4 Runtime v2：
     - 解耦写死的 magazine_flow import；改用 layout.analyze() 统一签名
     - parameters 透传给 LayoutContext；下游 plan()/render_page() 可读
+    - palette/skin 透传给 render_page（V2.3 双轨过渡）
     - 上限：当 page_count > theme.styles 提供的样式数时，截断到样式数；
       主流 7 套主题仅支持 2 个 style（兼容 grid-wrap），Magazine-flow
       自动截断防止 KeyError——调用方应据此裁剪 page_count。
@@ -143,5 +165,8 @@ def render_pages(theme: Theme, layout: LayoutPlugin, library,
     page_count = max(1, min(page_count, max_style_pages))
     images = []
     for page in range(1, page_count + 1):
-        images.append(render_page(theme, layout, library, spec, page, font_path))
+        images.append(render_page(
+            theme, layout, library, spec, page, font_path,
+            palette=palette, skin=skin, parameters=parameters,
+        ))
     return images

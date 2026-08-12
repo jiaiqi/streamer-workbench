@@ -7,9 +7,15 @@ Skin 连接 Palette（纯颜色）与 Layout（纯结构）：
 - 布局参数的布局级覆盖默认值
 
 旧 theme.json 在加载时可动态适配为临时 Skin（兼容期）。
+
+R4 Runtime v2：Skin.from_palette_and_layout() 工厂 + Skin.apply_to_style() 真实接线。
 """
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
+
+if TYPE_CHECKING:
+    from ..style import Style
+    from .palette import Palette
 
 
 @dataclass
@@ -23,7 +29,7 @@ class Skin:
     layout_id: str
 
     # ---- 背景 ----
-    backgrounds: Dict[str, str]        # {"1": "bg1.png", "2": "bg2.png"}
+    backgrounds: Dict[str, str] = field(default_factory=dict)  # {"1": "bg1.png", "2": "bg2.png"}
     bg_strategy: str = "fixed"         # "fixed" | "cycle" | "extend"
 
     # ---- 视觉主体（P4 起用）----
@@ -59,4 +65,43 @@ class Skin:
             mist_bottom_avoid=1498,
             mist_bottom_normal=1410,
             source="theme",
+        )
+
+    @staticmethod
+    def from_palette_and_layout(palette: "Palette", layout_id: str,
+                                 theme_name: str = "",
+                                 backgrounds: Optional[Dict[str, str]] = None) -> "Skin":
+        """R4 Runtime v2: 工厂方法 — 从 Palette + layout_id 构造 Skin。
+
+        用于 engine.render_page 接收 palette 后构造 Skin。
+        backgrounds 来自 theme（可选；缺省空 dict）。
+        """
+        return Skin(
+            theme_name=theme_name or palette.name or "unknown",
+            layout_id=layout_id,
+            backgrounds=backgrounds or {},
+            source="palette-factory",  # 标识来源便于调试
+        )
+
+    def apply_to_style(self, base: "Style", palette: "Palette") -> "Style":
+        """R4 Runtime v2: 把 Skin 覆盖应用到基础 Style。
+
+        优先级：extra_colors（Skin 自报扩展角色） > palette 5 角色 > base 5 角色。
+        实际只有 5 角色进 Style，extra_colors 暂存留待 layout 读取。
+
+        v1 兼容：不传 palette 时返 base 拷贝（保留旧行为）。
+        """
+        from ..style import Style
+        if palette is None:
+            # 防御：v1 兼容路径
+            return Style(
+                text=base.text, label=base.label, pill=base.pill,
+                line=base.line, mist=base.mist,
+            )
+        return Style(
+            text=palette.text,
+            label=palette.label,
+            pill=palette.pill,
+            line=palette.line,
+            mist=palette.mist,
         )

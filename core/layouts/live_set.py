@@ -241,7 +241,7 @@ class LiveSetLayout(LayoutPlugin):
             return 0
         if not isinstance(library, LiveSessionSnapshot):
             library = LiveSessionSnapshot()
-        params = getattr(ctx, "parameters", {}) or {}
+        params = ctx.parameters or {}  # R4 Runtime v2: ctx.parameters 始终有值（V2.4 链路修复）
         if not isinstance(params, Mapping):
             params = {}
         margin = int(params.get("margin", 58) or 58)

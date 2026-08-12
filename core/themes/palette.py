@@ -2,9 +2,14 @@
 
 Palette v1 承载现有 5 个颜色角色 + 字体角色。
 可从现有 flat Theme 构造，也可从 palette.json 独立加载。
+
+R4 Runtime v2：Palette.to_style() 真正接到渲染管线（双轨过渡）。
 """
 from dataclasses import dataclass, field
-from typing import Dict, Tuple, Optional
+from typing import TYPE_CHECKING, Dict, Tuple, Optional
+
+if TYPE_CHECKING:
+    from ..style import Style
 
 
 @dataclass
@@ -53,3 +58,18 @@ class Palette:
             "line": self.line,
             "mist": self.mist,
         }
+
+    def to_style(self) -> "Style":
+        """R4 Runtime v2: Palette → Style（frozen 5 角色）。
+
+        用于 engine.render_page 接收 palette 后构造 Style。
+        字体角色不进 Style（Style 旧契约只 5 颜色；字体由 ctx.font_song/font_label 传）。
+        """
+        from ..style import Style
+        return Style(
+            text=self.text,
+            label=self.label,
+            pill=self.pill,
+            line=self.line,
+            mist=self.mist,
+        )
