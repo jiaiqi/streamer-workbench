@@ -58,6 +58,7 @@
 - 统计页（StatsView）：事件流、洞察 tab、点歌热度、最近演唱
 - 命令面板（Cmd+K）、全局快捷键、Onboarding、状态栏、帮助中心
 - M2.13 系统集成：播控菜单、系统通知、Dock Badge、LiveView 队列数联动
+- R4 Runtime v2（V2.1 + V2.2 收口）：LayoutPlan / LayoutAnalysis / PagePlan / SectionPlan 数据结构 + LayoutContext；4 套 layout `analyze(library, ctx)` 统一签名；`engine.render_pages` 解耦写死 magazine_flow import；51 项新测试，1218 Python + 734 vitest 全过，16/16 金标准 0 像素差异，0 新依赖
 - SettingsView：output_dir / default_canvas / default_theme / font_path / 备份设置 / 外观
 
 ### 明确**在线可选**的功能域（不是离线故障，是设计如此）
