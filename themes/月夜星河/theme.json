@@ -68,5 +68,33 @@
   },
   "font": null,
   "notes": "M0.3 蓝图 v0.1 第 8 套主题：深蓝紫黑渐变 + 散布星点 + 暖琥珀当前行。匹配深色直播舞台模式（夜场弹唱 / 抒情慢歌 / 星空主题海报）。text 暖白 #F5F0E1，label 琥珀 #FFB84D，pill 半透明深底 rgba(20,30,60,180)，line 琥珀细线 #FFA500，mist 星云柔光 rgba(180,200,255,60)。",
-  "compatible_layouts": ["magazine-flow", "fullscreen-flow", "live-set", "learning-report"]
+  "compatible_layouts": [
+    "magazine-flow",
+    "fullscreen-flow",
+    "live-set",
+    "learning-report"
+  ],
+  "metadata": {
+    "tags": [
+      "深蓝",
+      "星空",
+      "夜场",
+      "琥珀",
+      "慢歌",
+      "抒情"
+    ],
+    "scenes": [
+      "夜场",
+      "弹唱",
+      "慢歌",
+      "抒情",
+      "舞台"
+    ],
+    "mood": "deep",
+    "language_friendly": "all",
+    "song_count_range": [
+      10,
+      40
+    ]
+  }
 }
