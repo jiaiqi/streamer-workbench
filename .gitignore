@@ -15,6 +15,7 @@ data/posters/
 data/live-sessions/
 data/presets/
 data/songs.json
+data/verify_runtime_v2/  # R4 退出条件验证脚本产物（可重新生成）
 *.tmp
 
 # PyInstaller 打包产物（可重新生成）
