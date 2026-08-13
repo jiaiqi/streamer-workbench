@@ -35,7 +35,84 @@ def api_themes(req: Request):
     return [{"name": t.name, "prefix": t.output_prefix,
              "watermark_fix": t.watermark_fix,
              "backgrounds": t.backgrounds,
-             "notes": t.notes} for t in themes.values()]
+             "notes": t.notes,
+             "metadata": _meta_to_dict(t)} for t in themes.values()]
+
+
+def _meta_to_dict(theme) -> dict:
+    """M3 P3 续: 序列化 ThemeMetadata 到 dict。"""
+    meta = theme.metadata
+    return {
+        "tags": list(meta.tags),
+        "scenes": list(meta.scenes),
+        "mood": meta.mood,
+        "language_friendly": meta.language_friendly,
+        "song_count_range": list(meta.song_count_range),
+    }
+
+
+@router.get("/api/themes/recommend")
+def api_recommend_themes(
+    req: Request,
+    poster_id: str = Query(None, max_length=64),
+    title: str = Query("", max_length=200),
+    song_titles: str = Query("", description="逗号分隔的歌名列表"),
+    tags: str = Query("", description="逗号分隔的标签列表"),
+    scene: str = Query("", max_length=64),
+    song_count: int = Query(0, ge=0, le=9999),
+    top_n: int = Query(3, ge=1, le=10),
+):
+    """M3 P3 续: 智能推荐主题。
+
+    两种调用方式：
+    1. 提供 poster_id：从已保存海报自动解析 title/song_titles/song_count
+    2. 不提供 poster_id：直接传 title/song_titles/tags/scene/song_count
+
+    返回 top_n 个推荐（含命中明细）。
+    """
+    from core.themes.recommender import PosterContext, recommend_themes
+    from core.data.songs import Song, SongLibrary
+
+    ctx = PosterContext(
+        title=title,
+        song_titles=tuple(t for t in song_titles.split(",") if t.strip()),
+        tags=tuple(t for t in tags.split(",") if t.strip()),
+        scene=scene,
+        song_count=song_count,
+    )
+
+    # 1. 用 poster_id 自动填充
+    if poster_id:
+        try:
+            from server.services.poster_service import PosterNotFound
+            app_ctx = get_app_context(req)
+            poster, full_lib, poster_lib, missing = app_ctx.poster_service.resolve_for_render(poster_id)
+            ctx.title = poster.name or ctx.title
+            ctx.song_titles = tuple(s.title for s in poster_lib.songs)
+            ctx.song_count = len(poster_lib.songs)
+        except Exception:
+            pass  # 容错：拿不到 poster 不影响
+
+    themes = list(get_app_context(req).themes.values())
+    scores = recommend_themes(themes, ctx, top_n=top_n)
+    return {
+        "context": {
+            "title": ctx.title,
+            "song_titles": list(ctx.song_titles),
+            "tags": list(ctx.tags),
+            "scene": ctx.scene,
+            "song_count": ctx.song_count,
+        },
+        "recommendations": [s.to_dict() for s in scores],
+        "themes": [
+            {
+                "name": s.theme_name,
+                "prefix": next((t.output_prefix for t in themes if t.name == s.theme_name), ""),
+                "notes": next((t.notes for t in themes if t.name == s.theme_name), ""),
+            }
+            for s in scores
+        ],
+    }
 
 
 @router.get("/api/thumb/{theme_name}")

@@ -26,6 +26,7 @@ import { searchSongs, buildEventsHeat } from "./search/globalSongSearch";
 import type { Song } from "./types";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
+import { ThemeLazyThumb } from "./components/ThemeLazyThumb";
 import { savePoster } from "./api/posters";
 import type { AppearanceSettings, Settings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
@@ -544,10 +545,8 @@ function AppInner() {
                   <div className={`aspect-[9/16] relative overflow-hidden ${dark ? "bg-zinc-800" : "bg-muted"}`}>
                     {/* 缩略图加载失败兜底：显示主题名，不露 alt 破图 */}
                     <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-xs text-muted-foreground">{t.name}</div>
-                    {/* P0-2: 缩略图端点（宽 360 JPEG），不再直出多 MB 原图 */}
-                    <img src={`/api/thumb/${encodeURIComponent(t.name)}`}
-                      alt={t.name} className="relative w-full h-full object-cover object-bottom opacity-90 group-hover:opacity-100 transition-opacity" loading="lazy"
-                      onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                    {/* M3 P3 续: 主题缩略图 IntersectionObserver 懒加载 — 进入视口才发请求 */}
+                    <ThemeLazyThumb name={t.name} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
                   </div>
                   <div className={`px-3 py-2.5 border-t ${dark ? "bg-zinc-800/80 border-zinc-700/50" : "bg-card border-border"}`}>

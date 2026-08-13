@@ -9,7 +9,7 @@ import json
 import os
 from typing import Dict
 
-from .model import Theme
+from .model import Theme, ThemeMetadata
 from ..style import Style
 
 
@@ -20,6 +20,17 @@ def _to_style(d: dict) -> Style:
         pill=tuple(d["pill"]),
         line=tuple(d["line"]),
         mist=tuple(d["mist"]),
+    )
+
+
+def _to_metadata(d: dict) -> ThemeMetadata:
+    """M3 P3 续：构造 ThemeMetadata（v1 兼容：空 dict → 默认 ThemeMetadata）。"""
+    return ThemeMetadata(
+        tags=tuple(d.get("tags", ())),
+        scenes=tuple(d.get("scenes", ())),
+        mood=d.get("mood", ""),
+        language_friendly=d.get("language_friendly", "all"),
+        song_count_range=tuple(d.get("song_count_range", (0, 9999))),
     )
 
 
@@ -48,6 +59,19 @@ def load_theme(theme_dir: str) -> Theme:
         notes=cfg.get("notes", ""),
         # R4 Runtime v2 v2.5: theme 端能力声明（缺省 = 全部兼容）
         compatible_layouts=tuple(cfg.get("compatible_layouts", ())),
+        # M3 P3 续: 智能推荐 metadata（缺省空 ThemeMetadata）
+        metadata=_to_metadata(cfg.get("metadata", {})),
+    )
+
+
+def _to_metadata(d: dict) -> ThemeMetadata:
+    """M3 P3 续：构造 ThemeMetadata（v1 兼容：空 dict → 默认 ThemeMetadata）。"""
+    return ThemeMetadata(
+        tags=tuple(d.get("tags", ())),
+        scenes=tuple(d.get("scenes", ())),
+        mood=d.get("mood", ""),
+        language_friendly=d.get("language_friendly", "all"),
+        song_count_range=tuple(d.get("song_count_range", (0, 9999))),
     )
 
 
