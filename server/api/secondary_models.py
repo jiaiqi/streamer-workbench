@@ -378,6 +378,39 @@ class ExportLogRecentResponse(BaseModel):
     items: list[ExportLogEntryResponse]
 
 
+# ── R4 退出条件 #3 专用海报区日活 ─────────────────────────────────────
+
+class SpecialPosterRecentEntry(BaseModel):
+    """GET /api/posters/special-stats - 单条最近事件摘要。
+
+    来源: events.jsonl 的 type=poster_exported 事件，
+    meta.kind ∈ {live-poster, learning-report}
+    """
+    event_id: str
+    occurred_at: str
+    kind: str                       # "live-poster" | "learning-report"
+    title: str = ""                 # 直播标题 / 报告副标题
+    session_id: str = ""            # 仅 live-poster
+    days: int = 0                   # 仅 learning-report
+    period_label: str = ""          # 仅 learning-report
+    filename: str = ""
+
+
+class SpecialPosterDayBucket(BaseModel):
+    """每日计数。"""
+    live_poster: int = 0
+    learning_report: int = 0
+
+
+class SpecialPosterStatsResponse(BaseModel):
+    """GET /api/posters/special-stats 响应。"""
+    days: int
+    since: str                      # ISO 起始时间
+    totals: dict[str, int]          # {"live_poster": N, "learning_report": M}
+    by_day: dict[str, SpecialPosterDayBucket]   # {"2026-08-12": {"live_poster": 2, ...}}
+    recent: list[SpecialPosterRecentEntry]      # 最近 5 条
+
+
 # ── R2 P3 直播会话 HTTP 模型 ────────────────────────────────────────
 
 class LiveSessionCreateRequest(StrictRequest):

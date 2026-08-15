@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../api/client";
 import { openLivePoster, openLearningReportPoster } from "../electron-bridge";
 import type { LiveSessionSummary } from "../api/generated";
+import { getSpecialPosterStats, type SpecialPosterStats } from "../api/posters";
 import ExportLogPanel from "./ExportLogPanel";
 
 const RECENT_SESSIONS_LIMIT = 3;
@@ -51,6 +52,21 @@ export default function SpecialPostersPanel({ dark }: SpecialPostersPanelProps) 
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showCustomReport, setShowCustomReport] = useState(false);
 
+  /* ---- R4 退出条件 #3: 专用海报区日活 ---- */
+  const [stats, setStats] = useState<SpecialPosterStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+
+  const refreshStats = useCallback(() => {
+    getSpecialPosterStats(30)
+      .then(data => {
+        setStats(data);
+        setStatsError(null);
+      })
+      .catch(reason => {
+        setStatsError(reason instanceof Error ? reason.message : "日活加载失败");
+      });
+  }, []);
+
   /* ---- mount 拉取最近 LiveSession（按 started_at 降序） ---- */
   useEffect(() => {
     let active = true;
@@ -71,6 +87,11 @@ export default function SpecialPostersPanel({ dark }: SpecialPostersPanelProps) 
       .finally(() => { if (active) setSessionsLoading(false); });
     return () => { active = false; };
   }, []);
+
+  /* ---- R4 退出条件 #3: mount 拉日活 + 导出成功后 invalidate refetch ---- */
+  useEffect(() => {
+    refreshStats();
+  }, [refreshStats, exportSuccess]);  // 导出成功时 refetch
 
   /* ---- 导出：复盘海报 ---- */
   const handleExportLive = useCallback(async (sessionId: string) => {
@@ -160,6 +181,31 @@ export default function SpecialPostersPanel({ dark }: SpecialPostersPanelProps) 
       <p className="eyebrow">专用海报</p>
       <h2 className="panel-title">直播复盘 · 学歌报告</h2>
       <p className="panel-copy mb-3">由事件流快照驱动，不走"选歌曲→选主题"。</p>
+
+      {/* ===== R4 退出条件 #3: 日活徽章 ===== */}
+      <div
+        className={`mb-3 px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-3 transition-colors ${
+          dark ? "bg-zinc-800/50 text-zinc-300" : "bg-muted/50 text-muted-foreground"
+        }`}
+        data-testid="special-poster-activity"
+        aria-label="专用海报区日活"
+      >
+        <span className="font-semibold shrink-0">📊 近 30 天</span>
+        {statsError ? (
+          <span className="text-destructive truncate" role="status">{statsError}</span>
+        ) : stats ? (
+          <>
+            <span className="tabular-nums shrink-0" data-testid="activity-live">
+              直播复盘 <strong className="text-foreground">{stats.totals?.live_poster ?? 0}</strong> 张
+            </span>
+            <span className="tabular-nums shrink-0" data-testid="activity-report">
+              学歌报告 <strong className="text-foreground">{stats.totals?.learning_report ?? 0}</strong> 张
+            </span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">加载中…</span>
+        )}
+      </div>
 
       {/* ===== 复盘海报 ===== */}
       <h3 className={`text-[11px] font-semibold uppercase tracking-wider mb-1.5 ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>

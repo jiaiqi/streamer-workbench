@@ -2,6 +2,7 @@
 
 路由表：
 - GET    /api/posters              列出已保存海报摘要
+- GET    /api/posters/special-stats R4 退出条件 #3：专用海报区日活
 - POST   /api/posters              创建或覆盖更新（id 缺则生成）
 - GET    /api/posters/{id}         读取完整 PosterDocument
 - DELETE /api/posters/{id}         软删除
@@ -17,10 +18,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 
 from core.data.posters import PosterDocument
 from server.api.errors import ApiError
@@ -34,8 +36,12 @@ from server.api.secondary_models import (
     PosterResponse,
     PosterSaveResponse,
     PosterSummaryResponse,
+    SpecialPosterDayBucket,
+    SpecialPosterRecentEntry,
+    SpecialPosterStatsResponse,
 )
 from server.dependencies import get_app_context
+from server.ports.repositories import EventQuery
 from server.services.posters import (
     PosterNotFound,
     PosterServiceError,
@@ -64,6 +70,83 @@ def _service_error(req: Request, error: PosterServiceError):
 def api_posters_list(req: Request):
     items = get_app_context(req).poster_service.list()
     return [asdict(item) for item in items]
+
+
+# ── R4 退出条件 #3：专用海报区日活 ──
+#
+# 必须在 /api/posters/{poster_id} 之前声明，否则 "special-stats" 会被
+# FastAPI 当作 poster_id 解析。
+
+_KIND_LIVE = "live-poster"
+_KIND_REPORT = "learning-report"
+_DAY_NAMES = {
+    _KIND_LIVE: "live_poster",
+    _KIND_REPORT: "learning_report",
+}
+
+
+@router.get("/api/posters/special-stats", response_model=SpecialPosterStatsResponse)
+def api_posters_special_stats(
+    req: Request,
+    days: int = Query(30, ge=1, le=365, description="时间窗口天数，1 ~ 365"),
+):
+    """R4 退出条件 #3：专用海报区日活统计。
+
+    事件源：events.jsonl 中 type=poster_exported 且 meta.kind ∈ {live-poster, learning-report}
+
+    返回：
+    - totals：总数（按 kind 区分）
+    - by_day：按日分桶（"YYYY-MM-DD" → {live_poster, learning_report}）
+    - recent：最近 5 条详情
+    """
+    ctx = get_app_context(req)
+    when = datetime.now().astimezone()
+    since_dt = when - timedelta(days=days)
+    since = since_dt.isoformat(timespec="seconds")
+
+    events = tuple(ctx.event_store.iter(
+        EventQuery(event_type="poster_exported", since=since)
+    ))
+
+    totals: dict[str, int] = {"live_poster": 0, "learning_report": 0}
+    by_day: dict[str, SpecialPosterDayBucket] = {}
+    recent: list[SpecialPosterRecentEntry] = []
+
+    for event in events:
+        meta = event.get("meta") or {}
+        kind = meta.get("kind", "")
+        if kind not in _DAY_NAMES:
+            continue  # 非专用海报（grid-export 等）不计入
+        day_key = (event.get("occurred_at") or "")[:10]  # YYYY-MM-DD
+        if not day_key:
+            continue
+        day_bucket = by_day.setdefault(day_key, SpecialPosterDayBucket())
+        if kind == _KIND_LIVE:
+            totals["live_poster"] += 1
+            day_bucket.live_poster += 1
+        else:
+            totals["learning_report"] += 1
+            day_bucket.learning_report += 1
+
+        if len(recent) < 5:
+            recent.append(SpecialPosterRecentEntry(
+                event_id=event.get("event_id", ""),
+                occurred_at=event.get("occurred_at", ""),
+                kind=kind,
+                title=meta.get("title", "") if kind == _KIND_LIVE else meta.get("period_label", ""),
+                session_id=meta.get("session_id", "") if kind == _KIND_LIVE else "",
+                days=meta.get("days", 0) if kind == _KIND_REPORT else 0,
+                period_label=meta.get("period_label", "") if kind == _KIND_REPORT else "",
+                filename=meta.get("filename", ""),
+            ))
+
+    return SpecialPosterStatsResponse(
+        days=days,
+        since=since,
+        totals=totals,
+        by_day=by_day,
+        recent=recent,
+    )
 
 
 @router.get("/api/posters/{poster_id}", response_model=PosterResponse)
