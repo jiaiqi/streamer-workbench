@@ -36,6 +36,13 @@ function fetchSpy(extra: Record<string, unknown> = {}) {
         status: 200, headers: { "content-type": "application/json" },
       });
     }
+    if (url.startsWith("/api/posters/special-stats")) {
+      return new Response(JSON.stringify(extra.stats ?? {
+        days: 30, since: "2026-07-17T00:00:00+08:00",
+        totals: { live_poster: 5, learning_report: 3 },
+        by_day: {}, recent: [],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
     return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
   });
 }
@@ -146,6 +153,60 @@ describe("SpecialPostersPanel 学歌报告触发", () => {
       expect(openLearningReportPoster).toHaveBeenCalledWith(
         expect.objectContaining({ days: 30, period_label: "本月特训" }),
       );
+    });
+  });
+});
+
+/// R4 退出条件 #3: 专用海报区日活徽章
+describe("SpecialPostersPanel 日活徽章（R4 退出条件 #3）", () => {
+  it("mount 后拉 /api/posters/special-stats 并显示统计", async () => {
+    globalThis.fetch = fetchSpy() as unknown as typeof fetch;
+    render(<SpecialPostersPanel dark={false} />);
+    await waitFor(() => {
+      const liveNode = screen.getByTestId("activity-live");
+      const reportNode = screen.getByTestId("activity-report");
+      expect(liveNode.textContent).toContain("5");
+      expect(reportNode.textContent).toContain("3");
+    });
+  });
+
+  it("stats 加载前显示「加载中…」", async () => {
+    // 拦截所有 fetch — stats 不解析
+    let resolveStats: (value: Response) => void = () => {};
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).toString();
+      if (url.endsWith("/api/live-sessions")) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.startsWith("/api/posters/special-stats")) {
+        return new Promise<Response>(resolve => { resolveStats = resolve; });
+      }
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    render(<SpecialPostersPanel dark={false} />);
+    expect(screen.getByTestId("special-poster-activity").textContent).toContain("加载中");
+    // 释放
+    resolveStats(new Response(JSON.stringify({
+      days: 30, since: "2026-07-17T00:00:00+08:00",
+      totals: { live_poster: 0, learning_report: 0 }, by_day: {}, recent: [],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+  });
+
+  it("stats 接口 500 显示错误条", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).toString();
+      if (url.endsWith("/api/live-sessions")) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.startsWith("/api/posters/special-stats")) {
+        return new Response("err", { status: 500 });
+      }
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    render(<SpecialPostersPanel dark={false} />);
+    await waitFor(() => {
+      const node = screen.getByTestId("special-poster-activity");
+      expect(node.textContent).toContain("请求失败");
     });
   });
 });

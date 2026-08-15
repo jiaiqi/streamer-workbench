@@ -61,6 +61,41 @@ export function getCompatibleThemesForLayout(layoutId: string): Promise<{ items:
   );
 }
 
+// ── R4 退出条件 #3: 专用海报区日活 ──
+
+export interface SpecialPosterRecentEntry {
+  event_id: string;
+  occurred_at: string;
+  kind: "live-poster" | "learning-report";
+  title: string;
+  session_id: string;
+  days: number;
+  period_label: string;
+  filename: string;
+}
+
+export interface SpecialPosterDayBucket {
+  live_poster: number;
+  learning_report: number;
+}
+
+export interface SpecialPosterStats {
+  days: number;
+  since: string;
+  totals: {
+    live_poster: number;
+    learning_report: number;
+  };
+  by_day: Record<string, SpecialPosterDayBucket>;
+  recent: SpecialPosterRecentEntry[];
+}
+
+export function getSpecialPosterStats(days: number = 30): Promise<SpecialPosterStats> {
+  return apiRequest<SpecialPosterStats>(
+    `/api/posters/special-stats?days=${encodeURIComponent(String(days))}`,
+  );
+}
+
 export function getPoster(posterId: string): Promise<PosterResponse> {
   return apiRequest<PosterResponse>(`/api/posters/${posterId}`);
 }
