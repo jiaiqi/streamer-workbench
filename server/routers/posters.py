@@ -23,6 +23,7 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request, Response
+from pydantic import BaseModel
 
 from core.data.posters import PosterDocument
 from server.api.errors import ApiError
@@ -495,4 +496,85 @@ def api_poster_batch(payload: PosterBatchRequest, req: Request):
         result["reordered"] = succeeded_count
     result["failed"] = failed
     return result
+
+
+# ── R4 退出条件 #2: 草稿/手动分页 UI V3 ──
+#
+# 端点：
+# - GET    /api/posters/{poster_id}/pages     列出 manual_pages
+# - POST   /api/posters/{poster_id}/pages     追加一页
+# - PATCH  /api/posters/{poster_id}/pages     批量重排（new_order: list[int]）
+# - DELETE /api/posters/{poster_id}/pages/{index}  删除指定页
+#
+# 任何修改都会把 page_policy.mode 切到 "manual"（删空后回退 "auto"）。
+
+
+class PosterPagesReorderRequest(BaseModel):
+    """PATCH /api/posters/{poster_id}/pages 载荷。"""
+    new_order: list[int]
+
+
+class PosterPagesListResponse(BaseModel):
+    """GET /api/posters/{poster_id}/pages 响应。"""
+    items: list[dict]
+    mode: str                                # "manual" | "auto" | "legacy-fixed-2"
+
+
+@router.get(
+    "/api/posters/{poster_id}/pages",
+    response_model=PosterPagesListResponse,
+)
+def api_posters_pages_list(poster_id: str, req: Request):
+    try:
+        context = get_app_context(req)
+        items = context.poster_service.list_pages(poster_id)
+        poster, _ = context.poster_service.get_with_revision(poster_id)
+        return {"items": items, "mode": poster.page_policy.mode}
+    except PosterServiceError as error:
+        return _service_error(req, error)
+
+
+@router.post(
+    "/api/posters/{poster_id}/pages",
+    response_model=PosterPagesListResponse,
+)
+def api_posters_pages_add(poster_id: str, req: Request):
+    try:
+        context = get_app_context(req)
+        context.poster_service.add_page(poster_id)
+        items = context.poster_service.list_pages(poster_id)
+        poster, _ = context.poster_service.get_with_revision(poster_id)
+        return {"items": items, "mode": poster.page_policy.mode}
+    except PosterServiceError as error:
+        return _service_error(req, error)
+
+
+@router.patch(
+    "/api/posters/{poster_id}/pages",
+    response_model=PosterPagesListResponse,
+)
+def api_posters_pages_reorder(poster_id: str, payload: PosterPagesReorderRequest, req: Request):
+    try:
+        context = get_app_context(req)
+        context.poster_service.reorder_pages(poster_id, payload.new_order)
+        items = context.poster_service.list_pages(poster_id)
+        poster, _ = context.poster_service.get_with_revision(poster_id)
+        return {"items": items, "mode": poster.page_policy.mode}
+    except PosterServiceError as error:
+        return _service_error(req, error)
+
+
+@router.delete(
+    "/api/posters/{poster_id}/pages/{index}",
+    response_model=PosterPagesListResponse,
+)
+def api_posters_pages_delete(poster_id: str, index: int, req: Request):
+    try:
+        context = get_app_context(req)
+        context.poster_service.delete_page(poster_id, index)
+        items = context.poster_service.list_pages(poster_id)
+        poster, _ = context.poster_service.get_with_revision(poster_id)
+        return {"items": items, "mode": poster.page_policy.mode}
+    except PosterServiceError as error:
+        return _service_error(req, error)
 

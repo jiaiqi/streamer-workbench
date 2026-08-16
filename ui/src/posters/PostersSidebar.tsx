@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { PosterStore } from "./usePosterStore";
 import LayoutPicker from "./LayoutPicker";
+import PagesPanel from "./PagesPanel";
 import StatusBadge from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { apiRequest } from "@/api/client";
@@ -440,6 +441,14 @@ export default function PostersSidebar({ store, dark }: PostersSidebarProps) {
       </h2>
 
       <LayoutPicker store={store} />
+
+      {/* R4 退出条件 #2: 草稿/手动分页 UI V3（仅在 layout 支持时启用） */}
+      <PagesPanel
+        posterId={store.current.id}
+        layoutId={store.current.layout_id}
+        supportsManualPages={store.current.layout_id === "magazine-flow"}
+        dark={dark}
+      />
 
       <div className="flex items-center gap-2 mt-1">
         <StatusBadge
