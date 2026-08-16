@@ -96,6 +96,45 @@ export function getSpecialPosterStats(days: number = 30): Promise<SpecialPosterS
   );
 }
 
+// ── R4 退出条件 #2: 草稿/手动分页 UI V3 ──
+
+export type PagePolicyMode = "manual" | "auto" | "legacy-fixed-2";
+
+export interface PosterPagesResponse {
+  items: Array<Record<string, unknown>>;
+  mode: PagePolicyMode;
+}
+
+export function getPosterPages(posterId: string): Promise<PosterPagesResponse> {
+  return apiRequest<PosterPagesResponse>(`/api/posters/${posterId}/pages`);
+}
+
+export function addPosterPage(posterId: string): Promise<PosterPagesResponse> {
+  return apiRequest<PosterPagesResponse>(`/api/posters/${posterId}/pages`, {
+    method: "POST",
+  });
+}
+
+export function deletePosterPage(
+  posterId: string,
+  index: number,
+): Promise<PosterPagesResponse> {
+  return apiRequest<PosterPagesResponse>(
+    `/api/posters/${posterId}/pages/${encodeURIComponent(String(index))}`,
+    { method: "DELETE" },
+  );
+}
+
+export function reorderPosterPages(
+  posterId: string,
+  newOrder: number[],
+): Promise<PosterPagesResponse> {
+  return apiRequest<PosterPagesResponse>(
+    `/api/posters/${posterId}/pages`,
+    { method: "PATCH", body: { new_order: newOrder } },
+  );
+}
+
 export function getPoster(posterId: string): Promise<PosterResponse> {
   return apiRequest<PosterResponse>(`/api/posters/${posterId}`);
 }

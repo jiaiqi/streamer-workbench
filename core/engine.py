@@ -128,8 +128,9 @@ def render_pages(theme: Theme, layout: LayoutPlugin, library,
                  page_count: int | None = None,
                  parameters: dict | None = None,
                  palette: Optional["Palette"] = None,    # noqa: F821
-                 skin: Optional["Skin"] = None) -> list[Image.Image]:
-    """R1b + R4 Runtime v2: 渲染多页并按序号返回 Image 列表。
+                 skin: Optional["Skin"] = None,
+                 manual_pages: list[dict] | None = None) -> list[Image.Image]:
+    """R1b + R4 Runtime v2 + V3: 渲染多页并按序号返回 Image 列表。
 
     page_count: 可显式指定；不指定则按 layout.pages（None = 自动）或 1 取。
     主要给 magazine-flow 自动分页使用——调用方需先用 layout.analyze()
@@ -145,7 +146,28 @@ def render_pages(theme: Theme, layout: LayoutPlugin, library,
     - 上限：当 page_count > theme.styles 提供的样式数时，截断到样式数；
       主流 7 套主题仅支持 2 个 style（兼容 grid-wrap），Magazine-flow
       自动截断防止 KeyError——调用方应据此裁剪 page_count。
+
+    R4 V3（手动分页）：
+    - manual_pages 提供时，page_count 走列表长度（不再调 layout.analyze）
+    - 每个 dict 透传给 render_page 内的 ctx.parameters（让 layout 知道「这是第 N 个 manual page」）
+    - manual_pages 为 None 时行为与 V2.4 一致
     """
+    if manual_pages is not None:
+        # V3 手动分页：按列表长度渲染，列表每个元素透传为该页 parameters 子集
+        page_count = len(manual_pages)
+        max_style_pages = max(theme.styles.keys()) if theme.styles else 2
+        page_count = max(1, min(page_count, max_style_pages))
+        images = []
+        for idx in range(page_count):
+            page_params = dict(parameters or {})
+            page_params["manual_page_index"] = idx
+            page_params["manual_page_meta"] = manual_pages[idx] or {}
+            images.append(render_page(
+                theme, layout, library, spec, idx + 1, font_path,
+                palette=palette, skin=skin, parameters=page_params,
+            ))
+        return images
+
     fixed = layout.pages
     if page_count is None:
         if fixed:

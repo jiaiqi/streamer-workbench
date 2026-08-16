@@ -11,6 +11,7 @@ from typing import Any, List, Mapping
 
 from core.data.posters import (
     CURRENT_SCHEMA_VERSION,
+    PagePolicy,
     PosterDocument,
     SOURCE_ALL_ACTIVE,
     SOURCE_ARTIST,
@@ -170,6 +171,90 @@ class PosterApplicationService:
             raise PosterNotFound(f"海报不存在：{poster_id}")
         deleted = self._posters.delete(poster_id, expected_revision=snapshot.revision)
         return PosterDeleteResult(poster_id, deleted)
+
+    # ── R4 退出条件 #2: 手动分页 ──
+
+    def list_pages(self, poster_id: str) -> list[dict]:
+        """返回 poster.page_policy.manual_pages 列表 + 总数。
+
+        空 list 表示「未启用手动分页」（沿用 layout.analyze 自动）。
+        """
+        snapshot = self._posters.get(poster_id)
+        if snapshot is None:
+            raise PosterNotFound(f"海报不存在：{poster_id}")
+        return list(snapshot.value.page_policy.manual_pages)
+
+    def add_page(self, poster_id: str) -> list[dict]:
+        """追加一个空白页到 manual_pages 末尾；自动切到 mode=manual。"""
+        snapshot = self._posters.get(poster_id)
+        if snapshot is None:
+            raise PosterNotFound(f"海报不存在：{poster_id}")
+        poster = snapshot.value
+        new_pages = list(poster.page_policy.manual_pages) + [{}]
+        updated_policy = PagePolicy(
+            mode="manual", manual_pages=new_pages,
+            min_pages=poster.page_policy.min_pages,
+            max_pages=poster.page_policy.max_pages,
+        )
+        return self._save_with_page_policy(poster, updated_policy, snapshot.revision)
+
+    def delete_page(self, poster_id: str, index: int) -> list[dict]:
+        """删除指定 index 的页。剩余 < 1 时回退到 mode=auto。"""
+        snapshot = self._posters.get(poster_id)
+        if snapshot is None:
+            raise PosterNotFound(f"海报不存在：{poster_id}")
+        poster = snapshot.value
+        if not (0 <= index < len(poster.page_policy.manual_pages)):
+            raise PosterValidationFailed(
+                f"页索引越界：{index}（共 {len(poster.page_policy.manual_pages)} 页）"
+            )
+        new_pages = [p for i, p in enumerate(poster.page_policy.manual_pages) if i != index]
+        if not new_pages:
+            # 没有 manual 页了，回退到 auto
+            updated_policy = PagePolicy(
+                mode="auto", manual_pages=[],
+                min_pages=poster.page_policy.min_pages,
+                max_pages=poster.page_policy.max_pages,
+            )
+        else:
+            updated_policy = PagePolicy(
+                mode="manual", manual_pages=new_pages,
+                min_pages=poster.page_policy.min_pages,
+                max_pages=poster.page_policy.max_pages,
+            )
+        return self._save_with_page_policy(poster, updated_policy, snapshot.revision)
+
+    def reorder_pages(self, poster_id: str, new_order: list[int]) -> list[dict]:
+        """按 new_order 数组重排 manual_pages。
+
+        new_order[i] = 原 index；必须为 0..N-1 的排列。
+        """
+        snapshot = self._posters.get(poster_id)
+        if snapshot is None:
+            raise PosterNotFound(f"海报不存在：{poster_id}")
+        poster = snapshot.value
+        pages = poster.page_policy.manual_pages
+        if sorted(new_order) != list(range(len(pages))):
+            raise PosterValidationFailed(
+                f"reorder 顺序必须是 0..{len(pages)-1} 的排列：{new_order}"
+            )
+        reordered = [pages[i] for i in new_order]
+        updated_policy = PagePolicy(
+            mode="manual", manual_pages=reordered,
+            min_pages=poster.page_policy.min_pages,
+            max_pages=poster.page_policy.max_pages,
+        )
+        return self._save_with_page_policy(poster, updated_policy, snapshot.revision)
+
+    def _save_with_page_policy(self, poster, page_policy, expected_revision: str) -> list[dict]:
+        """把 poster 的 page_policy 替换后保存，返回新 manual_pages 列表。"""
+        poster.page_policy = page_policy
+        poster.updated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+        try:
+            saved = self._posters.save(poster, expected_revision=expected_revision)
+        except ValueError as error:
+            raise PosterValidationFailed(str(error)) from error
+        return list(saved.value.page_policy.manual_pages)
 
     # ── SongSource 解析 ──
 
