@@ -32,6 +32,7 @@ import { savePoster } from "./api/posters";
 import type { AppearanceSettings, Settings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 import SpecialPostersPanel from "./posters/SpecialPostersPanel";
+import DataQuickEntryCard from "./posters/DataQuickEntryCard";
 import TonightSetCard from "./components/TonightSetCard";
 import { usePosterStore } from "./posters/usePosterStore";
 import { openQuickView, isElectron } from "./electron-bridge";
@@ -521,6 +522,12 @@ function AppInner() {
               dark={dark}
               onPlaySong={handlePlaySong}
               onOpenLiveView={() => setView("live")}
+            />
+            {/* R4.2.4 数据反哺创作快入口（基于数据卡片，1.1 收口） */}
+            <DataQuickEntryCard
+              dark={dark}
+              onCreatePosterFromTop={songIds => handleCreatePosterFromTop(songIds, "request")}
+              onSwitchToStats={() => setView("stats")}
             />
             {/* R1a.5 海报文档区 + 歌曲来源（独立 hook 状态机） */}
             <WorkspacePosterBridge
