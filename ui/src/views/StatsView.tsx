@@ -19,6 +19,7 @@ import Spinner from "../components/Spinner";
 import ErrorBanner from "../components/ErrorBanner";
 import EmptyState from "../components/EmptyState";
 import ExportLogPanel from "../posters/ExportLogPanel";
+import { asRecord, asString } from "../lib/narrow";
 
 type Tab = "overview" | "feed" | "top" | "insights" | "difficulty" | "key";
 type TopMetric = "request" | "perform" | "practice";
@@ -276,7 +277,8 @@ function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (
       const seen = new Set<string>();
       const songIds: string[] = [];
       for (const item of data.items) {
-        const songId = (item as unknown as { song_id?: string }).song_id;
+        const rec = asRecord(item);
+        const songId = rec ? asString(rec, "song_id") : null;
         if (songId && !seen.has(songId)) {
           seen.add(songId);
           songIds.push(songId);

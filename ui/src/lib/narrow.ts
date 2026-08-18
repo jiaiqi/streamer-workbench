@@ -39,6 +39,11 @@ export function asStringArray(record: Record<string, unknown>, key: string): str
   return v.every(item => typeof item === "string") ? v as string[] : null;
 }
 
+/** unknown → unknown[]（任一数组；调用方用 asStringArray / narrowWith 做元素 narrow） */
+export function asArray(value: unknown): unknown[] | null {
+  return Array.isArray(value) ? value : null;
+}
+
 /** Record<string, unknown> → T | null（带自定义 validator） */
 export function narrowWith<T>(
   record: Record<string, unknown>,

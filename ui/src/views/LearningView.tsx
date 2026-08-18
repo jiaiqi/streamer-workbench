@@ -120,9 +120,12 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
       }
       try {
         await apiRequest("/api/songs/add", { method: "POST", body: { title, artists, status: "draft" } });
-        results.push(`✅ ${title}`);
+        // M4 polish 3.5: 显式展示 artists + title，用户能确认歌手是否被正确解析
+        const label = artists.length > 0 ? `${artists.join(", ")} - ${title}` : title;
+        results.push(`✅ ${label}`);
       } catch (reason) {
-        results.push(`❌ ${title} — ${toRequestFailure(reason).message}`);
+        const label = artists.length > 0 ? `${artists.join(", ")} - ${title}` : title;
+        results.push(`❌ ${label} — ${toRequestFailure(reason).message}`);
       }
     }
     setImportResult(results);
@@ -300,8 +303,12 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
             style={{ boxShadow: "var(--shadow-lg)" }}
             onClick={e => e.stopPropagation()}>
             <h3 className={`font-serif text-lg font-semibold ${dark ? "text-zinc-100" : "text-foreground"}`}>批量导入学歌</h3>
-            <p className="mt-1 text-xs text-muted-foreground">每行一首，支持「歌手 歌名」或纯歌名格式</p>
-            <textarea rows={8} placeholder={"周杰伦 晴天\n五月天 倔强\n红豆"}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {/* M4 polish 3.5: 描述跟实际解析行为对齐（用空白分隔） */}
+              每行一首；用空格分隔「歌手 歌名」（如 <code className="px-1 rounded bg-muted">周杰伦 晴天</code>）；无空格则整行当歌名；下方会逐行显示导入结果。
+            </p>
+            <textarea rows={8}
+              placeholder={"周杰伦 晴天\n五月天 倔强\n陈奕迅 十年\n红豆"}
               value={importText}
               onChange={e => setImportText(e.target.value)}
               className={`${inputCls} mt-3 resize-none font-mono text-[13px] leading-relaxed`} />

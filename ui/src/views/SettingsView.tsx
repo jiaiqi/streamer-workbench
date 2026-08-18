@@ -4,6 +4,8 @@ import { apiRequest } from "../api/client";
 import type { SettingsUpdateResponse } from "../api/generated";
 import DataDirPanel from "../components/DataDirPanel";
 import WebDavPanel from "../components/WebDavPanel";
+import Spinner from "../components/Spinner";
+import EmptyState from "../components/EmptyState";
 import type { AppearanceSettings, Settings, Theme } from "../types";
 import { CANVAS_OPTIONS } from "../types";
 import { useApiError } from "../async/useApiError";
@@ -33,11 +35,11 @@ export default function SettingsView({
   const [status, setStatus] = useState<"loading" | "ready" | "saving" | "saved" | "error">("loading");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const loadSettings = () => {
+    setStatus("loading");
+    setError("");
     runWithToast(() => apiRequest<Settings>("/api/settings"), "设置加载失败")
       .then(settings => {
-        if (!active) return;
         if (!settings) return;
         const nextAppearance = normalizeAppearance(settings);
         setForm({ ...settings, ...nextAppearance });
@@ -46,11 +48,15 @@ export default function SettingsView({
         setStatus("ready");
       })
       .catch(failure => {
-        if (!active) return;
         setError((failure as RequestFailure).message);
         setStatus("error");
       });
-    return () => { active = false; };
+  };
+
+  useEffect(() => {
+    loadSettings();
+    // 仅首次挂载触发；loadSettings 变化由用户主动 retry
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateAppearance = (next: AppearanceSettings) => {
@@ -87,10 +93,31 @@ export default function SettingsView({
   };
 
   if (status === "loading") {
-    return <main className="settings-view" aria-busy="true"><div className="state-panel"><span className="spinner" />正在加载设置…</div></main>;
+    return (
+      <main className="settings-view" aria-busy="true">
+        {/* M4 polish 3.4: 改用 Spinner 组件（统一），配 EmptyState 风格包装 */}
+        <EmptyState
+          icon={<Spinner size="md" tone="primary" decorative label="正在加载设置" />}
+          title="正在加载设置…"
+          dark={dark}
+        />
+      </main>
+    );
   }
   if (!form) {
-    return <main className="settings-view"><div className="state-panel state-error" role="alert"><strong>无法读取设置</strong><span>{error}</span></div></main>;
+    return (
+      <main className="settings-view">
+        {/* M4 polish 3.4: 加载失败用 EmptyState（全屏式而非 ErrorBanner） */}
+        <EmptyState
+          icon={<span aria-hidden="true">⚠️</span>}
+          title="无法读取设置"
+          description={error || "请检查后端服务是否启动，或稍后重试。"}
+          actionLabel="重试"
+          onAction={loadSettings}
+          dark={dark}
+        />
+      </main>
+    );
   }
 
   const currentAppearance = normalizeAppearance(form);
