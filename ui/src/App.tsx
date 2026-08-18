@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { CANVAS_OPTIONS } from "./types";
 import { Icon } from "./icons";
+import { asArray, asRecord } from "./lib/narrow";
 import LibraryView from "./views/LibraryView";
 import LearningView from "./views/LearningView";
 import LiveView from "./views/LiveView";
@@ -282,9 +283,13 @@ function AppInner() {
     apiRequest<SongsData | Song[]>("/api/songs/list", {})
       .then(data => {
         if (!active) return;
-        const list: Song[] = Array.isArray(data) ? data
-          : (data && typeof data === "object" && "songs" in data && Array.isArray((data as SongsData).songs))
-            ? (data as SongsData).songs : [];
+        // M4 polish 3.3: 改用 narrow helper 显式校验"是数组" / "是 plain object"两步
+        const topArray = asArray(data);
+        const rec = asRecord(data);
+        const songsField = rec ? asArray(rec.songs) : null;
+        const list: Song[] = (topArray as Song[] | null)
+          ?? (songsField as Song[] | null)
+          ?? [];
         setAllSongs(list);
       })
       .catch(() => { /* 静默 — CommandPalette 仍能用命令 */ });
