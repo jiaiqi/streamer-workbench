@@ -1,4 +1,6 @@
 /* ---- 共享类型（与后端 API 契约对应） ---- */
+import type { SongResponse } from "./api/generated";
+
 export interface Theme {
   name: string;
   prefix: string;
@@ -12,28 +14,13 @@ export interface Layout {
   pages: number;
   supports_avoidance: boolean;
 }
-export interface Song {
-  id: string;
-  title: string;
-  status: string;
-  section: number | null;
-  artists: string[];
-  lyricist: string;
-  composer: string;
-  key: string;
-  capo: number | null;
-  // R9.4 个人 Capo 库
-  capo_options?: number[];
-  capo_default?: number;
-  difficulty: string;
-  tabs: string;
-  tags: string[];
-  pinyin: string;
-  added_at: string;
-  notes: string;
-  learned_at: string;
-  tab_files: string[];
-}
+/**
+ * 业务代码统一使用 Song 类型。
+ * 字段从后端 OpenAPI 生成的 SongResponse 派生（types.ts:1 之后禁止手抄字段），
+ * 既保证 lyric/audio 字段同步，也避免手工类型与 OpenAPI 漂移。
+ */
+export type Song = SongResponse;
+
 export interface SongsData {
   total: number;
   active: number;

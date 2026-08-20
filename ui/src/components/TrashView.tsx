@@ -27,7 +27,7 @@ function asTrashSong(value: unknown): TrashSong | null {
   const id = asString(v, "id");
   const title = asString(v, "title");
   const deleted_at = asString(v, "deleted_at");
-  if (!id || !title) return null;
+  if (!id || !title || !deleted_at) return null;
   const artists = asStringArray(v, "artists") ?? [];
   return {
     id,

@@ -14,6 +14,7 @@
 ///              next/prev  → 当前没有队列上下首语义，先打 log + setView("play") 提示用户
 import { useEffect, useRef } from "react";
 import { usePlayer } from "../player/PlayerContext";
+import "../lib/streamer";
 
 export interface SystemIntegrationOptions {
   /** 当前 song 的时长（ms）—— 通常 PlayView 通过 audio.duration 推 */
@@ -25,23 +26,6 @@ export interface SystemIntegrationOptions {
   notifySongChanged?: boolean;
   /** 队列从 0→>0 时是否通知主进程弹"直播开始"（默认 false，由 LiveView 决定） */
   notifyQueueStarted?: boolean;
-}
-
-declare global {
-  interface Window {
-    streamer?: {
-      sendPlayerState?: (state: Record<string, unknown>) => void;
-      onPlayerControl?: (listener: (cmd: string) => void) => () => void;
-      notify?: (opts: { title?: string; body?: string; tag?: string }) => Promise<{ ok: boolean }>;
-      getPlayerState?: () => Promise<Record<string, unknown>>;
-      openQuickView?: (sessionId?: string) => Promise<unknown>;
-      closeQuickView?: () => Promise<unknown>;
-      onQuickViewSession?: (listener: (sessionId: string) => void) => () => void;
-      saveFile?: (params: { data: ArrayBuffer; defaultName: string; mimeType?: string }) => Promise<unknown>;
-    };
-    /** LiveView 推送的队列数（自定义事件，桥接 LiveSession → 主进程 dock badge） */
-    __liveQueueCount?: number;
-  }
 }
 
 const THROTTLE_MS = 1000;
@@ -162,7 +146,7 @@ export function useSystemIntegration(opts: SystemIntegrationOptions = {}): void 
     const api = window.streamer;
     if (!api?.sendPlayerState) return;
     return () => {
-      api.sendPlayerState({
+      api.sendPlayerState?.({
         isPlaying: false,
         currentSongId: null,
         currentTitle: null,

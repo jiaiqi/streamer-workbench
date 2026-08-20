@@ -1,27 +1,9 @@
 /// Electron preload 暴露的 window.streamer API 类型与跨平台调用工具。
 ///
+/// 类型定义在 `lib/streamer.ts` 统一声明，本文件只放跨平台调用工具函数。
 /// 浏览器中 window.streamer 不存在 → 浏览器 <a download> 路径
 /// Electron 中 window.streamer 存在 → IPC 弹原生保存对话框（R4.0.12）
-declare global {
-  interface Window {
-    streamer?: {
-      openQuickView(sessionId?: string): Promise<{ ok: boolean }>;
-      closeQuickView(): Promise<{ ok: boolean }>;
-      onQuickViewSession(listener: (sessionId: string) => void): () => void;
-      saveFile?(params: {
-        data: ArrayBuffer;
-        defaultName: string;
-        mimeType?: string;
-      }): Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
-      // M3 海报 UI/UX：macOS Quick Look 预览（写 tmp + qlmanage -p）
-      quickLookPoster?(params: {
-        data: ArrayBuffer;
-        posterId?: string;
-      }): Promise<{ ok: boolean; code?: string; error?: string; path?: string }>;
-      isQuickLookSupported?(): boolean;
-    };
-  }
-}
+import "./lib/streamer";
 
 export const isElectron = (): boolean =>
   typeof window !== "undefined" && typeof window.streamer === "object";
@@ -37,7 +19,7 @@ export function openQuickView(
 ): void {
   if (isElectron()) {
     e?.preventDefault?.();
-    void window.streamer!.openQuickView(sessionId);
+    void window.streamer?.openQuickView?.(sessionId);
     return;
   }
   // 浏览器模式：让外层 <a target="_blank"> 走默认行为

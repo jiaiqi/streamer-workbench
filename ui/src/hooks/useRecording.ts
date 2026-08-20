@@ -214,6 +214,9 @@ function useStoreState(): RecordingState {
 
 export function useRecording(opts: UseRecordingOptions = {}): UseRecordingResult {
   // 兼容无 Provider 的环境（单测 / 裸环境）
+  // 类型用宽松形态：usePlayer() 返回 PlayerState & PlayerActions（含 PlayerMode 联合类型），
+  // 但内部不调用 player.setMode / setCurrent 等敏感方法，仅读 currentTimeMs/isPlaying，
+  // 所以这里用 unknown-ish 兜底 + 类型断言
   let player: {
     currentSongId?: string | null; mode?: string; isPlaying?: boolean;
     currentTimeMs?: number;
@@ -224,7 +227,7 @@ export function useRecording(opts: UseRecordingOptions = {}): UseRecordingResult
     lines?: { time_ms: number; text: string }[] | null;
   };
   try {
-    player = usePlayer();
+    player = usePlayer() as typeof player;
   } catch {
     player = { currentTimeMs: 0, isPlaying: false, lines: [] };
   }
@@ -232,11 +235,16 @@ export function useRecording(opts: UseRecordingOptions = {}): UseRecordingResult
   try {
     toast = useToast();
   } catch {
+    const noop = (): string => "";
     toast = {
-      success: () => undefined,
-      error: () => undefined,
-      warn: () => undefined,
-      info: () => undefined,
+      show: noop,
+      error: noop,
+      success: noop,
+      warn: noop,
+      warning: noop,
+      info: noop,
+      dismiss: () => undefined,
+      clear: () => undefined,
     };
   }
 

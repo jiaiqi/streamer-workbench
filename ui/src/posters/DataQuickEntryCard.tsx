@@ -172,7 +172,7 @@ export default function DataQuickEntryCard({
               }`}
             >
               {creating && <Spinner size="sm" tone="current" decorative />}
-              {creating ? "创建中…" : `用 Top ${data.items.length} 创建海报`}
+              {creating ? "创建中…" : `用 Top ${data.items?.length ?? 0} 创建海报`}
             </button>
             <button
               type="button"

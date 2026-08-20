@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
@@ -133,7 +133,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
 }) {
   const [songsData, setSongsData] = useState<SongsData | null>(null);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft" | "trash">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft" | "trash" | "snapshots">("all");
   // L2.2 批量导出：当前工作台 layout/theme/canvas
   const posterStore = usePosterStore();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -464,10 +464,10 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
     try {
       const result = await runWithToast(
         () => exportBySongIds({
-          theme: posterStore.current.theme_id,
+          theme: posterStore.current.theme_id ?? "",
           song_ids: ids,
-          layout: posterStore.current.layout_id,
-          canvas: posterStore.current.canvas_id,
+          layout: posterStore.current.layout_id ?? "",
+          canvas: posterStore.current.canvas_id ?? "",
         }),
         "批量导出失败",
       );
@@ -695,7 +695,7 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
               : (dark ? "text-zinc-500 hover:text-zinc-300" : "text-muted-foreground hover:text-foreground")}`}
           >
             {text}
-            {id !== "trash" && id !== "snapshots" && (
+            {id !== "trash" && (
               <span className="ml-1 tabular-nums opacity-60">
                 {id === "all" ? songsData?.total ?? "" : id === "active" ? songsData?.active ?? "" : songsData?.draft ?? ""}
               </span>

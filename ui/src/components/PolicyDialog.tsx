@@ -31,11 +31,16 @@ function useSafeToast(): ToastApi {
   try {
     toast = useToast();
   } catch {
+    const noop = (): string => "";
     toast = {
-      success: () => undefined,
-      error: () => undefined,
-      warn: () => undefined,
-      info: () => undefined,
+      show: noop,
+      error: noop,
+      success: noop,
+      warn: noop,
+      warning: noop,
+      info: noop,
+      dismiss: () => undefined,
+      clear: () => undefined,
     };
   }
   return toast;

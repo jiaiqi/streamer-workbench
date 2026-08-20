@@ -447,6 +447,7 @@ export default function LiveView({
               onRecord={handleRecord}
               onRefresh={() => loadDetail(activeSession.id)}
               onOpenManualPicker={() => setManualPickerOpen(true)}
+              onOpenPolicy={() => setPolicyDialogOpen(true)}
               onExportPoster={() => handleExportPoster(activeSession.id)}
               onPlaySong={onPlaySong}
               posterLoading={posterLoading}
@@ -465,7 +466,7 @@ export default function LiveView({
           open={policyDialogOpen}
           onClose={() => setPolicyDialogOpen(false)}
           sessionId={isActive ? activeId : null}
-          onUpdated={() => { void onRefresh(); }}
+          onUpdated={() => { void loadDetail(activeId ?? ""); }}
         />
       </main>
     </div>
@@ -514,6 +515,7 @@ function SessionCard({ session, active, dark, onSelect }: {
 function SessionDetail({
   session, detail, queue, performances, isActive, songTitle,
   songs, dark, onClose, onRecord, onRefresh, onOpenManualPicker,
+  onOpenPolicy,
   onExportPoster, onPlaySong,
   posterLoading,
 }: {
@@ -529,6 +531,8 @@ function SessionDetail({
   onRecord: (requestId: string, result: string) => void;
   onRefresh: () => void;
   onOpenManualPicker: () => void;
+  /** M2.4: 打开点歌规则配置弹窗。 */
+  onOpenPolicy: () => void;
   /** R4.0: 触发复盘海报导出；loading 状态由父组件管理。 */
   onExportPoster: () => Promise<void> | void;
   /** R8.2: 弹唱联动 — 队列项「弹唱」按钮触发。 */
@@ -557,7 +561,7 @@ function SessionDetail({
             data-testid="live-policy-button"
             disabled={!isActive}
             title={isActive ? "配置点歌规则（冷却 / 队列上限 / 单歌上限 / 单用户上限）" : "会话未激活"}
-            onClick={() => setPolicyDialogOpen(true)}
+            onClick={onOpenPolicy}
           >
             规则
           </button>

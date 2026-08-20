@@ -24,7 +24,7 @@ import ParamInspector from "./components/ParamInspector";
 import ColumnTemplatePicker from "./components/ColumnTemplatePicker";
 import CommandPalette, { type Command } from "./components/CommandPalette";
 import { searchSongs, buildEventsHeat } from "./search/globalSongSearch";
-import type { Song } from "./types";
+import type { Song, SongsData } from "./types";
 import { DEFAULT_APPEARANCE, normalizeAppearance, resolveAppearance } from "./appearance";
 import { apiRequest } from "./api/client";
 import { ThemeLazyThumb } from "./components/ThemeLazyThumb";

@@ -30,18 +30,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Spinner from "./Spinner";
 
 function useSafeToast(): ToastApi {
-  let toast: ToastApi;
-  try {
-    toast = useToast();
-  } catch {
-    toast = {
-      success: () => undefined,
-      error: () => undefined,
-      warn: () => undefined,
-      info: () => undefined,
-    };
-  }
-  return toast;
+  // useToast() 内部已经做了"未包 Provider 时返回 no-op"的兜底（Toast.tsx:155），
+  // 这里直接调用即可，不再 try-catch（早期 try-catch 是 useContext 抛错的临时方案）。
+  return useToast();
 }
 
 type Phase =

@@ -178,7 +178,7 @@ function OverviewPanel({ dark }: { dark: boolean }) {
   const [error, setError] = useState<RequestFailure | null>(null);
   const req = useLatestRequest<OverviewStatsResponse>({ isEmpty: d => d.total_events === 0 && !d.note });
 
-  useEffect(() => {
+  const retry = useCallback(() => {
     setError(null);
     void req.run(signal => runWithToast(
       () => apiRequest<OverviewStatsResponse>("/api/stats/overview", { signal }),
@@ -186,7 +186,12 @@ function OverviewPanel({ dark }: { dark: boolean }) {
     ))
       .then(d => { if (d) setData(d); })
       .catch(failure => setError(failure as RequestFailure));
-  }, []); // eslint-disable-line
+  }, [req, runWithToast]);
+
+  useEffect(() => {
+    retry();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
   if (!data) return (
@@ -208,12 +213,12 @@ function OverviewPanel({ dark }: { dark: boolean }) {
     { label: "总事件", value: data.total_events, color: "primary" },
     { label: "已会", value: data.active_songs, color: "amber" },
     { label: "在学", value: data.draft_songs, color: "rose" },
-    { label: "练习分钟", value: data.total_practice_minutes, color: "emerald" },
-    { label: "当前连续", value: `${data.current_streak_days} 天`, color: "sky" },
-    { label: "最长连续", value: `${data.longest_streak_days} 天`, color: "violet" },
-    { label: "点歌数", value: data.total_queue_requests, color: "amber" },
-    { label: "演唱数", value: data.total_performances, color: "rose" },
-    { label: "导出海报", value: data.total_posters_exported, color: "emerald" },
+    { label: "练习分钟", value: data.total_practice_minutes ?? 0, color: "emerald" },
+    { label: "当前连续", value: `${data.current_streak_days ?? 0} 天`, color: "sky" },
+    { label: "最长连续", value: `${data.longest_streak_days ?? 0} 天`, color: "violet" },
+    { label: "点歌数", value: data.total_queue_requests ?? 0, color: "amber" },
+    { label: "演唱数", value: data.total_performances ?? 0, color: "rose" },
+    { label: "导出海报", value: data.total_posters_exported ?? 0, color: "emerald" },
   ];
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 stagger-list">
@@ -255,9 +260,9 @@ function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (
   const [limit, setLimit] = useState(50);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const req = useLatestRequest<FeedResponse>({ isEmpty: d => d.items.length === 0 && !d.note });
+  const req = useLatestRequest<FeedResponse>({ isEmpty: d => (d.items?.length ?? 0) === 0 && !d.note });
 
-  const load = (n: number) => {
+  const load = useCallback((n: number) => {
     setError(null);
     void req.run(signal => runWithToast(
       () => apiRequest<FeedResponse>(`/api/stats/feed?limit=${n}`, { signal }),
@@ -265,19 +270,21 @@ function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (
     ))
       .then(d => { if (d) setData(d); })
       .catch(failure => setError(failure as RequestFailure));
-  };
+  }, [req, runWithToast]);
+
+  const retry = useCallback(() => { load(limit); }, [load, limit]);
 
   useEffect(() => { load(limit); /* eslint-disable-next-line */ }, [limit]);
 
   const handleCreatePreset = async () => {
-    if (!onCreatePreset || !data || data.items.length === 0 || creating) return;
+    if (!onCreatePreset || !data || (data.items?.length ?? 0) === 0 || creating) return;
     setCreating(true);
     setCreateError(null);
     try {
       // 从事件中抽去重 song_id（保留顺序）
       const seen = new Set<string>();
       const songIds: string[] = [];
-      for (const item of data.items) {
+      for (const item of data.items ?? []) {
         const rec = asRecord(item);
         const songId = rec ? asString(rec, "song_id") : null;
         if (songId && !seen.has(songId)) {
@@ -321,7 +328,7 @@ function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (
     <div>
       <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <p className={`text-xs ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
-          最近 {data.items.length} 条事件, 最新在前
+          最近 {data.items?.length ?? 0} 条事件, 最新在前
         </p>
         <div className="flex items-center gap-2">
           {onCreatePreset && (
@@ -364,11 +371,10 @@ function FeedPanel({ dark, onCreatePreset }: { dark: boolean; onCreatePreset?: (
           message={createError}
           onDismiss={() => setCreateError(null)}
           dark={dark}
-          className="mb-3"
         />
       )}
       <ul className="space-y-1.5 stagger-list" role="list">
-        {data.items.map(item => <FeedRow key={item.event_id} item={item} dark={dark} />)}
+        {(data.items ?? []).map(item => <FeedRow key={item.event_id} item={item} dark={dark} />)}
       </ul>
     </div>
   );
@@ -404,9 +410,9 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
   const [error, setError] = useState<RequestFailure | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const req = useLatestRequest<TopSongsResponse>({ isEmpty: d => d.items.length === 0 && !d.note });
+  const req = useLatestRequest<TopSongsResponse>({ isEmpty: d => (d.items?.length ?? 0) === 0 && !d.note });
 
-  useEffect(() => {
+  const retry = useCallback(() => {
     setError(null);
     void req.run(signal => runWithToast(
       () => apiRequest<TopSongsResponse>(`/api/stats/top-songs?metric=${metric}&limit=10`, { signal }),
@@ -414,7 +420,12 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
     ))
       .then(d => { if (d) setData(d); })
       .catch(failure => setError(failure as RequestFailure));
-  }, [metric]); // eslint-disable-line
+  }, [req, runWithToast, metric]);
+
+  useEffect(() => {
+    retry();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metric]);
 
   if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
   if (!data) return (
@@ -432,13 +443,14 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
     data-testid="stats-empty"
   />;
 
-  const max = data.items[0]?.count || 1;
+  const items = data.items ?? [];
+  const max = items[0]?.count || 1;
   const handleCreatePoster = async () => {
-    if (!onCreatePoster || !data || data.items.length === 0 || creating) return;
+    if (!onCreatePoster || !data || items.length === 0 || creating) return;
     setCreating(true);
     setCreateError(null);
     try {
-      const songIds = data.items.map(item => item.song_id).filter(id => !!id);
+      const songIds = items.map(item => item.song_id).filter(id => !!id);
       await runWithToast(
         () => onCreatePoster!(songIds, metric),
         "创建海报失败",
@@ -473,7 +485,7 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
             {label}
           </button>
         ))}
-        {onCreatePoster && data && data.items.length > 0 && (
+        {onCreatePoster && data && items.length > 0 && (
           <button
             type="button"
             className="ml-auto secondary-action"
@@ -482,14 +494,14 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
             disabled={creating}
             aria-busy={creating}
             onClick={() => { void handleCreatePoster(); }}
-            title={`用这 ${data.items.length} 首创建海报`}
+            title={`用这 ${items.length} 首创建海报`}
           >
             {creating ? (
               <>
                 <Spinner size="sm" tone="current" decorative />
                 <span className="ml-1.5">创建中…</span>
               </>
-            ) : `据此创建海报（${data.items.length} 首）`}
+            ) : `据此创建海报（${items.length} 首）`}
           </button>
         )}
       </div>
@@ -500,11 +512,10 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
           message={createError}
           onDismiss={() => setCreateError(null)}
           dark={dark}
-          className="mb-3"
         />
       )}
       <ul className="space-y-2 stagger-list" role="list">
-        {data.items.map((item, idx) => (
+        {items.map((item, idx) => (
           <li
             key={item.song_id}
             className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${
@@ -534,15 +545,15 @@ function TopPanel({ dark, onCreatePoster, currentMetric }: { dark: boolean; onCr
               }`}>
                 <div
                   className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${(item.count / max) * 100}%` }}
+                  style={{ width: `${((item.count ?? 0) / max) * 100}%` }}
                 />
               </div>
             </div>
             <div className="shrink-0 text-right">
               <div className={`text-lg font-bold tabular-nums ${dark ? "text-zinc-100" : "text-foreground"}`}>
-                {item.count}
+                {item.count ?? 0}
               </div>
-              {item.minutes > 0 && (
+              {(item.minutes ?? 0) > 0 && (
                 <div className={`text-[10px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
                   {item.minutes} 分钟
                 </div>
@@ -560,9 +571,9 @@ function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficult
   const { runWithToast } = useApiError();
   const [data, setData] = useState<DistributionResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
-  const req = useLatestRequest<DistributionResponse>({ isEmpty: d => d.buckets.length === 0 && !d.note });
+  const req = useLatestRequest<DistributionResponse>({ isEmpty: d => (d.buckets?.length ?? 0) === 0 && !d.note });
 
-  useEffect(() => {
+  const retry = useCallback(() => {
     setError(null);
     void req.run(signal => runWithToast(
       () => apiRequest<DistributionResponse>(`/api/stats/distribution?metric=${metric}`, { signal }),
@@ -570,7 +581,12 @@ function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficult
     ))
       .then(d => { if (d) setData(d); })
       .catch(failure => setError(failure as RequestFailure));
-  }, [metric]); // eslint-disable-line
+  }, [req, runWithToast, metric]);
+
+  useEffect(() => {
+    retry();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metric]);
 
   if (error) return <ErrorBanner title="统计加载失败" message={error.message} dark={dark} onRetry={retry} />;
   if (!data) return (
@@ -587,10 +603,10 @@ function DistributionPanel({ dark, metric }: { dark: boolean; metric: "difficult
     dark={dark}
     data-testid="stats-empty"
   />;
-  const max = data.buckets.reduce((m, b) => Math.max(m, b.count), 1);
+  const max = (data.buckets ?? []).reduce((m, b) => Math.max(m, b.count), 1);
   return (
     <div className="space-y-2 stagger-list" role="list">
-      {data.buckets.map(b => (
+      {(data.buckets ?? []).map(b => (
         <div key={b.label} className="flex items-center gap-3" role="listitem">
           <div className={`shrink-0 w-20 text-sm text-right ${dark ? "text-zinc-400" : "text-muted-foreground"}`}>
             {b.label}
@@ -626,10 +642,10 @@ function InsightsPanel({ dark }: { dark: boolean }) {
   useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   if (request.status === "loading" && !request.data) {
-    return <Spinner dark={dark} label="加载洞察数据…" />;
+    return <Spinner label="加载洞察数据…" />;
   }
   if (request.status === "error" && !request.data) {
-    return <ErrorBanner dark={dark} error={request.error} onRetry={refresh} />;
+    return <ErrorBanner dark={dark} message={request.error?.message ?? "加载失败"} onRetry={refresh} />;
   }
   const data = request.data;
   if (!data) return null;

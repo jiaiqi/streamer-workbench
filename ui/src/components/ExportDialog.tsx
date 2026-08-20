@@ -4,17 +4,7 @@ import { toRequestFailure } from "../async/requestState";
 import ExportLogPanel from "../posters/ExportLogPanel";
 import ErrorBanner from "./ErrorBanner";
 import { useToast } from "./Toast";
-
-declare global {
-  interface Window {
-    streamer?: {
-      copyImageToClipboard?: (params: { data: ArrayBuffer }) => Promise<{ ok: boolean; error?: string }>;
-      revealInFinder?: (params: { filePath: string }) => Promise<{ ok: boolean; error?: string }>;
-      shareToMacOS?: (params: { data: ArrayBuffer; defaultName?: string }) => Promise<{ ok: boolean; code?: string; error?: string }>;
-      isMacOSShareSupported?: () => boolean;
-    };
-  }
-}
+import "../lib/streamer";
 
 /* ---- M3 P0 重构后的 ExportDialog：三段式引导 ----
  *   阶段 1（未开始）：范围选择 + 预估 + [开始导出] + [关闭]

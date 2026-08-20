@@ -41,6 +41,7 @@ import type {
   PosterSummaryResponse,
 } from "../api/generated";
 import { isAbortError, toRequestFailure, type RequestFailure } from "../async/requestState";
+import { apiRequest } from "../api/client";
 
 const AUTOSAVE_DEBOUNCE_MS = 750;
 const HISTORY_LIMIT = 50;

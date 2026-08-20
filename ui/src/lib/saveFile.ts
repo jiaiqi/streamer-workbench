@@ -8,6 +8,8 @@
 /// 返回：
 ///   { ok: true, path?, method: 'native' | 'download' }
 ///   { ok: false, cancelled?: boolean, error?: string }
+import "./streamer";
+
 export interface SaveFileSuccess {
   ok: true;
   /** Electron 下是真实保存路径；浏览器下为 null。 */
@@ -23,20 +25,6 @@ export interface SaveFileFailure {
   error?: string;
 }
 export type SaveFileResult = SaveFileSuccess | SaveFileFailure;
-
-interface ElectronSaveFile {
-  (params: { data: ArrayBuffer; defaultName: string; mimeType?: string })
-    : Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
-}
-
-declare global {
-  interface Window {
-    streamer?: {
-      saveFile?: ElectronSaveFile;
-      [key: string]: unknown;
-    };
-  }
-}
 
 /**
  * 触发浏览器下载 <a download>。同步创建 → 模拟点击 → 异步清理。

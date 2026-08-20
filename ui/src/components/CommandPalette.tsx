@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../icons";
 
-export type CommandGroup = "视图" | "操作" | "海报" | "速查" | "歌曲";
+export type CommandGroup = "视图" | "操作" | "海报" | "速查" | "歌曲" | "帮助";
 
 export interface Command {
   id: string;

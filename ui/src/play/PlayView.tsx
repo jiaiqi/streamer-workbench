@@ -116,7 +116,7 @@ export default function PlayView({
       return parseLrc(song.lyrics_lrc).lines;
     }
     if (song.lyrics_plain && song.lyrics_plain.trim()) {
-      const total = song.audio_duration_ms > 0 ? song.audio_duration_ms : DEFAULT_TOTAL_MS;
+      const total = (song.audio_duration_ms ?? 0) > 0 ? song.audio_duration_ms ?? 0 : DEFAULT_TOTAL_MS;
       return distributePlainLyrics(song.lyrics_plain, total);
     }
     return [];
@@ -678,7 +678,7 @@ export default function PlayView({
           linkedSessionId: linkedSessionId ?? null,
           linkedRequestId: linkedRequestId ?? null,
           // 传 LRC 行供字幕事件采集
-          lines: lyricsLines ?? null,
+          lines: (lyricsLines ?? []).map(l => ({ time_ms: l.timeMs, text: l.text })),
         }}
       />
     </div>

@@ -20,7 +20,7 @@ export interface UseIntersectionOptions {
 
 export function useIntersection<T extends Element = Element>(
   options: UseIntersectionOptions = {},
-): [RefObject<T>, boolean] {
+): [RefObject<T | null>, boolean] {
   const { rootMargin = "0px", threshold = 0, once = true } = options;
   const ref = useRef<T>(null);
   const [isIntersecting, setIsIntersecting] = useState(false);

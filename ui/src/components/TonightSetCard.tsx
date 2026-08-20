@@ -152,7 +152,7 @@ export default function TonightSetCard({ dark, onPlaySong, onOpenLiveView }: Ton
   }, [queue]);
 
   const isEmpty = useMemo(
-    () => sessionsReq.status === "ready" && !activeSession,
+    () => sessionsReq.status === "success" && !activeSession,
     [sessionsReq.status, activeSession],
   );
 

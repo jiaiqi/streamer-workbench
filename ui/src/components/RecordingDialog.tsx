@@ -240,9 +240,9 @@ export default function RecordingDialog({ open, onClose, options }: RecordingDia
                 const audioCheckbox = document.getElementById("recording-include-audio") as HTMLInputElement | null;
                 const includeAudio = audioCheckbox?.checked ?? true;
                 if (sourceId) void handleStart(sourceId, sourceName || "(unknown)", includeAudio);
-              }} disabled={r.sources.length === 0 || r.status === "starting"}
+              }} disabled={r.sources.length === 0}
                 data-testid="recording-start-button">
-                {r.status === "starting" ? "启动中…" : "开始录制"}
+                开始录制
               </Button>
             </>
           )}

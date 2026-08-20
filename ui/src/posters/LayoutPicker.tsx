@@ -43,7 +43,7 @@ export default function LayoutPicker({ store, currentThemeId }: LayoutPickerProp
   // R4 Runtime v2 v2.5: 实时校验 (current layout, current theme) 兼容性
   const incompatReason = (() => {
     if (!matrix || !currentThemeId) return null;
-    const cell = matrix.matrix[current]?.[currentThemeId];
+    const cell = matrix.matrix[current ?? ""]?.[currentThemeId];
     if (cell && !cell.compatible) return cell.reason;
     return null;
   })();

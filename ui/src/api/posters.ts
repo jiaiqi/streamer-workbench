@@ -14,8 +14,16 @@ import type {
   PosterSummaryResponse,
   RenderDocumentRequest,
   RenderDocumentResponse,
+  SnapshotListResponse,
+  SongExportResponse,
+  SongImportRequest,
+  SongImportResult,
 } from "./generated";
 import { apiRequest } from "./client";
+
+/** 兼容别名：L2.3 旧 call site 仍叫 SongImportRequestBody / SongImportResultResponse */
+export type SongImportRequestBody = SongImportRequest;
+export type SongImportResultResponse = SongImportResult;
 
 // ── 海报文档 (CRUD + 解析) ────────────────────────────────────
 
@@ -34,6 +42,18 @@ export interface CompatibilityMatrix {
   layouts: string[];
   themes: string[];
   matrix: Record<string, Record<string, CompatibilityCheckResult>>;
+}
+
+/** 主题元数据（M3 P3 续 + 多选批量改主题用）。`/api/themes` 端点返回结构。 */
+export interface Theme {
+  id: string;
+  name?: string;
+  /** 缩略图 URL（懒生成时使用） */
+  thumbnail?: string;
+  /** 标签 / 场景 / 心情等推荐元数据（可选） */
+  tags?: string[];
+  scenes?: string[];
+  mood?: string[];
 }
 
 export function checkCompatibility(

@@ -29,7 +29,7 @@ export default function DiscoveryTabs({ dark }: DiscoveryTabsProps) {
   const [items, setItems] = useState<DiscoveryResponse | null>(null);
   const [error, setError] = useState<RequestFailure | null>(null);
   const fetchRequest = useLatestRequest<DiscoveryResponse>({
-    isEmpty: r => r.items.length === 0 && !r.note,
+    isEmpty: r => (r.items?.length ?? 0) === 0 && !r.note,
   });
 
   const load = (which: Tab) => {
@@ -96,14 +96,14 @@ export default function DiscoveryTabs({ dark }: DiscoveryTabsProps) {
             {items.note}
           </div>
         )}
-        {!error && items && items.items.length > 0 && (
+        {!error && items && (items.items?.length ?? 0) > 0 && (
           <ul className="space-y-2">
-            {items.items.map((it, idx) => (
+            {(items.items ?? []).map((it, idx) => (
               <DiscoveryRow key={it.song_id} index={idx + 1} item={it} dark={dark} showTab={tab} />
             ))}
           </ul>
         )}
-        {!error && items && items.items.length === 0 && !items.note && (
+        {!error && items && (items.items?.length ?? 0) === 0 && !items.note && (
           <div className={`text-xs py-4 text-center ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
             暂无数据
           </div>
@@ -150,11 +150,11 @@ function DiscoveryRow({ index, item, dark, showTab }: {
           )}
           {showTab === "request-hot" && (
             <>
-              {item.request_count > 0 && <span>· 点 {item.request_count}</span>}
-              {item.perform_count > 0 && <span>· 演 {item.perform_count}</span>}
+              {(item.request_count ?? 0) > 0 && <span>· 点 {item.request_count}</span>}
+              {(item.perform_count ?? 0) > 0 && <span>· 演 {item.perform_count}</span>}
             </>
           )}
-          {showTab === "recommend" && item.request_count > 0 && (
+          {showTab === "recommend" && (item.request_count ?? 0) > 0 && (
             <span>· 被点 {item.request_count} 次</span>
           )}
         </div>

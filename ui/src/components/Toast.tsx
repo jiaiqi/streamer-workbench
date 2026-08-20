@@ -21,9 +21,18 @@ export interface ToastAction {
   variant?: "primary" | "warning" | "neutral";
 }
 
+/**
+ * 便捷方法的第二参：可以是带回调的"撤销/重试"按钮，
+ * 也可以是纯文案提示（不点击，只作为副标题显示）。
+ * 后者常见于网络错误场景："复制失败" / "请稍后重试"。
+ */
+export type ToastLabelOrAction = string | ToastAction;
+
 export interface ToastInput {
   message: string;
   action?: ToastAction;
+  /** 副标题文案（不点击；多行显示时放在 message 下方） */
+  hint?: string;
   /** 自动消失毫秒数；0 = 不自动消失（需手动 ✕）；默认按 kind 决定 */
   durationMs?: number;
   /** L1.1: toast 类型（影响配色 + 默认 duration） */
@@ -37,15 +46,22 @@ interface ToastItem extends ToastInput {
   createdAt: number;
 }
 
-interface ToastApi {
+export interface ToastApi {
   show: (input: ToastInput) => string;
-  /** 便捷方法：L1.1 错误全局 toast 通道 */
-  error: (message: string, action?: ToastAction) => string;
-  success: (message: string) => string;
-  warning: (message: string) => string;
+  /** 便捷方法：L1.1 错误全局 toast 通道。action 接受 string（副标题）或 ToastAction（按钮） */
+  error: (message: string, action?: ToastLabelOrAction) => string;
+  success: (message: string, action?: ToastLabelOrAction) => string;
+  /** L1.1: warning 别名 `warn`，统一调用方命名 */
+  warn: (message: string, action?: ToastLabelOrAction) => string;
+  /** 兼容旧命名：toast.warning 等同 toast.warn（P0-1 临时保留，P0-4 清理） */
+  warning: (message: string, action?: ToastLabelOrAction) => string;
+  info: (message: string, action?: ToastLabelOrAction) => string;
   dismiss: (id: string) => void;
   clear: () => void;
 }
+
+/** 兼容旧命名：toast.warning 等同 toast.warn */
+export const warning = (api: ToastApi, message: string) => api.warn(message);
 
 const KIND_DEFAULT_DURATION: Record<ToastKind, number> = {
   info: 5000,
@@ -85,12 +101,32 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, [dismiss]);
 
   // L1.1 便捷方法：让 catch (e) → toast.error(e.message) 更顺
-  const error = useCallback((message: string, action?: ToastAction) =>
-    show({ message, kind: "error", action }), [show]);
-  const success = useCallback((message: string) =>
-    show({ message, kind: "success" }), [show]);
-  const warning = useCallback((message: string) =>
-    show({ message, kind: "warning" }), [show]);
+  // 第二参接受 string（副标题）或 ToastAction（按钮）—— 两者常见用法都覆盖
+  const normalizeAction = (action: ToastLabelOrAction | undefined): { action?: ToastAction; hint?: string } => {
+    if (action === undefined) return {};
+    if (typeof action === "string") return { hint: action };
+    return { action };
+  };
+  const error = useCallback((message: string, action?: ToastLabelOrAction): string => {
+    const { action: a, hint } = normalizeAction(action);
+    return show({ message, kind: "error", action: a, hint });
+  }, [show]);
+  const success = useCallback((message: string, action?: ToastLabelOrAction): string => {
+    const { action: a, hint } = normalizeAction(action);
+    return show({ message, kind: "success", action: a, hint });
+  }, [show]);
+  const warn = useCallback((message: string, action?: ToastLabelOrAction): string => {
+    const { action: a, hint } = normalizeAction(action);
+    return show({ message, kind: "warning", action: a, hint });
+  }, [show]);
+  const info = useCallback((message: string, action?: ToastLabelOrAction): string => {
+    const { action: a, hint } = normalizeAction(action);
+    return show({ message, kind: "info", action: a, hint });
+  }, [show]);
+  /** 兼容旧命名：toast.warning → toast.warn */
+  const warning = useCallback((message: string, action?: ToastLabelOrAction): string => {
+    return warn(message, action);
+  }, [warn]);
 
   const clear = useCallback(() => {
     setItems([]);
@@ -107,7 +143,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ show, error, success, warning, dismiss, clear }}>
+    <ToastContext.Provider value={{ show, error, success, warn, warning, info, dismiss, clear }}>
       {children}
       <ToastViewport items={items} onDismiss={dismiss} />
     </ToastContext.Provider>
@@ -118,13 +154,18 @@ export function useToast(): ToastApi {
   const ctx = useContext(ToastContext);
   if (!ctx) {
     // 容错：未包 Provider 时返回 no-op API（单元测试 / 独立窗口如 QuickView）
+    const noop = (): string => "";
+    const noopAction = (): string => "";
+    const noopVoid = (): void => undefined;
     return {
-      show: () => undefined,
-      dismiss: () => undefined,
-      success: () => undefined,
-      error: () => undefined,
-      warn: () => undefined,
-      info: () => undefined,
+      show: noop,
+      error: noopAction,
+      success: noop,
+      warn: noop,
+      warning: noop,
+      info: noop,
+      dismiss: noopVoid,
+      clear: noopVoid,
     };
   }
   return ctx;
@@ -211,8 +252,13 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: (id: strin
       >
         {ks.icon}
       </span>
-      <span data-testid="toast-message" className="flex-1 min-w-0 truncate">
-        {item.message}
+      <span data-testid="toast-message" className="flex-1 min-w-0">
+        <div className="truncate">{item.message}</div>
+        {item.hint && (
+          <div data-testid="toast-hint" className="text-xs text-zinc-400 truncate">
+            {item.hint}
+          </div>
+        )}
       </span>
       {item.action && (
         <button
