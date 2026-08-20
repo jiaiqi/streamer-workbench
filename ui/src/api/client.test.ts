@@ -125,3 +125,59 @@ test("returns undefined for 204 response", async () => {
   });
   assert.equal(await request("/api/empty"), undefined);
 });
+
+// ===== P0-2: session token 自动注入 =====
+
+test("P0-2: mutate 请求自动注入 X-Streamer-Session", async () => {
+  let received: RequestInit | undefined;
+  const request = createApiClient({
+    getSessionToken: () => "tok-abc-123",
+    fetch: async (_url, init) => {
+      received = init;
+      return jsonResponse({ ok: true });
+    },
+  });
+  await request("/api/songs/import", { method: "POST", body: { title: "x" } });
+  assert.equal(new Headers(received?.headers).get("x-streamer-session"), "tok-abc-123");
+});
+
+test("P0-2: GET 请求不注入 X-Streamer-Session（避免噪音）", async () => {
+  let received: RequestInit | undefined;
+  const request = createApiClient({
+    getSessionToken: () => "tok-abc-123",
+    fetch: async (_url, init) => {
+      received = init;
+      return jsonResponse([]);
+    },
+  });
+  await request("/api/songs/list");
+  assert.equal(new Headers(received?.headers).get("x-streamer-session"), null);
+});
+
+test("P0-2: 未提供 getSessionToken 时 mutate 不注入（dev mode 行为）", async () => {
+  let received: RequestInit | undefined;
+  const request = createApiClient({
+    fetch: async (_url, init) => {
+      received = init;
+      return jsonResponse({ ok: true });
+    },
+  });
+  await request("/api/songs/import", { method: "POST", body: { title: "x" } });
+  assert.equal(new Headers(received?.headers).get("x-streamer-session"), null);
+});
+
+test("P0-2: FormData mutate 仍注入 X-Streamer-Session（被 csp 误伤）", async () => {
+  let received: RequestInit | undefined;
+  const request = createApiClient({
+    getSessionToken: () => "tok-abc-123",
+    fetch: async (_url, init) => {
+      received = init;
+      return jsonResponse({ tab_files: [] });
+    },
+  });
+  const form = new FormData();
+  form.append("file", new Blob(["x"]), "x.txt");
+  await request("/api/tabs", { method: "POST", body: form });
+  // FormData 走 multipart，不应强加 content-type，但 session 头必须注入
+  assert.equal(new Headers(received?.headers).get("x-streamer-session"), "tok-abc-123");
+});

@@ -3,7 +3,12 @@
 /// 类型定义在 `lib/streamer.ts` 统一声明，本文件只放跨平台调用工具函数。
 /// 浏览器中 window.streamer 不存在 → 浏览器 <a download> 路径
 /// Electron 中 window.streamer 存在 → IPC 弹原生保存对话框（R4.0.12）
+///
+/// P0-2: 海报渲染走统一 apiRequest / apiRequestBinary，由它们自动注入
+/// X-Streamer-Session。组件不自己 fetch + 自己塞 token。
 import "./lib/streamer";
+import { apiRequestBinary } from "./api/client";
+import { getSessionToken } from "./api/session";
 
 export const isElectron = (): boolean =>
   typeof window !== "undefined" && typeof window.streamer === "object";
@@ -47,68 +52,51 @@ function learningReportFilename(days: number, label: string): string {
 /**
  * R2.5: 渲染并保存直播复盘海报 PNG。
  * Electron 走原生保存对话框；浏览器走 <a download>。
+ *
+ * P0-2: 不再接受 authToken 参数；sessionToken 由 apiRequestBinary 内部自动注入
+ * X-Streamer-Session（packaged mode 必需）。
  * @param sessionId LiveSession id
- * @param baseUrl API 根（默认当前 origin）
- * @param authToken 会话令牌（packaged 模式需要）
+ * @param baseUrl API 根（默认当前 origin；electron 模式下用 window.location.origin）
  * @returns SaveFileResult — caller 可用于 toast 提示「已保存到 xxx」
  */
 export async function openLivePoster(
   sessionId: string,
   baseUrl: string = window.location.origin,
-  authToken: string = "",
 ): Promise<SaveFileResult> {
-  const headers: Record<string, string> = {};
-  if (authToken) headers["X-Session-Token"] = authToken;
-  const res = await fetch(
-    `${baseUrl}/api/live-sessions/${encodeURIComponent(sessionId)}/poster`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({
-        theme_id: "海洋柔光",
-        canvas_id: "抖音全屏 9:20",
-      }),
-    },
-  );
-  if (!res.ok) {
-    throw new Error(`live-set 海报渲染失败：HTTP ${res.status}`);
-  }
-  const blob = await res.blob();
+  const path = `${baseUrl}/api/live-sessions/${encodeURIComponent(sessionId)}/poster`;
+  const buf = await apiRequestBinary(path, {
+    method: "POST",
+    body: { theme_id: "海洋柔光", canvas_id: "抖音全屏 9:20" },
+    getSessionToken,
+  });
+  const blob = new Blob([buf], { type: "image/png" });
   return await saveBlob(blob, livePosterFilename(sessionId));
 }
 
 /**
  * R3.5: 渲染并保存学歌报告海报 PNG。
- * @param options days / period_label / top_n_artists
- * @param baseUrl API 根
- * @param authToken 会话令牌（packaged 模式需要）
+ *
+ * P0-2: 同样去掉 authToken 死参数；统一走 apiRequestBinary。
  */
 export async function openLearningReportPoster(
   options: { days?: number; period_label?: string; top_n_artists?: number } = {},
   baseUrl: string = window.location.origin,
-  authToken: string = "",
 ): Promise<SaveFileResult> {
   const days = options.days ?? 30;
   const label = options.period_label ?? `${days}天`;
-  const headers: Record<string, string> = {};
-  if (authToken) headers["X-Session-Token"] = authToken;
-  const res = await fetch(
-    `${baseUrl}/api/learning-report/poster`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({
-        theme_id: "海洋柔光",
-        canvas_id: "抖音全屏 9:20",
-        days,
-        period_label: label,
-        top_n_artists: options.top_n_artists ?? 5,
-      }),
-    },
-  );
-  if (!res.ok) {
-    throw new Error(`learning-report 海报渲染失败：HTTP ${res.status}`);
-  }
-  const blob = await res.blob();
+  const body = {
+    theme_id: "海洋柔光",
+    canvas_id: "抖音全屏 9:20",
+    days,
+    period_label: label,
+    top_n_artists: options.top_n_artists ?? 5,
+  };
+  const path = `${baseUrl}/api/learning-report/poster`;
+  const buf = await apiRequestBinary(path, {
+    method: "POST",
+    body,
+    getSessionToken,
+  });
+  const blob = new Blob([buf], { type: "image/png" });
   return await saveBlob(blob, learningReportFilename(days, label));
 }

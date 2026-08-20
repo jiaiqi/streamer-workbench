@@ -131,6 +131,18 @@ contextBridge.exposeInMainWorld("streamer", {
     return ipcRenderer.invoke("player:getState");
   },
 
+  // ===== P0-2: API 配置（baseUrl + sessionToken 单一来源） =====
+  /**
+   * 拉取 Python 后端的 baseUrl + session token。
+   * 渲染层所有 mutate 请求必须经统一 client 注入 X-Streamer-Session；
+   * 不应各组件自行 fetch + 自行塞 token。
+   * dev mode sessionToken 为空；packaged mode 是主进程启动时生成的随机串。
+   * @returns {Promise<{ baseUrl: string, sessionToken: string }>}
+   */
+  getApiConfig() {
+    return ipcRenderer.invoke("app:get-api-config");
+  },
+
   // ===== R8.2.x 弹唱录屏（Electron desktopCapturer + MediaRecorder） =====
   /**
    * 列出可录制的源（屏幕 / 窗口）。

@@ -119,6 +119,18 @@ export interface RecordingState {
 }
 
 /**
+ * P0-2: 主进程返回的 API 配置。
+ * - baseUrl：Python 后端完整 origin（http://localhost:8765 等）；
+ * - sessionToken：packaged mode 必填；dev mode 为空字符串（origin 白名单兜底）。
+ * 渲染层 mutate 请求走 client.ts，由它统一注入 X-Streamer-Session；
+ * 组件自身不要用 fetch() + 自行塞 token。
+ */
+export interface ApiConfig {
+  baseUrl: string;
+  sessionToken: string;
+}
+
+/**
  * 主进程实际暴露的 IPC 能力集合。全部可选（浏览器模式 streamer 不存在）。
  * 各模块按需取用对应字段，不要假定全有。
  */
@@ -144,6 +156,9 @@ export interface StreamerApi {
   onPlayerControl?(listener: (cmd: string) => void): () => void;
   notify?(opts: NotifyParams): Promise<NotifyResult>;
   getPlayerState?(): Promise<Record<string, unknown>>;
+
+  // P0-2: API 配置（baseUrl + sessionToken）
+  getApiConfig?(): Promise<ApiConfig>;
 
   // 录屏（R8.2.x）
   listRecordingSources?(): Promise<RecordingSource[]>;

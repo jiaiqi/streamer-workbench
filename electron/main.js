@@ -461,6 +461,19 @@ ipcMain.handle("desktop:info", () => ({
   pyUrl: PY_URL,
 }));
 
+/**
+ * P0-2: 让渲染层拿到 Python 后端的 baseUrl + session token。
+ * - baseUrl：渲染层跨窗口时（如 QuickView）需要明确知道调哪个 origin；
+ *   在 dev mode 是 http://localhost:8765，在 packaged 同样。
+ * - sessionToken：packaged mode 下 Python 后端强制要求 X-Streamer-Session 头；
+ *   dev mode sessionToken 为空（Python 端不强制，origin 白名单兜底）。
+ * 渲染层不应自己造 token / 端口，必须从主进程读单一来源。
+ */
+ipcMain.handle("app:get-api-config", () => ({
+  baseUrl: PY_URL,
+  sessionToken: sessionToken || "",
+}));
+
 // =====================================================================
 // R8.2.x 弹唱录屏（desktopCapturer + MediaRecorder + 1GB 自动切片 + SRT）
 // =====================================================================
