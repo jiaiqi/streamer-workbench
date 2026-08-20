@@ -45,6 +45,7 @@ import { ToastProvider, useToast } from "./components/Toast";
 import ShortcutsPanel from "./components/ShortcutsPanel";
 import Onboarding, { resetOnboarded } from "./components/Onboarding";
 import OnlineStatusBadge from "./components/OnlineStatusBadge";
+import { useLocalBackend } from "./hooks/useLocalBackend";
 import StatusBar, { type StatusView } from "./components/StatusBar";
 import HelpCenter from "./components/HelpCenter";
 
@@ -77,10 +78,14 @@ function AppInner() {
   const ws = useWorkspaceState({ layoutId: posterStore.current.layout_id });
   /* M1.3: 跨场景播放器状态（M1.4 MiniPlayer 读这个） */
   const player = usePlayer();
-  /* L1.5 离线检测 + M9.6b toast */
+  /* L1.5 离线检测 + M9.6b toast + P0-4b: 三态网络（internet / localBackend / onlineFeatures） */
   const toast = useToast();
-  const [online, setOnline] = useState<boolean>(() => navigator.onLine);
-  const wasOnlineRef = useRef<boolean>(navigator.onLine);
+  const localBackend = useLocalBackend();
+  // online 现在专指 internet（navigator.onLine）；localBackend 由 useLocalBackend 提供
+  const [online, setOnline] = useState<boolean>(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true,
+  );
+  const wasOnlineRef = useRef<boolean>(online);
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
@@ -98,7 +103,9 @@ function AppInner() {
     if (online) {
       toast.success("网络已恢复");
     } else {
-      toast.warning("网络已断开；导出 / 同步操作会失败");
+      // P0-4: 文案区分本地能力 vs 在线增强。
+      // 本地海报导出 / 曲库 / 直播 / 备份都不依赖网络。
+      toast.warn("网络已断开；在线元数据 / 公开歌单 / WebDAV 同步暂不可用");
     }
   }, [online, toast]);
 
@@ -358,7 +365,7 @@ function AppInner() {
     { id: "view-live", title: "切换到直播", group: "视图", shortcut: "4", keywords: ["live", "直播"], action: () => setView("live") },
     { id: "view-stats", title: "切换到数据统计", group: "视图", shortcut: "5", keywords: ["stats", "统计"], action: () => setView("stats") },
     { id: "view-settings", title: "打开设置", group: "视图", shortcut: "⌘,", keywords: ["setting", "设置"], action: () => setView("settings") },
-    { id: "act-export", title: "导出当前海报", group: "操作", shortcut: "⌘E", keywords: ["export", "下载"], action: () => setExportDialogOpen(true), disabledReason: view !== "workspace" ? "切到工作台后可用" : !online ? "离线状态无法导出" : undefined },
+    { id: "act-export", title: "导出当前海报", group: "操作", shortcut: "⌘E", keywords: ["export", "下载"], action: () => setExportDialogOpen(true), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
     { id: "act-refresh", title: "刷新预览", group: "操作", shortcut: "⌘R", keywords: ["refresh", "reload"], action: () => ws.refresh(), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
     { id: "act-quickview", title: "打开直播速查", group: "速查", keywords: ["quickview", "速查"], action: () => openQuickView() },
     { id: "act-shortcuts", title: "查看快捷键面板", group: "帮助", shortcut: "?", keywords: ["shortcut", "快捷键", "help", "帮助"], action: () => setShortcutsOpen(true) },
@@ -408,8 +415,10 @@ function AppInner() {
 
       if (mod && e.key === "e") {
         e.preventDefault();
-        if (!online) {
-          toast.warning("离线状态无法导出海报");
+        // P0-4: 海报导出是本地能力（核心 PIP 渲染 + 本地文件保存），
+        // 不应被网络状态阻断。只在不在工作台时提示。
+        if (view !== "workspace") {
+          toast.warn("切到工作台后才能导出海报");
           return;
         }
         setExportDialogOpen(true);
@@ -504,6 +513,15 @@ function AppInner() {
           <span className={`font-serif text-[15px] font-semibold tracking-wide whitespace-nowrap ${dark ? "text-zinc-200" : "text-foreground"}`}>主播工作台</span>
           <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
           <OnlineStatusBadge dark={dark} />
+          {localBackend.state === "down" && (
+            <span
+              data-testid="local-backend-down"
+              className="text-amber-500 whitespace-nowrap"
+              title="本机后端未启动或未响应；本地功能仍可用，但请确认数据写入是否成功"
+            >
+              本地后端未响应
+            </span>
+          )}
           <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>
           <span className="hidden min-[800px]:inline whitespace-nowrap">{ws.themes.length} 个主题 · {ws.maxPage} 页</span>
           <span className={`h-4 w-px hidden min-[800px]:block ${dark ? "bg-zinc-700/50" : "bg-border"}`}></span>

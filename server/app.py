@@ -269,6 +269,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(webdav.router)
     from server.routers import auto_sync as auto_sync_router  # M2.4 自动同步
     app.include_router(auto_sync_router.router)
+    from server.routers import health  # P0-4b: 本地后端健康检查
+    app.include_router(health.router)
 
     @app.get("/api/health")
     def health(request: Request):
