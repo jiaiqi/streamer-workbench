@@ -4,6 +4,7 @@ import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
+import ErrorBanner from "../components/ErrorBanner";
 import PracticeStatsCard from "../practice/PracticeStatsCard";
 import PracticeLogDialog from "../practice/PracticeLogDialog";
 import { DiscoveryTabs, TheoryHelper } from "../discovery";
@@ -159,7 +160,12 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
 
       {/* ===== 内容区 ===== */}
       <div className="flex-1 overflow-y-auto px-8 pb-10">
-        {actionError && <div className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500" role="alert">{actionError}</div>}
+        {actionError && (
+          // 3.2 收口：原裸 div 改用 ErrorBanner
+          <div className="mb-4">
+            <ErrorBanner severity="error" message={actionError} dark={dark} />
+          </div>
+        )}
 
         {/* P4 R4: 练习打卡统计卡片区 */}
         <PracticeStatsCard dark={dark} onLogClick={() => setLogDialogOpen(true)} />

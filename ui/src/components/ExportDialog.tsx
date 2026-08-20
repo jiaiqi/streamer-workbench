@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { apiRequest } from "../api/client";
 import { toRequestFailure } from "../async/requestState";
 import ExportLogPanel from "../posters/ExportLogPanel";
+import ErrorBanner from "./ErrorBanner";
 import { useToast } from "./Toast";
 
 declare global {
@@ -373,8 +374,9 @@ export default function ExportDialog({ dark, open, onClose, selTheme, page, maxP
         {/* ─── 错误阶段：提示 + 重试 + 关闭 ─── */}
         {isStage("error") && (
           <div data-testid="export-error-section">
-            <div className="mb-4 rounded-xl bg-red-500/10 px-3 py-2.5 text-sm text-red-500" role="alert" data-testid="export-error-message">
-              {error || "导出失败"}
+            {/* 3.2 收口：原裸 div 改用 ErrorBanner（mb-4 保留外边距） */}
+            <div className="mb-4" data-testid="export-error-message">
+              <ErrorBanner severity="error" message={error || "导出失败"} dark={dark} />
             </div>
             <div className="flex justify-end gap-2 flex-wrap">
               <button onClick={onClose}

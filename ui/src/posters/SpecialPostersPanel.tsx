@@ -14,6 +14,7 @@ import { openLivePoster, openLearningReportPoster } from "../electron-bridge";
 import type { LiveSessionSummary } from "../api/generated";
 import { getSpecialPosterStats, type SpecialPosterStats } from "../api/posters";
 import ExportLogPanel from "./ExportLogPanel";
+import Spinner from "../components/Spinner";
 
 const RECENT_SESSIONS_LIMIT = 3;
 
@@ -213,7 +214,8 @@ export default function SpecialPostersPanel({ dark }: SpecialPostersPanelProps) 
       </h3>
       {sessionsLoading && (
         <div className="text-[11px] text-muted-foreground py-2 flex items-center gap-1.5">
-          <span className="spinner" /> 加载最近直播…
+          {/* 3.1 收口：原 <span className="spinner" /> 改用 Spinner 组件 */}
+          <Spinner size="sm" tone="current" decorative label="加载最近直播" /> 加载最近直播…
         </div>
       )}
       {sessionsError && !sessionsLoading && (
@@ -246,7 +248,7 @@ export default function SpecialPostersPanel({ dark }: SpecialPostersPanelProps) 
                 }`}
               >
                 {isExporting ? (
-                  <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                  <Spinner size="sm" tone="current" decorative label="导出中" className="shrink-0" />
                 ) : (
                   <span className="shrink-0 w-1.5 h-1.5 rounded-full"
                     style={{ background: s.state === "active" ? "var(--color-primary)" : "var(--color-muted-foreground)" }} />
@@ -293,7 +295,7 @@ export default function SpecialPostersPanel({ dark }: SpecialPostersPanelProps) 
                 }`}
               >
                 {isExporting ? (
-                  <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                  <Spinner size="sm" tone="current" decorative label="导出中" className="shrink-0" />
                 ) : (
                   <span className="shrink-0 text-[14px]" aria-hidden="true">📈</span>
                 )}
@@ -419,7 +421,7 @@ function SessionPickerDialog({ dark, sessions, exportingId, onClose, onSelect }:
                   className={`w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 transition-colors disabled:opacity-60 ${dark ? "hover:bg-zinc-700/50" : "hover:bg-muted"}`}
                 >
                   {isExporting ? (
-                    <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size="sm" tone="current" decorative label="导出中" className="shrink-0" />
                   ) : (
                     <span className="shrink-0 w-1.5 h-1.5 rounded-full"
                       style={{ background: s.state === "active" ? "var(--color-primary)" : "var(--color-muted-foreground)" }} />
@@ -518,7 +520,8 @@ function LearningReportPickerDialog({ dark, exportingKey, onClose, onConfirm }: 
           >
             {isExporting ? (
               <>
-                <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                {/* 3.1 收口：原 inline w-3 h-3 spinner 改用 Spinner 组件 */}
+                <Spinner size="sm" tone="current" decorative label="渲染中" />
                 渲染中…
               </>
             ) : "生成海报"}

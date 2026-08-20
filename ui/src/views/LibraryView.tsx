@@ -3,6 +3,7 @@ import type { Song, SongsData } from "../types";
 import SongEditDialog from "../components/SongEditDialog";
 import TabsPanel from "../components/TabsPanel";
 import AsyncStateNotice from "../components/AsyncStateNotice";
+import ErrorBanner from "../components/ErrorBanner";
 import TrashView from "../components/TrashView";
 import PlaylistImportDialog from "../components/PlaylistImportDialog";
 import ChartsBrowseDialog from "../components/ChartsBrowseDialog";
@@ -716,7 +717,12 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
         <SnapshotsView dark={dark} onChanged={() => { void refresh(); }} />
       )}
 
-      {actionError && <div className="mx-6 mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-500" role="alert">{actionError}</div>}
+      {actionError && (
+        // 3.2 收口：原裸 div 改用 ErrorBanner
+        <div className="mx-6 mt-3">
+          <ErrorBanner severity="error" message={actionError} dark={dark} />
+        </div>
+      )}
 
       {/* ===== 分组卡片网格 ===== */}
       {listRequest.status === "loading" && !songsData ? <AsyncStateNotice kind="loading" label="歌曲库" />

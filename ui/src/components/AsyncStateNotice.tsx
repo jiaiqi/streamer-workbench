@@ -1,4 +1,5 @@
 import type { RequestFailure } from "../async/requestState";
+import Spinner from "./Spinner";
 
 export default function AsyncStateNotice({ kind, error, onRetry, label = "内容", actionLabel, onAction, actionPending }: {
   kind: "loading" | "empty" | "error";
@@ -9,7 +10,15 @@ export default function AsyncStateNotice({ kind, error, onRetry, label = "内容
   onAction?: () => void;
   actionPending?: boolean;
 }) {
-  if (kind === "loading") return <div className="state-panel" role="status" aria-live="polite"><span className="spinner" />正在加载{label}…</div>;
+  if (kind === "loading") {
+    return (
+      <div className="state-panel" role="status" aria-live="polite">
+        {/* 3.1 收口：原 <span className="spinner" /> 改用 Spinner 组件 */}
+        <Spinner size="sm" tone="current" decorative label={`正在加载${label}`} />
+        <span>正在加载{label}…</span>
+      </div>
+    );
+  }
   if (kind === "empty") {
     return (
       <div className="state-panel" role="status">
