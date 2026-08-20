@@ -34,6 +34,9 @@ from pathlib import Path
 
 import pyzipper
 
+# P0-3：备份 zip member 路径白名单（绝对/穿越/drive path 拒绝）
+from core.backup import assert_safe_member_path, UnsafeBackupMemberError
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_ROOT = ROOT / "data"
@@ -293,7 +296,14 @@ def import_backup(input: Path, data_root: Path, password: str | None,
         for name in names:
             if name in (MANIFEST_NAME, HMAC_FILE):
                 continue
-            target = data_root / name
+            # P0-3：恶意备份包可写绝对路径 / `..` 穿越 / Windows drive path；
+            # 路径白名单校验放在最前面，失败直接拒绝整个 import
+            try:
+                target = assert_safe_member_path(name, data_root)
+            except UnsafeBackupMemberError as exc:
+                raise ValueError(
+                    f"备份包含不安全路径（拒绝整个 import）: member={name!r} reason={exc}"
+                ) from exc
             if target.exists() and not overwrite:
                 raise FileExistsError(
                     f"目标文件已存在（用 --overwrite 覆盖）: {target}"
