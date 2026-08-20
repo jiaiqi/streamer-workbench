@@ -34,6 +34,7 @@ import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 import SpecialPostersPanel from "./posters/SpecialPostersPanel";
 import DataQuickEntryCard from "./posters/DataQuickEntryCard";
 import TonightSetCard from "./components/TonightSetCard";
+import Spinner from "./components/Spinner";
 import { usePosterStore } from "./posters/usePosterStore";
 import { openQuickView, isElectron } from "./electron-bridge";
 import { useWorkspaceState } from "./workspace/useWorkspaceState";
@@ -544,7 +545,12 @@ function AppInner() {
               <p className="panel-copy">主题与布局独立组合。选择后实时更新中央展品。</p>
             </div>
             <div className="px-3 pb-4 space-y-2">
-              {ws.themes.length === 0 && !ws.resourceError && <div className="panel-empty" aria-busy="true"><span className="spinner" />正在陈列主题…</div>}
+              {ws.themes.length === 0 && !ws.resourceError && (
+                <div className="panel-empty" aria-busy="true">
+                  {/* 3.1 收口：原 <span className="spinner" /> 改用 Spinner 组件 */}
+                  <Spinner size="sm" tone="current" decorative label="正在陈列主题" />正在陈列主题…
+                </div>
+              )}
               {ws.themes.map(t => (
                 <button
                   key={t.name}
@@ -667,7 +673,8 @@ function AppInner() {
                   )}
                   {ws.loading && !ws.previewError && !ws.hasFrame && (
                     <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2.5 ${dark ? "bg-zinc-800/60" : "bg-background/60"}`}>
-                      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      {/* 3.1 收口：原 inline w-6 h-6 spinner 改用 Spinner 组件（primary 24px） */}
+                      <Spinner size="lg" tone="primary" decorative label="渲染中" />
                       <p className="text-xs text-muted-foreground">渲染中…</p>
                     </div>
                   )}
@@ -740,7 +747,12 @@ function AppInner() {
                     onLoad={ws.markLoaded}
                     onError={ws.markFailed} />
                 )}
-                {ws.loading && !ws.previewError && <div className="mobile-preview-loading"><span className="spinner" />渲染中…</div>}
+                {ws.loading && !ws.previewError && (
+                  <div className="mobile-preview-loading">
+                    {/* 3.1 收口：原 <span className="spinner" /> 改用 Spinner 组件 */}
+                    <Spinner size="sm" tone="current" decorative label="渲染中" />渲染中…
+                  </div>
+                )}
               </div>
             ) : <div className="panel-empty">尚无可预览主题</div>}
             <div className="mobile-page-picker" aria-label="选择页码">

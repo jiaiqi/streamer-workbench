@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import Spinner from "./Spinner";
 
 function useSafeToast(): ToastApi {
   let toast: ToastApi;
@@ -505,7 +506,10 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
           <span>云端同步（WebDAV）</span>
           <small>把 .songworkbench 备份推到任意 WebDAV 服务器</small>
         </div>
-        <p className="field-note"><span className="spinner" /> 正在读取…</p>
+        <p className="field-note">
+          {/* 3.1 收口：原 <span className="spinner" /> 改用 Spinner 组件 */}
+          <Spinner size="sm" tone="current" decorative label="正在读取" /> 正在读取…
+        </p>
       </section>
     );
   }

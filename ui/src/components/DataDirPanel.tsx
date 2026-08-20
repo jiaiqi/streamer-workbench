@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Spinner from "./Spinner";
 
 /* ---- 数据目录面板（R0.9 / 主规格 §11.5.3）----
    契约：验证失败不切换、不丢数据；切换只写启动配置，重启后端后生效。
@@ -97,7 +98,10 @@ export default function DataDirPanel() {
     return (
       <section className="settings-card settings-card-wide" aria-busy="true">
         <div className="section-heading"><span>数据目录</span></div>
-        <p className="field-note"><span className="spinner" /> 正在读取数据目录…</p>
+        <p className="field-note">
+          {/* 3.1 收口：原 <span className="spinner" /> 改用 Spinner 组件 */}
+          <Spinner size="sm" tone="current" decorative label="正在读取数据目录" /> 正在读取数据目录…
+        </p>
       </section>
     );
   }

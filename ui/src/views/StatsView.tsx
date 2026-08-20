@@ -51,13 +51,13 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
         </div>
         <div className="flex flex-col items-end gap-2">
           {posterError && (
-            <div
-              className="rounded-lg bg-red-500/10 px-3 py-1 text-xs text-red-500"
-              role="alert"
+            // 3.2 收口：原裸 div 改用 ErrorBanner
+            <ErrorBanner
+              severity="error"
+              message={posterError}
+              dark={dark}
               data-testid="stats-poster-error"
-            >
-              {posterError}
-            </div>
+            />
           )}
           {posterSuccess && (
             <div
@@ -99,7 +99,8 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
           >
             {posterLoading ? (
               <>
-                <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin align-middle" />
+                {/* 3.1 收口：原 inline w-3 h-3 spinner 改用 Spinner 组件 */}
+                <Spinner size="sm" tone="current" decorative label="渲染中" />
                 <span className="ml-1.5">渲染中…</span>
               </>
             ) : "导出学习报告"}

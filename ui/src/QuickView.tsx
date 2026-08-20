@@ -13,6 +13,7 @@ import type { Song, SongsData } from "./types";
 import { useLiveSession } from "./quick-view/useLiveSession";
 import { apiRequest } from "./api/client";
 import { useLatestRequest } from "./async/requestState";
+import Spinner from "./components/Spinner";
 
 /* ================== 模式解析 ================== */
 // 兼容: dev 模式 (?session=) + Electron packaged 模式 (#/quick?session=)
@@ -260,7 +261,8 @@ export default function QuickView() {
   if (live.session === undefined) {
     return (
       <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-3 font-sans">
-        <span className="spinner" />
+        {/* 3.1 收口：原 <span className="spinner" /> 改用 Spinner 组件 */}
+        <Spinner size="md" tone="primary" decorative label={`加载会话 ${SESSION_ID}`} />
         <p className="text-zinc-400 text-sm">加载会话 {SESSION_ID}…</p>
       </div>
     );
