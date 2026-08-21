@@ -25,7 +25,19 @@ import type {
 const PENDING_KEY = "quickview-v2-pending";
 const PENDING_LIMIT = 50;
 
+/** P0-5: 旧版 PENDING 单数组存储（无 sessionId）；新版改为 sessions dict。 */
+interface PendingLegacy {
+  command_id: string;
+  kind: "queue" | "record";
+  target_id: string;
+  payload: Record<string, unknown>;
+  queued_at: number;
+}
+
 export interface PendingCommand {
+  /** P0-5: 命令所属 session id。retryPending 只重放当前 session 的命令，
+   * 避免切换 session 后把别的 session 的命令补报到当前 session。 */
+  session_id: string;
   /** 与后端 command_id 一致, 用于幂等补报。 */
   command_id: string;
   kind: "queue" | "record";
@@ -34,6 +46,9 @@ export interface PendingCommand {
   payload: Record<string, unknown>;
   queued_at: number;
 }
+
+/** 持久化形状：sessions[id] = commands[] */
+type PendingStore = Record<string, PendingCommand[]>;
 
 export interface LiveSessionState {
   /** null = 加载中; undefined = sessionId 为空 (等待) */
@@ -61,16 +76,24 @@ export type UseLiveSession = LiveSessionState & LiveSessionActions;
 export function useLiveSession(sessionId: string | null): UseLiveSession {
   const [session, setSession] = useState<LiveSessionDetail | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [pendingCount, setPendingCount] = useState(() => loadPending().length);
+  const [pendingCount, setPendingCount] = useState(() => loadPendingFor(null).length);
 
-  const pendingRef = useRef<PendingCommand[]>(loadPending());
+  const pendingRef = useRef<PendingCommand[]>(loadPendingFor(sessionId));
   pendingRef.current = pendingRef.current; // keep ref in sync
   const sessionRef = useRef<LiveSessionDetail | null>(null);
   const retryingRef = useRef(false);
 
+  // P0-5: 切换 session 时重读自己的 pending 桶；
+  // sessionId 变化时同步本地 pendingCount。
+  useEffect(() => {
+    const next = loadPendingFor(sessionId);
+    pendingRef.current = next;
+    setPendingCount(next.length);
+  }, [sessionId]);
+
   const updatePending = (next: PendingCommand[]) => {
     pendingRef.current = next.slice(-PENDING_LIMIT);
-    localStorage.setItem(PENDING_KEY, JSON.stringify(pendingRef.current));
+    savePendingFor(sessionId, pendingRef.current);
     setPendingCount(pendingRef.current.length);
   };
 
@@ -132,8 +155,9 @@ export function useLiveSession(sessionId: string | null): UseLiveSession {
     retryingRef.current = false;
   }, [sessionId, refresh]);
 
-  const enqueuePending = (cmd: PendingCommand) => {
-    updatePending([...pendingRef.current, cmd]);
+  const enqueuePending = (cmd: Omit<PendingCommand, "session_id">) => {
+    if (!sessionId) return;
+    updatePending([...pendingRef.current, { ...cmd, session_id: sessionId }]);
   };
 
   const queueRequest = useCallback(async (
@@ -227,14 +251,45 @@ export function useLiveSession(sessionId: string | null): UseLiveSession {
 
 /* ===== helpers ===== */
 
-function loadPending(): PendingCommand[] {
+/** P0-5: 加载持久化的 pending store 字典；旧版单数组迁移到 __legacy 桶。 */
+function loadStore(): PendingStore {
   try {
     const raw = localStorage.getItem(PENDING_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // 旧版：纯数组（无 session_id）→ 放进 __legacy 桶
+      return { __legacy: parsed as PendingCommand[] };
+    }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as PendingStore;
+    }
+    return {};
   } catch {
-    return [];
+    return {};
+  }
+}
+
+/** P0-5: 取指定 sessionId 的 pending 桶；sessionId=null 时取全部（不推荐）。 */
+function loadPendingFor(sessionId: string | null): PendingCommand[] {
+  const store = loadStore();
+  if (!sessionId) {
+    // 不指定 session 时返回全部（旧行为兼容；但只用于初次 mount 计数）
+    return Object.values(store).flat();
+  }
+  return store[sessionId] ?? [];
+}
+
+/** P0-5: 把指定 session 的 pending 写回 store。 */
+function savePendingFor(sessionId: string | null, cmds: PendingCommand[]): void {
+  const store = loadStore();
+  if (!sessionId) return; // 没 session 不写
+  store[sessionId] = cmds;
+  // __legacy 桶保留在 store 里：用户主动导出/清空时才删
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(store));
+  } catch {
+    /* quota 满时静默 no-op；下个 save 会覆盖 */
   }
 }
 

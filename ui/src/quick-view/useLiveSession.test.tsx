@@ -126,13 +126,16 @@ describe("useLiveSession", () => {
     vi.mocked(apiRequest).mockResolvedValueOnce({ ok: true } as never);
     vi.mocked(apiRequest).mockRejectedValueOnce(new Error("still down"));
     vi.mocked(apiRequest).mockResolvedValueOnce(sampleDetail as never);
-    // 预存两条 pending
-    localStorage.setItem("quickview-v2-pending", JSON.stringify([
-      { command_id: "c1", kind: "queue", target_id: "song_x",
-        payload: { song_id: "song_x" }, queued_at: 1 },
-      { command_id: "c2", kind: "record", target_id: "req_a",
-        payload: { request_id: "req_a", result: "sung" }, queued_at: 2 },
-    ]));
+    // P0-5: 预存两条 pending 时必须带 session_id（新版按 session 分桶）；
+    // 旧版无 session_id 的纯数组会被识别为 legacy 不参与当前 session 重放。
+    localStorage.setItem("quickview-v2-pending", JSON.stringify({
+      live_test: [
+        { session_id: "live_test", command_id: "c1", kind: "queue", target_id: "song_x",
+          payload: { song_id: "song_x" }, queued_at: 1 },
+        { session_id: "live_test", command_id: "c2", kind: "record", target_id: "req_a",
+          payload: { request_id: "req_a", result: "sung" }, queued_at: 2 },
+      ],
+    }));
     const { result } = renderHook(() => useLiveSession("live_test"));
     await waitFor(() => expect(result.current.session).not.toBeNull());
     expect(result.current.pendingCount).toBe(2);
@@ -156,6 +159,72 @@ describe("useLiveSession", () => {
     vi.mocked(apiRequest).mockResolvedValueOnce(other as never);
     rerender({ id: "live_other" });
     await waitFor(() => expect(result.current.session?.id).toBe("live_other"));
+  });
+
+  // ===== P0-5: QuickView pending 按 session 隔离 =====
+  it("P0-5: 切换 session 后 pending 桶独立 — A 的命令不会被补报到 B", async () => {
+    // 预存两个 session 的 pending
+    localStorage.setItem("quickview-v2-pending", JSON.stringify({
+      live_a: [
+        { session_id: "live_a", command_id: "a1", kind: "queue", target_id: "song_a",
+          payload: { song_id: "song_a" }, queued_at: 1 },
+      ],
+      live_b: [
+        { session_id: "live_b", command_id: "b1", kind: "queue", target_id: "song_b",
+          payload: { song_id: "song_b" }, queued_at: 2 },
+      ],
+    }));
+    // 初始挂 live_a → 看到 1 条
+    vi.mocked(apiRequest).mockResolvedValueOnce(sampleDetail as never);
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useLiveSession(id),
+      { initialProps: { id: "live_a" } },
+    );
+    await waitFor(() => expect(result.current.session?.id).toBe("live_test"));
+    expect(result.current.pendingCount).toBe(1);
+
+    // 切到 live_b → 应该看到自己桶的 1 条，不是 live_a 的
+    const other = { ...sampleDetail, id: "live_b" };
+    vi.mocked(apiRequest).mockResolvedValueOnce(other as never);
+    rerender({ id: "live_b" });
+    await waitFor(() => expect(result.current.pendingCount).toBe(1));
+    // 进一步：调用 retryPending 不应该把 live_a 的命令补报到 live_b
+    // 用队列断言：retry 期间只能看到对 live_b 的 POST /queue
+    vi.mocked(apiRequest).mockResolvedValue({ ok: true } as never);
+    await act(async () => {
+      await result.current.retryPending();
+    });
+    // 验证整个测试期间，没有任何调用把 live_a 的命令补报到 live_b
+    const calls = vi.mocked(apiRequest).mock.calls;
+    const queueCalls = calls.filter(([url]) => String(url).includes("/queue"));
+    for (const [url, opts] of queueCalls) {
+      // 如果 URL 含 live_b，body 一定是 song_b（不是 song_a）
+      if (String(url).includes("live_b")) {
+        const body = (opts as { body?: { song_id?: string } })?.body;
+        expect(body?.song_id).toBe("song_b");
+      }
+    }
+  });
+
+  it("P0-5: legacy 桶（无 session_id）不会被重放到当前 session", async () => {
+    // 旧版纯数组格式 → loadStore 归到 __legacy 桶
+    localStorage.setItem("quickview-v2-pending", JSON.stringify([
+      { command_id: "old1", kind: "queue", target_id: "song_legacy",
+        payload: { song_id: "song_legacy" }, queued_at: 1 },
+    ]));
+    vi.mocked(apiRequest).mockResolvedValueOnce(sampleDetail as never);
+    const { result } = renderHook(() => useLiveSession("live_test"));
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    // legacy 不归当前 session → pendingCount=0
+    expect(result.current.pendingCount).toBe(0);
+    // retry 也不应该 POST /queue（legacy 不重放）
+    vi.mocked(apiRequest).mockClear();
+    await act(async () => {
+      await result.current.retryPending();
+    });
+    const queueCalls = vi.mocked(apiRequest).mock.calls
+      .filter(([url]) => String(url).includes("/queue"));
+    expect(queueCalls).toHaveLength(0);
   });
 
   it("close 调 POST /close (即便失败也不抛)", async () => {
