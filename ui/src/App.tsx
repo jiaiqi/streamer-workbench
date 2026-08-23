@@ -32,8 +32,7 @@ import { savePoster } from "./api/posters";
 import type { AppearanceSettings, Settings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 import SpecialPostersPanel from "./posters/SpecialPostersPanel";
-import DataQuickEntryCard from "./posters/DataQuickEntryCard";
-import TonightSetCard from "./components/TonightSetCard";
+import TonightWorkbench from "./components/TonightWorkbench";
 import Spinner from "./components/Spinner";
 import { usePosterStore } from "./posters/usePosterStore";
 import { openQuickView, isElectron } from "./electron-bridge";
@@ -255,6 +254,18 @@ function AppInner() {
     setView("workspace");
     await posterStore.select(res.id);
   }, [posterStore, ws.selTheme, ws.canvas, ws.params]);
+
+  /* ---- P1-A1 今晚工作台 3 个新回调（占位 toast，避免改动 LiveView / ReportService） ---- */
+  const handleGenerateRecap = useCallback((sessionId: string) => {
+    toast.info(`复盘海报：${sessionId} — 接入 SpecialPostersPanel 后将自动唤起。`);
+  }, [toast]);
+  const handleGenerateLearningReport = useCallback(() => {
+    toast.info("学习报告：接入 StatsView 时间线 tab 后将自动生成。");
+  }, [toast]);
+  const handleOpenQuickView = useCallback((sessionId: string) => {
+    if (sessionId) openQuickView(sessionId);
+    else toast.info("速查窗口：需要先开始一场直播。");
+  }, [toast]);
 
   const handleCreatePresetFromFeed = useCallback(async (songIds: string[], name: string) => {
     if (songIds.length === 0) throw new Error("时间线歌曲 ID 为空");
@@ -536,17 +547,16 @@ function AppInner() {
           {/* ===== LEFT: theme list（仅工作台视图显示，<800px 隐藏） ===== */}
           {inWorkspace && (
           <aside className={`w-64 shrink-0 border-r overflow-y-auto transition-colors duration-500 max-[800px]:hidden ${dark ? "border-zinc-700/50 bg-zinc-800/30" : "border-border"}`}>
-            {/* R9.5 今晚歌单 — 工作台首屏运营卡片（live session Top 5 + 弹唱按钮） */}
-            <TonightSetCard
+            {/* P1-A1 今晚工作台 — 工作台首屏主任务中心（5 区一体化） */}
+            <TonightWorkbench
               dark={dark}
               onPlaySong={handlePlaySong}
               onOpenLiveView={() => setView("live")}
-            />
-            {/* R4.2.4 数据反哺创作快入口（基于数据卡片，1.1 收口） */}
-            <DataQuickEntryCard
-              dark={dark}
               onCreatePosterFromTop={songIds => handleCreatePosterFromTop(songIds, "request")}
               onSwitchToStats={() => setView("stats")}
+              onGenerateRecap={handleGenerateRecap}
+              onGenerateLearningReport={handleGenerateLearningReport}
+              onOpenQuickView={handleOpenQuickView}
             />
             {/* R1a.5 海报文档区 + 歌曲来源（独立 hook 状态机） */}
             <WorkspacePosterBridge
