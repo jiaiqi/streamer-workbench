@@ -7,12 +7,14 @@ import ErrorBanner from "../components/ErrorBanner";
 import TrashView from "../components/TrashView";
 import PlaylistImportDialog from "../components/PlaylistImportDialog";
 import ChartsBrowseDialog from "../components/ChartsBrowseDialog";
+import SongActionBar from "../components/SongActionBar";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
 import { exportBySongIds, exportLibrary, importLibrary, listSnapshots, restoreSnapshot } from "../api/posters";
 import { usePosterStore } from "../posters/usePosterStore";
 import { useLatestRequest, type RequestFailure } from "../async/requestState";
 import { useApiError } from "../async/useApiError";
+import { useSongActions } from "../hooks/useSongActions";
 
 /* ================= 符号化元数据 ================= */
 // 难度 → 菱形阶（◆◆◇），一瞥可读
@@ -124,12 +126,26 @@ function SnapshotsView({ dark, onChanged }: { dark: boolean; onChanged: () => vo
   );
 }
 
-export default function LibraryView({ dark, onStatsChange, onEditTargetChange, onPlaySong }: {
+export default function LibraryView({
+  dark, onStatsChange, onEditTargetChange, onPlaySong,
+  hasCurrentPoster = false,
+  activeSessionId = null,
+}: {
   dark: boolean;
   onStatsChange: (s: { active: number; draft: number }) => void;
   onEditTargetChange?: (open: boolean) => void;
   /** R8.0: 触发弹唱视图（点击卡片 ▶ 按钮 / 双击行） */
   onPlaySong?: (songId: string) => void;
+  /**
+   * P1-A2 SongActionBar: 是否有"当前正在编辑的海报"可加入。
+   * 默认 false — 库视图不感知工作台状态；P1-A3 会从 App 注入。
+   */
+  hasCurrentPoster?: boolean;
+  /**
+   * P1-A2 SongActionBar: 当前活跃直播 session id（null=无）。
+   * 默认 null — 库视图不感知直播状态；P1-A3 会从 App 注入。
+   */
+  activeSessionId?: string | null;
 }) {
   const [songsData, setSongsData] = useState<SongsData | null>(null);
   const [query, setQuery] = useState("");
@@ -199,6 +215,18 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
       songs: d.songs.map(s => s.title === title ? { ...s, tab_files: files } : s),
     }));
   };
+
+  /* P1-A2: 5 动作 hook 集合 — SongActionBar 消费 */
+  // 这里不接 onAddToCurrentPoster（默认 false + hook 走 toast.info 提示"未启用"）；
+  // P1-A3 再从 App 注入 App posterStore 的 update 引用，让"加入当前海报"真生效。
+  // editSong 用本视图的 setEditTarget 走 SongEditDialog。
+  const songActions = useSongActions({
+    activeSessionId,
+    onEditSong: (title) => {
+      const target = songsData?.songs.find(s => s.title === title) ?? null;
+      if (target) setEditTarget(target);
+    },
+  });
 
   useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => { onEditTargetChange?.(editTarget !== null); }, [editTarget, onEditTargetChange]);
@@ -1073,6 +1101,31 @@ export default function LibraryView({ dark, onStatsChange, onEditTargetChange, o
             </button>
           </div>
         </div>
+      )}
+
+      {/* P1-A2: 5 动作底部条 — 与 L2.1 batch bar 并存（不替换） */}
+      {selectMode && statusFilter !== "trash" && (
+        <SongActionBar
+          selectedCount={selectedTitles.size}
+          dark={dark}
+          hasCurrentPoster={hasCurrentPoster}
+          hasActiveSession={activeSessionId != null}
+          onAddToCurrentPoster={() => {
+            void songActions.addToCurrentPoster({ titles: [...selectedTitles], songsData });
+          }}
+          onAddToTonightSession={() => {
+            void songActions.addToTonightSession({ titles: [...selectedTitles], songsData });
+          }}
+          onAddToLearningPlan={() => {
+            void songActions.addToLearningPlan({ titles: [...selectedTitles], songsData });
+          }}
+          onPlay={() => {
+            void songActions.play({ titles: [...selectedTitles], songsData });
+          }}
+          onEdit={() => {
+            songActions.editSong({ titles: [...selectedTitles], songsData });
+          }}
+        />
       )}
     </main>
   );
