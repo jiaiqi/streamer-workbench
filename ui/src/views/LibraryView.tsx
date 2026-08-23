@@ -163,9 +163,9 @@ export default function LibraryView({
   const [actionError, setActionError] = useState("");
   const listRequest = useLatestRequest<SongsData>({ isEmpty: data => data.total === 0 });
   const [seedPending, setSeedPending] = useState(false);
-  /* L2.1 批量操作：多选模式 + 已选标题集合 */
+  /* L2.1 批量操作：多选模式 + 已选 song_id 集合（P1-A4 切到 song_id 主键） */
   const [selectMode, setSelectMode] = useState(false);
-  const [selectedTitles, setSelectedTitles] = useState<Set<string>>(() => new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [batchPending, setBatchPending] = useState(false);
   const [exportPending, setExportPending] = useState(false);
   const [importPending, setImportPending] = useState(false);
@@ -222,8 +222,11 @@ export default function LibraryView({
   // editSong 用本视图的 setEditTarget 走 SongEditDialog。
   const songActions = useSongActions({
     activeSessionId,
-    onEditSong: (title) => {
-      const target = songsData?.songs.find(s => s.title === title) ?? null;
+    onEditSong: (idOrTitle) => {
+      // P1-A4: 优先按 song_id 查(新主键),fallback title(向后兼容)
+      const target = songsData?.songs.find(s => s.id === idOrTitle)
+        ?? songsData?.songs.find(s => s.title === idOrTitle)
+        ?? null;
       if (target) setEditTarget(target);
     },
   });
@@ -312,13 +315,13 @@ export default function LibraryView({
     setActionSong(song.id); setActionError("");
     try {
       await runWithToast(
-        () => apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: next } }),
+        () => apiRequest(`/api/songs/${song.id}/status`, { method: "PATCH", body: { status: next } }),
         "状态切换失败",
       );
       // 本地更新该行 + 统计，避免整表重拉
       setSongsData(prev => {
         if (!prev) return prev;
-        const songs = prev.songs.map(s => s.title === song.title ? { ...s, status: next } : s);
+        const songs = prev.songs.map(s => s.id === song.id ? { ...s, status: next } : s);
         const stats = {
           active: songs.reduce((n, s) => n + (s.status === "active" ? 1 : 0), 0),
           draft: songs.reduce((n, s) => n + (s.status === "draft" ? 1 : 0), 0),
@@ -338,7 +341,7 @@ export default function LibraryView({
     setActionSong(song.id); setActionError("");
     try {
       await runWithToast(
-        () => apiRequest("/api/songs/delete", { method: "POST", body: { title: song.title } }),
+        () => apiRequest(`/api/songs/${song.id}`, { method: "DELETE" }),
         "删除失败",
       );
       if (expanded === song.title) setExpanded(null);
@@ -365,44 +368,45 @@ export default function LibraryView({
     finally { setActionSong(null); }
   };
 
-  /* ---- L2.1 批量操作：多选 helper ---- */
-  const toggleSelectTitle = (title: string) => {
-    setSelectedTitles(prev => {
+  /* ---- L2.1 批量操作：多选 helper（song_id 主键） ---- */
+  const toggleSelectId = (id: string) => {
+    setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(title)) next.delete(title);
-      else next.add(title);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
   const selectAllVisible = () => {
-    setSelectedTitles(prev => {
+    setSelectedIds(prev => {
       const next = new Set(prev);
-      for (const s of filtered) next.add(s.title);
+      for (const s of filtered) next.add(s.id);
       return next;
     });
   };
-  const clearSelection = () => setSelectedTitles(new Set());
+  const clearSelection = () => setSelectedIds(new Set());
   const exitSelectMode = () => { setSelectMode(false); clearSelection(); };
-  /* ---- L2.1 批量删除：循环调 /api/songs/delete + 聚合 toast + 单条撤销 ---- */
+  /* ---- L2.1 批量删除：循环调 DELETE /api/songs/{id} + 聚合 toast + 单条撤销 ---- */
   const handleBatchDelete = async () => {
-    if (batchPending || selectedTitles.size === 0) return;
-    if (!window.confirm(`确定删除 ${selectedTitles.size} 首？R9.6 软删除：30 天内可在垃圾桶恢复。`)) return;
+    if (batchPending || selectedIds.size === 0) return;
+    if (!window.confirm(`确定删除 ${selectedIds.size} 首？R9.6 软删除：30 天内可在垃圾桶恢复。`)) return;
     setBatchPending(true);
     setActionError("");
-    const titles = Array.from(selectedTitles);
+    const ids = Array.from(selectedIds);
     let succeeded = 0;
     const failed: string[] = [];
     const deletedIds: Array<{ id: string; title: string }> = [];
-    for (const title of titles) {
-      const song = songsData?.songs.find(s => s.title === title);
-      if (!song) continue;
+    for (const id of ids) {
+      const song = songsData?.songs.find(s => s.id === id);
+      // 乐观删除：歌已不在列表里就跳过
+      const title = song?.title ?? id;
       try {
         await runWithToast(
-          () => apiRequest("/api/songs/delete", { method: "POST", body: { title } }),
+          () => apiRequest(`/api/songs/${id}`, { method: "DELETE" }),
           "批量删除失败",
         );
         succeeded++;
-        deletedIds.push({ id: song.id, title: song.title });
+        deletedIds.push({ id, title });
       } catch (failure) {
         failed.push(`${title}：${(failure as RequestFailure).message}`);
       }
@@ -442,18 +446,20 @@ export default function LibraryView({
       toast.error(`批量删除全部失败：${failed[0]}${failed.length > 1 ? ` 等 ${failed.length} 首` : ""}`);
     }
   };
-  /* ---- L2.1 批量改状态：循环调 /api/songs/status + 聚合 toast ---- */
+  /* ---- L2.1 批量改状态：循环调 PATCH /api/songs/{id}/status + 聚合 toast ---- */
   const handleBatchStatus = async (next: "active" | "draft") => {
-    if (batchPending || selectedTitles.size === 0) return;
+    if (batchPending || selectedIds.size === 0) return;
     setBatchPending(true);
     setActionError("");
-    const titles = Array.from(selectedTitles);
+    const ids = Array.from(selectedIds);
     let succeeded = 0;
     const failed: string[] = [];
-    for (const title of titles) {
+    for (const id of ids) {
+      const song = songsData?.songs.find(s => s.id === id);
+      const title = song?.title ?? id;
       try {
         await runWithToast(
-          () => apiRequest("/api/songs/status", { method: "POST", body: { title, status: next } }),
+          () => apiRequest(`/api/songs/${id}/status`, { method: "PATCH", body: { status: next } }),
           `批量改状态失败`,
         );
         succeeded++;
@@ -477,13 +483,11 @@ export default function LibraryView({
 
   /* ---- L2.2 批量导出：每首选中歌曲渲染成 1 张 PNG 存盘 ---- */
   const handleBatchExport = async () => {
-    if (exportPending || selectedTitles.size === 0) return;
+    if (exportPending || selectedIds.size === 0) return;
     setExportPending(true);
     setActionError("");
-    const titles = Array.from(selectedTitles);
-    const ids = titles
-      .map(t => songsData?.songs.find(s => s.title === t)?.id)
-      .filter((id): id is string => !!id);
+    const ids = Array.from(selectedIds).filter(
+      (id): id is string => !!songsData?.songs.find(s => s.id === id));
     if (ids.length === 0) {
       toast.error("未能解析选中歌曲的 ID");
       setExportPending(false);
@@ -788,15 +792,15 @@ export default function LibraryView({
                 {songs.map(s => {
                   const isOpen = expanded === s.title;
                   const isCursor = cursor === s.title;
-                  const isSelected = selectedTitles.has(s.title);
+                  const isSelected = selectedIds.has(s.id);
                   return (
-                    <div key={s.title}
+                    <div key={s.id}
                       ref={el => { if (el) rowRefs.current.set(s.title, el); else rowRefs.current.delete(s.title); }}
                       className={isOpen ? "col-span-full" : ""}>
                       {/* ---- 卡片：点击就地展开；状态变化只用背景填充，不加边框 ---- */}
                       <div
                         onClick={() => {
-                          if (selectMode) toggleSelectTitle(s.title);
+                          if (selectMode) toggleSelectId(s.id);
                           else setExpanded(isOpen ? null : s.title);
                         }}
                         data-testid={`library-card-${s.id}`}
@@ -1034,7 +1038,7 @@ export default function LibraryView({
           <span className={`text-[13px] font-medium tabular-nums ${
             dark ? "text-zinc-200" : "text-foreground"
           }`}>
-            已选 <span data-testid="library-batch-count" className="text-emerald-500">{selectedTitles.size}</span> 首
+            已选 <span data-testid="library-batch-count" className="text-emerald-500">{selectedIds.size}</span> 首
           </span>
           <button
             type="button"
@@ -1049,7 +1053,7 @@ export default function LibraryView({
             type="button"
             onClick={clearSelection}
             data-testid="library-batch-clear"
-            disabled={selectedTitles.size === 0}
+            disabled={selectedIds.size === 0}
             className={`text-[12px] px-2 h-7 rounded transition-colors disabled:opacity-40 ${
               dark ? "text-zinc-400 hover:bg-zinc-800" : "text-muted-foreground hover:bg-muted"
             }`}>
@@ -1060,7 +1064,7 @@ export default function LibraryView({
               type="button"
               onClick={() => handleBatchStatus("active")}
               data-testid="library-batch-mark-active"
-              disabled={selectedTitles.size === 0 || batchPending}
+              disabled={selectedIds.size === 0 || batchPending}
               className="flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-emerald-600 hover:bg-emerald-700 text-white">
               ✓ 标记已会
             </button>
@@ -1068,7 +1072,7 @@ export default function LibraryView({
               type="button"
               onClick={() => handleBatchStatus("draft")}
               data-testid="library-batch-mark-draft"
-              disabled={selectedTitles.size === 0 || batchPending}
+              disabled={selectedIds.size === 0 || batchPending}
               className={`flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 ${
                 dark ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700" : "bg-background hover:bg-muted text-foreground border border-border"
               }`}>
@@ -1078,7 +1082,7 @@ export default function LibraryView({
               type="button"
               onClick={handleBatchDelete}
               data-testid="library-batch-delete"
-              disabled={selectedTitles.size === 0 || batchPending}
+              disabled={selectedIds.size === 0 || batchPending}
               className="flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-red-600 hover:bg-red-700 text-white">
               🗑 批量删除
             </button>
@@ -1086,7 +1090,7 @@ export default function LibraryView({
               type="button"
               onClick={handleBatchExport}
               data-testid="library-batch-export"
-              disabled={selectedTitles.size === 0 || batchPending || exportPending}
+              disabled={selectedIds.size === 0 || batchPending || exportPending}
               className="flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-40 bg-blue-600 hover:bg-blue-700 text-white">
               📤 批量导出
             </button>
@@ -1106,24 +1110,26 @@ export default function LibraryView({
       {/* P1-A2: 5 动作底部条 — 与 L2.1 batch bar 并存（不替换） */}
       {selectMode && statusFilter !== "trash" && (
         <SongActionBar
-          selectedCount={selectedTitles.size}
+          selectedCount={selectedIds.size}
           dark={dark}
           hasCurrentPoster={hasCurrentPoster}
           hasActiveSession={activeSessionId != null}
           onAddToCurrentPoster={() => {
-            void songActions.addToCurrentPoster({ titles: [...selectedTitles], songsData });
+            // P1-A4: 把 selected song_id 当 titles 传给 SongActionBar 内部 hooks;
+            // 反查 songsData.songs.find(s => s.id === id) 即得真正的 song 对象。
+            void songActions.addToCurrentPoster({ titles: [...selectedIds], songsData });
           }}
           onAddToTonightSession={() => {
-            void songActions.addToTonightSession({ titles: [...selectedTitles], songsData });
+            void songActions.addToTonightSession({ titles: [...selectedIds], songsData });
           }}
           onAddToLearningPlan={() => {
-            void songActions.addToLearningPlan({ titles: [...selectedTitles], songsData });
+            void songActions.addToLearningPlan({ titles: [...selectedIds], songsData });
           }}
           onPlay={() => {
-            void songActions.play({ titles: [...selectedTitles], songsData });
+            void songActions.play({ titles: [...selectedIds], songsData });
           }}
           onEdit={() => {
-            songActions.editSong({ titles: [...selectedTitles], songsData });
+            songActions.editSong({ titles: [...selectedIds], songsData });
           }}
         />
       )}

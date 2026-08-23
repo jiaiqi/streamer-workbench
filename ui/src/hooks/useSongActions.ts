@@ -10,7 +10,8 @@
 /// 设计原则：
 ///   - 失败 → toast.error + 不抛错（任务硬约束）
 ///   - 任何 toast 通过 useToast() 内部完成，caller 不必再包 try/catch
-///   - titles: string[] 输入（LibraryView 用 selectedTitles），内部按 title 反查 songsData.songs 拿 id
+///   - titles: string[] 输入（P1-A4 = LibraryView selectedIds 即 song_id, 旧调用方 = title 字符串）,
+///     内部按 id 优先 / title 兜底反查 songsData.songs 拿完整 Song 对象
 ///   - songsData: SongsData | null 输入
 ///   - 0 后端改动：复用现存端点（practice/log + live-sessions/{id}/queue）
 ///
@@ -23,8 +24,9 @@ import { useToast } from "../components/Toast";
 import { usePlayer } from "../player/PlayerContext";
 import type { SongsData } from "../types";
 
-/** 单个 action 的入参：title 列表 + 当前曲库快照（反查 song_id 用）。 */
+/** 单个 action 的入参：item 列表（song_id 或 title）+ 当前曲库快照。 */
 export interface SongActionInput {
+  /** P1-A4: LibraryView 传 selectedIds(song_id); 旧调用方传 title。内部统一按 id → title 顺序解析。 */
   titles: string[];
   songsData: SongsData | null;
 }
@@ -62,19 +64,31 @@ export interface UseSongActions {
   editSong: (input: SongActionInput) => void;
 }
 
-/** titles → 唯一 song_id 列表（按 songsData.songs.find 反查；找不到的 title 跳过 + 计入 skipped）。 */
-function resolveSongIds(
-  titles: string[], songsData: SongsData | null,
-): { ids: string[]; skipped: string[] } {
+/** titles 或 song_ids → song 对象列表。
+ *
+ * P1-A4 切到 song_id 主键:LibraryView 选中的 selectedIds 是 song_id,
+ * 这里优先按 id 匹配、fallback 按 title(向后兼容旧调用)。
+ * 返回 ids（已去重）和 titles（按调用方传入顺序；解析失败的跳过），
+ * 以及 skipped（解析失败的原值，供 toast 显示）。
+ */
+function resolveSongObjects(
+  items: string[], songsData: SongsData | null,
+): { ids: string[]; titles: string[]; skipped: string[] } {
   const ids: string[] = [];
+  const titles: string[] = [];
   const skipped: string[] = [];
-  if (!songsData) return { ids, skipped: titles };
-  for (const title of titles) {
-    const song = songsData.songs.find(s => s.title === title);
-    if (song) ids.push(song.id);
-    else skipped.push(title);
+  if (!songsData) return { ids, titles, skipped: items };
+  for (const item of items) {
+    const song = songsData.songs.find(s => s.id === item)
+      ?? songsData.songs.find(s => s.title === item);
+    if (song) {
+      ids.push(song.id);
+      titles.push(song.title);
+    } else {
+      skipped.push(item);
+    }
   }
-  return { ids, skipped };
+  return { ids, titles, skipped };
 }
 
 /**
@@ -96,7 +110,7 @@ export function useSongActions(options: UseSongActionsOptions): UseSongActions {
   /* ---------- 1. 加入当前海报 ---------- */
   const addToCurrentPoster = useCallback(async ({ titles, songsData }: SongActionInput) => {
     if (titles.length === 0) return;
-    const { ids, skipped } = resolveSongIds(titles, songsData);
+    const { ids, skipped } = resolveSongObjects(titles, songsData);
     if (ids.length === 0) {
       toast.warn("未能解析选中歌曲的 ID");
       return;
@@ -129,7 +143,7 @@ export function useSongActions(options: UseSongActionsOptions): UseSongActions {
       toast.info("加入今晚歌单：未启用（App 接线缺失）");
       return;
     }
-    const { ids, skipped } = resolveSongIds(titles, songsData);
+    const { ids, titles: resolvedTitles, skipped } = resolveSongObjects(titles, songsData);
     if (ids.length === 0) {
       toast.warn("未能解析选中歌曲的 ID");
       return;
@@ -138,7 +152,7 @@ export function useSongActions(options: UseSongActionsOptions): UseSongActions {
     const failed: string[] = [];
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i];
-      const title = titles[i] ?? id;
+      const title = resolvedTitles[i] ?? id;
       try {
         await onEnqueue(activeSessionId, id, title);
         succeeded++;
@@ -161,7 +175,7 @@ export function useSongActions(options: UseSongActionsOptions): UseSongActions {
   /* ---------- 3. 加入学习计划 ---------- */
   const addToLearningPlan = useCallback(async ({ titles, songsData }: SongActionInput) => {
     if (titles.length === 0) return;
-    const { ids, skipped } = resolveSongIds(titles, songsData);
+    const { ids, titles: resolvedTitles, skipped } = resolveSongObjects(titles, songsData);
     if (ids.length === 0) {
       toast.warn("未能解析选中歌曲的 ID");
       return;
@@ -172,7 +186,7 @@ export function useSongActions(options: UseSongActionsOptions): UseSongActions {
     const failed: string[] = [];
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i];
-      const title = titles[i] ?? id;
+      const title = resolvedTitles[i] ?? id;
       try {
         await apiRequest<{ ok?: boolean }>("/api/practice/log", {
           method: "POST",
@@ -205,25 +219,26 @@ export function useSongActions(options: UseSongActionsOptions): UseSongActions {
   /* ---------- 4. 弹唱（仅取首首设置 PlayerContext） ---------- */
   const play = useCallback(async ({ titles, songsData }: SongActionInput) => {
     if (titles.length === 0) return;
-    const { ids } = resolveSongIds(titles, songsData);
+    const { ids, titles: resolvedTitles } = resolveSongObjects(titles, songsData);
     if (ids.length === 0) {
       toast.warn("未能解析选中歌曲的 ID");
       return;
     }
     const firstId = ids[0];
+    const firstTitle = resolvedTitles[0] ?? firstId;
     // PlayerMode = "live" | "practice" | "browse"；library 弹唱选 browse（与 CommandPalette / 单曲 ▶ 一致）。
     player.setCurrent(firstId, "browse");
     if (titles.length > 1) {
       toast.show({
-        message: `已选「${titles[0]}」开始弹唱（${titles.length - 1} 首待切歌）`,
+        message: `已选「${firstTitle}」开始弹唱（${titles.length - 1} 首待切歌）`,
         durationMs: 3000,
       });
     }
     // 单选时不弹 toast（无声切换；MiniPlayer 自动出现）
   }, [player, toast]);
 
-  /* ---------- 5. 编辑（仅单选生效） ---------- */
-  const editSong = useCallback(({ titles }: SongActionInput) => {
+  /* ---------- 5. 编辑（仅单选生效） */
+  const editSong = useCallback(({ titles, songsData }: SongActionInput) => {
     if (titles.length === 0) return;
     if (titles.length > 1) {
       toast.warn("编辑仅支持单选：先清空其他选择");
@@ -233,7 +248,11 @@ export function useSongActions(options: UseSongActionsOptions): UseSongActions {
       toast.info("编辑：未启用（App 接线缺失）");
       return;
     }
-    onEditSong(titles[0]);
+    // P1-A4: titles 可能是 song_id(新主键)或 title(向后兼容)。
+    // 优先按 id 解析,fallback 传原值(LibraryView onEditSong 内部再次尝试 find)。
+    const item = titles[0];
+    const byId = songsData?.songs.find(s => s.id === item);
+    onEditSong(byId ? byId.id : item);
   }, [onEditSong, toast]);
 
   return {

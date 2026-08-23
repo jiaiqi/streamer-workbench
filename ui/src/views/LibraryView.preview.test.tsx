@@ -122,7 +122,8 @@ describe("LibraryView - M9.6b 删除 5s 撤销", () => {
     apiRequest.mockReset();
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
-      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
+      // P1-A4: 走 DELETE /api/songs/song_1
+      if (path.startsWith("/api/songs/song_")) return Promise.resolve({ ok: true });
       return Promise.resolve({});
     });
     // 简化流程，跳过 window.confirm
@@ -149,8 +150,8 @@ describe("LibraryView - M9.6b 删除 5s 撤销", () => {
     apiRequest.mockReset();
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
-      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
-      if (path === "/api/songs/song_1/restore") return Promise.resolve({ ok: true });
+      // P1-A4: DELETE /api/songs/{id} + POST /api/songs/{id}/restore
+      if (path.startsWith("/api/songs/song_")) return Promise.resolve({ ok: true });
       return Promise.resolve({});
     });
     vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -182,7 +183,7 @@ describe("LibraryView - M9.6b 删除 5s 撤销", () => {
     apiRequest.mockReset();
     apiRequest.mockImplementation((path: string) => {
       if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
-      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
+      if (path.startsWith("/api/songs/song_")) return Promise.resolve({ ok: true });
       return Promise.resolve({});
     });
     vi.spyOn(window, "confirm").mockReturnValue(true);

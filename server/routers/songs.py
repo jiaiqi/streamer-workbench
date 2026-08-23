@@ -1,7 +1,15 @@
-"""歌曲管理路由（/api/songs*）。"""
+"""歌曲管理路由（/api/songs*）。
 
-from fastapi import APIRouter, UploadFile, File, Request, Response
+P1-A4 收口：title 路由加 Deprecation + Sunset header，新消费者必须走 song_id 主键路由。
+"""
+
+import json
+from fastapi import APIRouter, UploadFile, File, Path, Request, Response
 from dataclasses import asdict
+
+# Sunset: 固定日期 2027-02-23；2026-08-23 起 6 个月内为兼容窗口
+# （保持稳定以便 E2E 测试断言 + 客户端可读；改时同步通知所有现存客户端）
+LEGACY_SUNSET_HEADER = "Tue, 23 Feb 2027 00:00:00 GMT"
 
 from core.data.songs import SongLibrary
 from core.data.tabs import MAX_FILE_BYTES
@@ -131,6 +139,7 @@ def api_songs_trash(req: Request):
 
 @router.post("/api/songs/status", response_model=SongLegacyStatusResponse)
 def api_songs_status(req: Request, payload: SongLegacyStatusRequest):
+    # LEGACY: use PATCH /api/songs/{song_id}/status instead.
     payload = _payload_dict(payload)
     context = get_app_context(req)
     title = (payload.get("title") or "").strip()
@@ -139,8 +148,15 @@ def api_songs_status(req: Request, payload: SongLegacyStatusRequest):
         result = context.song_service.set_status_by_title(title, status)
     except SongServiceError as error:
         return _song_service_error(error)
-    return {"ok": True, "title": title, "status": status,
-            "active": result.active, "draft": result.draft}
+    return Response(
+        content=json.dumps(
+            {"ok": True, "title": title, "status": status,
+             "active": result.active, "draft": result.draft},
+            ensure_ascii=False),
+        status_code=200,
+        media_type="application/json",
+        headers={"Deprecation": "true", "Sunset": LEGACY_SUNSET_HEADER},
+    )
 
 
 @router.post("/api/songs/update", response_model=SongUpdateResponse)
@@ -170,6 +186,7 @@ def api_songs_add(req: Request, payload: SongCreateRequest):
 
 @router.post("/api/songs/delete", response_model=SongLegacyDeleteResponse)
 def api_songs_delete(req: Request, payload: SongLegacyIdentityRequest):
+    # LEGACY: use DELETE /api/songs/{song_id} instead.
     payload = _payload_dict(payload)
     context = get_app_context(req)
     title = (payload.get("title") or "").strip()
@@ -177,8 +194,15 @@ def api_songs_delete(req: Request, payload: SongLegacyIdentityRequest):
         result = context.song_service.delete_by_title(title)
     except SongServiceError as error:
         return _song_service_error(error)
-    return {"ok": True, "title": title,
-            "active": result.active, "draft": result.draft}
+    return Response(
+        content=json.dumps(
+            {"ok": True, "title": title,
+             "active": result.active, "draft": result.draft},
+            ensure_ascii=False),
+        status_code=200,
+        media_type="application/json",
+        headers={"Deprecation": "true", "Sunset": LEGACY_SUNSET_HEADER},
+    )
 
 
 @router.post("/api/songs/seed-sample", response_model=SongMutationResponse)
@@ -352,7 +376,8 @@ def api_songs_snapshots_restore(req: Request, payload: SnapshotRestoreRequest):
 # ── Song ID 主接口 ──
 
 @router.get("/api/songs/{song_id}", response_model=SongResponse)
-def api_song_get_by_id(req: Request, song_id: str):
+def api_song_get_by_id(req: Request,
+                       song_id: str = Path(..., min_length=1, max_length=128)):
     """按不可变 ID 获取歌曲；新消费者不得再用 title 定位资源。"""
     library = _library(get_app_context(req))
     song = library.get_by_id(song_id)
@@ -362,7 +387,9 @@ def api_song_get_by_id(req: Request, song_id: str):
 
 
 @router.patch("/api/songs/{song_id}", response_model=SongUpdateResponse)
-def api_song_update_by_id(req: Request, song_id: str, payload: SongEditableFields):
+def api_song_update_by_id(req: Request,
+                          song_id: str = Path(..., min_length=1, max_length=128),
+                          payload: SongEditableFields = None):
     """按不可变 ID 更新歌曲，允许修改 title 但禁止修改 id。"""
     context = get_app_context(req)
     payload = _payload_dict(payload)
@@ -374,7 +401,9 @@ def api_song_update_by_id(req: Request, song_id: str, payload: SongEditableField
 
 
 @router.patch("/api/songs/{song_id}/status", response_model=SongMutationResponse)
-def api_song_status_by_id(req: Request, song_id: str, payload: SongStatusRequest):
+def api_song_status_by_id(req: Request,
+                          song_id: str = Path(..., min_length=1, max_length=128),
+                          payload: SongStatusRequest = None):
     """按不可变 ID 修改 active/draft 状态。"""
     context = get_app_context(req)
     payload = _payload_dict(payload)
@@ -388,7 +417,9 @@ def api_song_status_by_id(req: Request, song_id: str, payload: SongStatusRequest
 
 
 @router.delete("/api/songs/{song_id}", response_model=SongDeleteResponse)
-def api_song_delete_by_id(req: Request, song_id: str, permanent: bool = False):
+def api_song_delete_by_id(req: Request,
+                          song_id: str = Path(..., min_length=1, max_length=128),
+                          permanent: bool = False):
     """按不可变 ID 删除歌曲（R9.6 软删除：默认 30 天可恢复；?permanent=true 真删）。"""
     context = get_app_context(req)
     try:
@@ -404,7 +435,8 @@ def api_song_delete_by_id(req: Request, song_id: str, permanent: bool = False):
 
 
 @router.post("/api/songs/{song_id}/restore", response_model=SongUpdateResponse)
-def api_song_restore_by_id(req: Request, song_id: str):
+def api_song_restore_by_id(req: Request,
+                           song_id: str = Path(..., min_length=1, max_length=128)):
     """R9.6 恢复软删除的歌曲（清空 deleted_at）。"""
     context = get_app_context(req)
     try:

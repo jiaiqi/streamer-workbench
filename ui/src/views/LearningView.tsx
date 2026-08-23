@@ -90,12 +90,12 @@ export default function LearningView({ dark, onStatsChange, onEditTargetChange }
     setLearningSong(song.id); setActionError("");
     try {
       await runWithToast(
-        () => apiRequest("/api/songs/status", { method: "POST", body: { title: song.title, status: "active" } }),
+        () => apiRequest(`/api/songs/${song.id}/status`, { method: "PATCH", body: { status: "active" } }),
         "标记失败",
       );
       setJustLearned(song.title);
       setTimeout(() => {
-        setSongs(prev => prev.filter(s => s.title !== song.title));
+        setSongs(prev => prev.filter(s => s.id !== song.id));
         setJustLearned(null);
       }, 450);
       onStatsChange(prev => prev && ({ active: prev.active + 1, draft: prev.draft - 1 }));

@@ -147,15 +147,20 @@ describe("L2.1 LibraryView 批量操作", () => {
 
     apiRequest.mockClear();
     apiRequest.mockImplementation((path: string) => {
-      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
+      if (path.startsWith("/api/songs/song_")) return Promise.resolve({ ok: true });
       if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
       return Promise.resolve({});
     });
 
     fireEvent.click(getByTestId("library-batch-delete"));
     await waitFor(() => {
-      const deletes = apiRequest.mock.calls.filter(([p]) => p === "/api/songs/delete");
+      // P1-A4: 走 DELETE /api/songs/{song_id} 而非 POST /api/songs/delete
+      const deletes = apiRequest.mock.calls.filter(
+        ([p, opts]) => p.startsWith("/api/songs/song_") && opts?.method === "DELETE");
       expect(deletes.length).toBe(2);
+      // 验证 URL 形如 /api/songs/song_1 + /api/songs/song_2
+      const paths = deletes.map(([p]) => p).sort();
+      expect(paths).toEqual(["/api/songs/song_1", "/api/songs/song_2"]);
     });
     // 弹 toast「已删除 2 首」
     await waitFor(() => {
@@ -176,15 +181,18 @@ describe("L2.1 LibraryView 批量操作", () => {
 
     apiRequest.mockClear();
     apiRequest.mockImplementation((path: string) => {
-      if (path === "/api/songs/delete") return Promise.resolve({ ok: true });
-      if (path.startsWith("/api/songs/song_1/restore")) return Promise.resolve({ ok: true });
+      if (path.startsWith("/api/songs/song_")) return Promise.resolve({ ok: true });
       if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
       return Promise.resolve({});
     });
 
     fireEvent.click(getByTestId("library-batch-delete"));
     await waitFor(() => {
-      expect(apiRequest).toHaveBeenCalledWith("/api/songs/delete", expect.anything());
+      // P1-A4: 走 DELETE /api/songs/song_1
+      expect(apiRequest).toHaveBeenCalledWith(
+        "/api/songs/song_1",
+        expect.objectContaining({ method: "DELETE" }),
+      );
     });
     // 单条 toast 带撤销按钮
     await waitFor(() => {
@@ -206,15 +214,19 @@ describe("L2.1 LibraryView 批量操作", () => {
 
     apiRequest.mockClear();
     apiRequest.mockImplementation((path: string) => {
-      if (path === "/api/songs/status") return Promise.resolve({ ok: true, status: "active" });
+      if (path.endsWith("/status")) return Promise.resolve({ ok: true, status: "active" });
       if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
       return Promise.resolve({});
     });
 
     fireEvent.click(getByTestId("library-batch-mark-active"));
     await waitFor(() => {
-      const calls = apiRequest.mock.calls.filter(([p]) => p === "/api/songs/status");
+      // P1-A4: 走 PATCH /api/songs/{song_id}/status
+      const calls = apiRequest.mock.calls.filter(
+        ([p, opts]) => p.endsWith("/status") && opts?.method === "PATCH");
       expect(calls.length).toBe(2);
+      const paths = calls.map(([p]) => p).sort();
+      expect(paths).toEqual(["/api/songs/song_2/status", "/api/songs/song_3/status"]);
     });
     await waitFor(() => {
       const toasts = document.querySelectorAll('[data-testid="toast-item"]');
@@ -231,14 +243,16 @@ describe("L2.1 LibraryView 批量操作", () => {
 
     apiRequest.mockClear();
     apiRequest.mockImplementation((path: string) => {
-      if (path === "/api/songs/status") return Promise.resolve({ ok: true, status: "draft" });
+      if (path.endsWith("/status")) return Promise.resolve({ ok: true, status: "draft" });
       if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
       return Promise.resolve({});
     });
 
     fireEvent.click(getByTestId("library-batch-mark-draft"));
     await waitFor(() => {
-      const calls = apiRequest.mock.calls.filter(([p]) => p === "/api/songs/status");
+      // P1-A4: 走 PATCH /api/songs/song_1/status
+      const calls = apiRequest.mock.calls.filter(
+        ([p, opts]) => p === "/api/songs/song_1/status" && opts?.method === "PATCH");
       expect(calls.length).toBe(1);
     });
     await waitFor(() => {
@@ -466,5 +480,125 @@ it("点「批量导出」按钮 → 调 exportBySongIds + 弹「已导出 N 张�
     await waitFor(() => {
       expect(queryByTestId("library-batch-bar")).toBeNull();
     });
+  });
+});
+
+
+/* ============== P1-A4 song_id 全链路切主键 ==============
+ *
+ * 3 项核心契约测试：
+ * 1. 多选 3 首歌 → 「标记已会」→ 调 3 次 PATCH /api/songs/{id}/status
+ * 2. 多选 2 首歌 → 「删除」→ 调 2 次 DELETE /api/songs/{id}
+ * 3. selectedIds 是 Set<string>,行 checkbox 状态 = selectedIds.has(s.id)
+ *
+ * 既不依赖 title 链、也不依赖后端真实响应 — 纯前端契约。
+ */
+describe("P1-A4 song_id 全链路 (LibraryView)", () => {
+  it("多选 3 首歌 → 「标记已会」→ 调 3 次 PATCH /api/songs/{id}/status (不再走 POST /api/songs/status + title)", async () => {
+    const { getByTestId } = renderLibrary();
+    await waitForSongs();
+    fireEvent.click(getByTestId("library-select-toggle"));
+    fireEvent.click(getByTestId("library-card-song_1"));
+    fireEvent.click(getByTestId("library-card-song_2"));
+    fireEvent.click(getByTestId("library-card-song_3"));
+    expect(getByTestId("library-batch-count").textContent).toBe("3");
+
+    apiRequest.mockClear();
+    apiRequest.mockImplementation((path: string) => {
+      if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
+      if (path.endsWith("/status")) return Promise.resolve({ ok: true, status: "active" });
+      return Promise.resolve({});
+    });
+
+    fireEvent.click(getByTestId("library-batch-mark-active"));
+
+    await waitFor(() => {
+      // 关键契约: 3 个 PATCH 打到 song_id 路由
+      const patches = apiRequest.mock.calls.filter(
+        ([p, opts]) => p.endsWith("/status") && opts?.method === "PATCH");
+      expect(patches.length).toBe(3);
+      const paths = patches.map(([p]) => p).sort();
+      expect(paths).toEqual([
+        "/api/songs/song_1/status",
+        "/api/songs/song_2/status",
+        "/api/songs/song_3/status",
+      ]);
+      // body 只含 status,不含 title
+      for (const [, opts] of patches) {
+        expect(opts?.body).toEqual({ status: "active" });
+        expect(opts?.body).not.toHaveProperty("title");
+      }
+      // 绝对不能调旧 title 路由
+      const legacyCalls = apiRequest.mock.calls.filter(
+        ([p]) => p === "/api/songs/status");
+      expect(legacyCalls.length).toBe(0);
+    });
+  });
+
+  it("多选 2 首歌 → 「删除」→ 调 2 次 DELETE /api/songs/{id} (不再走 POST /api/songs/delete + title)", async () => {
+    const { getByTestId } = renderLibrary();
+    await waitForSongs();
+    fireEvent.click(getByTestId("library-select-toggle"));
+    fireEvent.click(getByTestId("library-card-song_1"));
+    fireEvent.click(getByTestId("library-card-song_2"));
+    expect(getByTestId("library-batch-count").textContent).toBe("2");
+
+    apiRequest.mockClear();
+    apiRequest.mockImplementation((path: string) => {
+      if (path === "/api/songs/list") return Promise.resolve(SONGS_DATA);
+      if (path.startsWith("/api/songs/song_")) return Promise.resolve({ ok: true });
+      return Promise.resolve({});
+    });
+
+    fireEvent.click(getByTestId("library-batch-delete"));
+
+    await waitFor(() => {
+      // 关键契约: 2 个 DELETE 打到 song_id 路由
+      const deletes = apiRequest.mock.calls.filter(
+        ([p, opts]) => p.startsWith("/api/songs/song_") && opts?.method === "DELETE");
+      expect(deletes.length).toBe(2);
+      const paths = deletes.map(([p]) => p).sort();
+      expect(paths).toEqual(["/api/songs/song_1", "/api/songs/song_2"]);
+      // 绝对不能调旧 title 路由
+      const legacyCalls = apiRequest.mock.calls.filter(
+        ([p]) => p === "/api/songs/delete");
+      expect(legacyCalls.length).toBe(0);
+    });
+  });
+
+  it("selectedIds: Set<string> 内部状态正确(行 checkbox = selectedIds.has(s.id))", async () => {
+    const { getByTestId } = renderLibrary();
+    await waitForSongs();
+    fireEvent.click(getByTestId("library-select-toggle"));
+
+    // 初始: 0 选中
+    expect(getByTestId("library-batch-count").textContent).toBe("0");
+    expect(getByTestId("library-card-checkbox-song_1").getAttribute("data-checked")).toBe("false");
+    expect(getByTestId("library-card-checkbox-song_2").getAttribute("data-checked")).toBe("false");
+    expect(getByTestId("library-card-checkbox-song_3").getAttribute("data-checked")).toBe("false");
+
+    // 选 song_2
+    fireEvent.click(getByTestId("library-card-song_2"));
+    expect(getByTestId("library-batch-count").textContent).toBe("1");
+    expect(getByTestId("library-card-checkbox-song_2").getAttribute("data-checked")).toBe("true");
+    expect(getByTestId("library-card-checkbox-song_1").getAttribute("data-checked")).toBe("false");
+    expect(getByTestId("library-card-checkbox-song_3").getAttribute("data-checked")).toBe("false");
+
+    // 再选 song_3
+    fireEvent.click(getByTestId("library-card-song_3"));
+    expect(getByTestId("library-batch-count").textContent).toBe("2");
+    expect(getByTestId("library-card-checkbox-song_3").getAttribute("data-checked")).toBe("true");
+
+    // 「全选当前筛选」→ 3 首
+    fireEvent.click(getByTestId("library-batch-select-all"));
+    expect(getByTestId("library-batch-count").textContent).toBe("3");
+    expect(getByTestId("library-card-checkbox-song_1").getAttribute("data-checked")).toBe("true");
+
+    // 「清空」→ 0 首
+    fireEvent.click(getByTestId("library-batch-clear"));
+    expect(getByTestId("library-batch-count").textContent).toBe("0");
+    expect(getByTestId("library-card-checkbox-song_1").getAttribute("data-checked")).toBe("false");
+    expect(getByTestId("library-card-checkbox-song_2").getAttribute("data-checked")).toBe("false");
+    expect(getByTestId("library-card-checkbox-song_3").getAttribute("data-checked")).toBe("false");
   });
 });
