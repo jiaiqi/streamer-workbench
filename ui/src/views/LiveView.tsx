@@ -13,10 +13,22 @@
 /// R8.2 联动：队列项行尾加「弹唱」按钮 → 调 onPlaySong(songId, { sessionId, requestId, requesterName })
 ///   把主播带入 PlayView 联动模式；audio ended 自动 mark sung 回到 LiveView。
 ///
+/// P1-A3.1: LiveShell 总闸接入
+///   - 新增 `headerSlot` prop：App.tsx 注入 <LiveShell /> 作为顶部 sticky 栏
+///   - 新增 `onShellSummary` 回调：把活跃 session {id, title, queueSize} 推给 App.tsx，
+///     LiveShell 消费 prop，不重复拉 /api/live-sessions
+///
 /// 不在本视图做（避免职责重复）：
 /// - 搜歌入队、权益授予、断网补报 → QuickView
 /// - 整体快捷键（Space/U/P/R）→ QuickView 内做
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, type ReactNode } from "react";
+
+/** P1-A3.1: 提给 App.tsx 的 LiveShell 数据快照。 */
+export interface LiveShellSummary {
+  id: string;
+  title: string;
+  queueSize: number;
+}
 import type { Song, SongsData } from "../types";
 import AsyncStateNotice from "../components/AsyncStateNotice";
 import Spinner from "../components/Spinner";
@@ -151,10 +163,16 @@ function uuid(): string {
 export default function LiveView({
   dark,
   onPlaySong,
+  headerSlot,
+  onShellSummary,
 }: {
   dark: boolean;
   /** R8.2: 弹唱联动 — 队列项行尾「弹唱」按钮触发；App.tsx 接管路由。 */
   onPlaySong?: (songId: string, link: { sessionId: string; requestId: string; requesterName: string }) => void;
+  /** P1-A3.1: 顶部 sticky 槽位（App.tsx 注入 <LiveShell />）。 */
+  headerSlot?: ReactNode;
+  /** P1-A3.1: 把活跃 session 摘要推给 App.tsx，LiveShell 消费 prop 不重复拉。 */
+  onShellSummary?: (summary: LiveShellSummary | null) => void;
 }) {
   // M2.6 错误全局 toast 化 — 失败时自动 toast.error
   const { runWithToast } = useApiError();
@@ -372,8 +390,27 @@ export default function LiveView({
       .sort((a, b) => (b.recorded_at > a.recorded_at ? 1 : -1));
   }, [detail]);
 
+  // P1-A3.1: 把活跃 session 摘要推给 App.tsx，让 LiveShell 消费 prop 不重复拉。
+  //   - activeId / activeSession / queueEntries 任一变化都推一次
+  //   - 无活跃 session 时推 null（LiveShell 显示「暂无场次」+ 3 入口）
+  useEffect(() => {
+    if (!onShellSummary) return;
+    if (!activeId || !activeSession) {
+      onShellSummary(null);
+      return;
+    }
+    onShellSummary({
+      id: activeId,
+      title: activeSession.title || "",
+      queueSize: queueEntries.length,
+    });
+  }, [activeId, activeSession, queueEntries.length, onShellSummary]);
+
   return (
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* P1-A3.1: 顶部 sticky 槽位（App.tsx 注入 <LiveShell />）。 */}
+      {headerSlot}
+      <div className="flex flex-1 overflow-hidden">
       {/* ====== LEFT: 会话列表 ====== */}
       <aside
         className={`w-72 shrink-0 border-r flex flex-col overflow-hidden ${dark ? "border-zinc-700/50" : "border-border"}`}
@@ -469,6 +506,7 @@ export default function LiveView({
           onUpdated={() => { void loadDetail(activeId ?? ""); }}
         />
       </main>
+      </div>
     </div>
   );
 }

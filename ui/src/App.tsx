@@ -34,6 +34,8 @@ import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 import SpecialPostersPanel from "./posters/SpecialPostersPanel";
 import TonightWorkbench from "./components/TonightWorkbench";
 import Spinner from "./components/Spinner";
+import LiveShell from "./components/LiveShell";
+import type { LiveShellSummary } from "./views/LiveView";
 import { usePosterStore } from "./posters/usePosterStore";
 import { openQuickView, isElectron } from "./electron-bridge";
 import { useWorkspaceState } from "./workspace/useWorkspaceState";
@@ -122,6 +124,8 @@ function AppInner() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [songStats, setSongStats] = useState<{ active: number; draft: number } | null>(null);
   const [libDialogOpen, setLibDialogOpen] = useState(false);
+  // P1-A3.1: LiveShell 摘要（由 LiveView 推上来，App.tsx 不重复拉 /api/live-sessions）
+  const [shellSummary, setShellSummary] = useState<LiveShellSummary | null>(null);
   // R8.0: 弹唱视图 - 当前播放的 song_id（null 时切回 library）
   const [playSongId, setPlaySongId] = useState<string | null>(null);
   // R8.2: 联动 — 弹唱视图进入时携带的直播会话上下文（无值表示非联动）
@@ -456,6 +460,10 @@ function AppInner() {
   const inWorkspace = view === "workspace";
   const settingsBusy = appearanceSaving || settingsSaving;
   const resourceAlert = ws.resourceError;
+  // P1-A3.1: LiveShell "isInPlayMode" — 在 view==="live" 块内 view 已被 TS 窄化为 "live"，
+  // 不能再用 view === "play" 比。用 player.currentSongId 非空作为"在弹唱中"指示
+  // （PlayView mount 时会 setCurrent，退出时清）。
+  const isInPlayMode = player.currentSongId !== null;
 
   return (
     <div className="app-shell flex h-screen w-screen overflow-hidden font-sans" data-mode={dark ? "dark" : "light"} data-accent={appearance.applicationAccentId}>
@@ -837,8 +845,52 @@ function AppInner() {
               onEditTargetChange={setLibDialogOpen} />
           )}
 
-          {/* ===== 直播视图 ===== */}
-          {view === "live" && <LiveView dark={dark} onPlaySong={handlePlaySong} />}
+          {/* ===== 直播视图（P1-A3.1: LiveShell 顶栏注入 headerSlot） ===== */}
+          {view === "live" && (
+            <LiveView
+              dark={dark}
+              onPlaySong={handlePlaySong}
+              headerSlot={(
+                <LiveShell
+                  dark={dark}
+                  activeSessionId={shellSummary?.id ?? null}
+                  activeSessionTitle={shellSummary?.title ?? null}
+                  queueSize={shellSummary?.queueSize ?? 0}
+                  isInPlayMode={isInPlayMode}
+                  isPlayLinked={playLink != null}
+                  playLinkInfo={
+                    playLink && player.currentSongId
+                      ? { ...playLink, songId: player.currentSongId }
+                      : null
+                  }
+                  onOpenLiveView={() => setView("live")}
+                  onOpenQuickView={() => {
+                    // 速查窗口走 openQuickView (Electron IPC)，浏览器模式按钮 disabled
+                    openQuickView(shellSummary?.id);
+                  }}
+                  onOpenPlayView={(linked) => {
+                    if (linked) {
+                      handlePlaySong(linked.songId, {
+                        sessionId: linked.sessionId,
+                        requestId: linked.requestId,
+                        requesterName: linked.requesterName,
+                      });
+                    } else {
+                      // 非联动：复用 MiniPlayer 的 currentSongId（若有），否则回 browse
+                      if (player.currentSongId) {
+                        setView("play");
+                      } else {
+                        // 没有正在播的歌 — 提示去选歌
+                        toast.info("弹唱屏：先去歌曲库选一首歌再打开。");
+                      }
+                    }
+                  }}
+                  onClosePlay={handleMiniPlayerClose}
+                />
+              )}
+              onShellSummary={setShellSummary}
+            />
+          )}
 
           {/* ===== 统计视图 (R4) ===== */}
           {view === "stats" && (
