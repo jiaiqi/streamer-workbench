@@ -22,6 +22,8 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/.git/**",
+      "**/.worktrees/**",
+      "**/dist/**",
       "src/api/client.test.ts",
       "src/appearance/model.test.ts",
       "src/quick-view/model.test.ts",
