@@ -170,9 +170,79 @@ class FileLiveRepository:
                     recovered.append(str(orphan))
                 except OSError:
                     pass
-            self._report = RecoveryReport(detected=tuple(detected),
-                                        recovered=tuple(recovered))
+            # P0-3：扫描实体目录，把 manifest 与磁盘实体对齐
+            rebuild_report = self._rebuild_manifest_from_disk()
+            detected.extend(rebuild_report.detected)
+            recovered.extend(rebuild_report.recovered)
+            self._report = RecoveryReport(
+                detected=tuple(detected),
+                recovered=tuple(recovered),
+                quarantined=rebuild_report.quarantined,
+                unresolved=rebuild_report.unresolved,
+            )
             return self._report
+
+    def _rebuild_manifest_from_disk(self) -> RecoveryReport:
+        """P0-3：把 manifest 视为「磁盘实体的索引」，启动时扫描同步。
+
+        - 磁盘有但 manifest 没有 → 加入 manifest（orphaned_state_picked_up）
+        - manifest 有但磁盘没有 → 从 manifest 移除（missing_state_cleaned）
+        - 两边都有 → 保留
+
+        不改写任何 state.json；只动 manifest.json。
+        """
+        with self._lock:
+            manifest = self._load_manifest()
+            indexed = set(manifest.get("sessions", []))
+            # 扫描实体目录：根目录下名字是合法 session_id 的子目录 + 含 state.json
+            on_disk: set[str] = set()
+            for child in self._root.iterdir():
+                if not child.is_dir():
+                    continue
+                sid = child.name
+                # 跳过 .trash / .recovery 等隐藏目录
+                if sid.startswith("."):
+                    continue
+                # 验证 session_id 合法性
+                try:
+                    self._session_dir(sid)  # 复用校验
+                except ValueError:
+                    continue
+                if (child / "state.json").exists():
+                    on_disk.add(sid)
+            # 缺失的：磁盘有但 manifest 没有
+            added = on_disk - indexed
+            # 孤儿：manifest 有但磁盘没有
+            removed = indexed - on_disk
+            if not added and not removed:
+                return RecoveryReport()
+            for sid in sorted(added):
+                manifest.setdefault("sessions", []).append(sid)
+                # 重新计算 revision：磁盘实体存在则 revision 用 hash(state.json)
+                try:
+                    import hashlib
+                    state_bytes = (self._state_path(sid)).read_bytes()
+                    rev = hashlib.sha256(state_bytes).hexdigest()[:16]
+                    manifest.setdefault("revisions", {})[sid] = rev
+                except OSError:
+                    pass
+            for sid in sorted(removed):
+                try:
+                    manifest["sessions"].remove(sid)
+                except ValueError:
+                    pass
+                manifest.get("revisions", {}).pop(sid, None)
+            self._save_manifest(manifest)
+            return RecoveryReport(
+                detected=(
+                    *(f"orphaned_state_picked_up:{sid}" for sid in sorted(added)),
+                    *(f"missing_state_cleaned:{sid}" for sid in sorted(removed)),
+                ),
+                recovered=(
+                    *(f"added:{sid}" for sid in sorted(added)),
+                    *(f"removed:{sid}" for sid in sorted(removed)),
+                ),
+            )
 
     # ── CRUD ──
 
