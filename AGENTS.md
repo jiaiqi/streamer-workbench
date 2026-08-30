@@ -1,6 +1,7 @@
 # Agent 项目规则
 
 > 此文件供 AI 编码助手（Agent）读取并遵守。每次接手时首先读取本文。
+> 最后更新：2026-08-30（P0 收口 4 项：WebDAV 主密码 → 系统 Keychain / 本地 outbox / Manifest 派生索引 / Electron smoke）
 > 最后更新：2026-08-16（R4 退出条件 #2 草稿/手动分页 UI V3 收口 → R4 11/11 = 100%）
 
 ---
