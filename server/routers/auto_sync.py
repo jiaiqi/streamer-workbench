@@ -1,19 +1,23 @@
-"""M2.4 WebDAV 自动同步 HTTP 端点。
+"""M2.4 WebDAV 自动同步 HTTP 端点（P0-1 已切到 secret_store）。
 
-- GET    /api/backup/webdav/auto-sync      读 status + 配置
-- POST   /api/backup/webdav/auto-sync      启用 / 关闭 / 调间隔 / 调方向
+- GET    /api/backup/webdav/auto-sync      读 status + 配置 + 密钥环 backend 名
+- POST   /api/backup/webdav/auto-sync      启用 / 关闭 / 调间隔 / 调方向 + 写主密码到密钥环
 - POST   /api/backup/webdav/auto-sync/run  立即触发一次（用明文主密码）
+
+P0-1（2026-08-30 8/18 评估 6.5）：
+- 主密码不再以 base64 形式落到 settings；改用 core.secret_store（系统 Keychain）
+- 旧字段 webdav_auto_sync_master_password_b64 在 _normalize 时被静默擦除
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
+from core import secret_store
 from server.api.errors import ApiError
 from server.api.handlers import api_error_response
 from server.api.secondary_models import (
     AutoSyncSettingsRequest,
     AutoSyncRunRequest,
-    OkResponse,
 )
 from server.dependencies import get_app_context
 
@@ -28,8 +32,15 @@ def _payload(payload) -> dict:
 
 @router.get("/api/backup/webdav/auto-sync")
 def api_autosync_get(req: Request):
-    """读当前自动同步配置 + 上次执行状态。"""
+    """读当前自动同步配置 + 上次执行状态 + 密钥环 backend 状态。"""
     settings = get_app_context(req).settings_service.get()
+    # P0-1：has_master_password 改读密钥环
+    has_master = False
+    if secret_store.is_available():
+        try:
+            has_master = bool(secret_store.get_secret("settings-master"))
+        except secret_store.SecretStoreUnavailable:
+            has_master = False
     return {
         "enabled": bool(settings.get("webdav_auto_sync_enabled")),
         "interval_minutes": int(settings.get(
@@ -40,8 +51,10 @@ def api_autosync_get(req: Request):
         "last_error": settings.get("webdav_auto_sync_last_error"),
         "last_remote_name": settings.get("webdav_auto_sync_last_remote_name"),
         "has_webdav_config": bool(settings.get("webdav_config_encrypted")),
-        "has_master_password": bool(settings.get(
-            "webdav_auto_sync_master_password_b64")),
+        "has_master_password": has_master,
+        # P0-1：让 UI 能展示「存在密钥环，但当前 backend 不可用」这种状态
+        "secret_store_available": secret_store.is_available(),
+        "secret_store_backend": secret_store.backend_name(),
     }
 
 
@@ -49,11 +62,11 @@ def api_autosync_get(req: Request):
 async def api_autosync_set(payload: AutoSyncSettingsRequest, req: Request):
     """启用 / 关闭 / 调间隔 / 调方向 + 可选主密码（启用时必填）。
 
-    enabled=false 时清掉主密码字段（避免主密码残留在 settings.json）。
+    P0-1：主密码写到系统密钥环（secret_store.set_secret），不写 settings。
+    关闭时清掉密钥环项（secret_store.delete_secret）。
     """
     context = get_app_context(req)
     body = _payload(payload)
-    from server.services.auto_sync import _encode_master
     changes: dict = {}
     if "enabled" in body:
         changes["webdav_auto_sync_enabled"] = bool(body["enabled"])
@@ -69,11 +82,26 @@ async def api_autosync_set(payload: AutoSyncSettingsRequest, req: Request):
                 req, 422,
                 ApiError("missing_master_password",
                          "启用自动同步必须提供主密码（用于解锁加密 config）"))
-        changes["webdav_auto_sync_master_password_b64"] = _encode_master(
-            body["master_password"])
+        # P0-1：先检查密钥环可用，否则 503 提示用户
+        if not secret_store.is_available():
+            return api_error_response(
+                req, 503,
+                ApiError("secret_store_unavailable",
+                         f"系统密钥环不可用: {secret_store.backend_name()}; "
+                         f"自动同步已关闭"))
+        try:
+            secret_store.set_secret("settings-master", body["master_password"])
+        except secret_store.SecretStoreUnavailable as exc:
+            return api_error_response(
+                req, 503,
+                ApiError("secret_store_unavailable", str(exc)))
     elif enabled is False:
-        # 关闭时清掉主密码
-        changes["webdav_auto_sync_master_password_b64"] = None
+        # 关闭时清掉密钥环项（如果存在）
+        if secret_store.is_available():
+            try:
+                secret_store.delete_secret("settings-master")
+            except secret_store.SecretStoreUnavailable:
+                pass  # 不可用时忽略；下个 tick 不会再用
     try:
         new_settings = context.settings_service.update(changes)
     except Exception as exc:

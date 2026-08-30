@@ -108,4 +108,10 @@ class SettingsApplicationService:
             v = settings.get(key)
             if v is not None and not isinstance(v, str):
                 raise SettingsValidationFailed(f"{key} 必须是字符串或 null")
+
+        # P0-1（2026-08-30 8/18 评估 6.5）：
+        # 旧字段 webdav_auto_sync_master_password_b64 不再使用；主密码已迁到密钥环。
+        # 这里静默擦除，不再报错（旧 settings.json 残留自动清理）。
+        if "webdav_auto_sync_master_password_b64" in settings:
+            settings.pop("webdav_auto_sync_master_password_b64", None)
         return settings

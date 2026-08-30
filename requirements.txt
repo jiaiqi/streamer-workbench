@@ -4,3 +4,9 @@ python-multipart==0.0.32
 pillow==12.2.0
 pypinyin==0.53.0
 pyzipper==0.4.0
+# P0-1（2026-08-30 8/18 评估 6.5）：跨平台主密码存系统 Keychain
+# - macOS: Keychain
+# - Windows: Credential Manager
+# - Linux: Secret Service (KWallet / GNOME Keyring)
+# 缺 backend 时 keyring 退化为 NullKeyring，secret_store.is_available() 返 False
+keyring==25.7.0

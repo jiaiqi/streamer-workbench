@@ -74,6 +74,10 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
     enabled: boolean; interval_minutes: number; direction: "push" | "pull" | "both";
     last_at: string | null; last_status: string | null; last_error: string | null;
     last_remote_name: string | null;
+    // P0-1：主密码改存系统密钥环；后端多返两个字段供 UI 展示
+    has_master_password?: boolean;
+    secret_store_available?: boolean;
+    secret_store_backend?: string;
   } | null>(null);
 
   // M2.15：监听离线
@@ -130,6 +134,9 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
         direction: "push" | "pull" | "both";
         last_at: string | null; last_status: string | null; last_error: string | null;
         last_remote_name: string | null;
+        has_master_password?: boolean;
+        secret_store_available?: boolean;
+        secret_store_backend?: string;
       }>("/api/backup/webdav/auto-sync");
       setAutoSync({
         enabled: data.enabled,
@@ -139,6 +146,9 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
         last_status: data.last_status,
         last_error: data.last_error,
         last_remote_name: data.last_remote_name,
+        has_master_password: data.has_master_password,
+        secret_store_available: data.secret_store_available,
+        secret_store_backend: data.secret_store_backend,
       });
     } catch {
       // 静默 — 自动同步是可选的
@@ -169,9 +179,18 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
 
   const handleAutoSyncToggle = useCallback(async (enable: boolean) => {
     if (!guardOnline(enable ? "启用自动同步" : "关闭自动同步")) return;
-    if (enable && !masterPwd) {
-      setInlineError("启用自动同步必须先填写主密码");
-      return;
+    if (enable) {
+      if (!masterPwd) {
+        setInlineError("启用自动同步必须先填写主密码");
+        return;
+      }
+      // P0-1：检查系统密钥环是否可用
+      if (autoSync && autoSync.secret_store_available === false) {
+        setInlineError(
+          `系统密钥环不可用（${autoSync.secret_store_backend ?? "未知"}）; 无法安全存储主密码，自动同步已拒绝`,
+        );
+        return;
+      }
     }
     setBusy("autosync");
     setInlineError("");
@@ -190,7 +209,7 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
     } finally {
       setBusy(null);
     }
-  }, [masterPwd, refreshAutoSync, toast]);
+  }, [autoSync, masterPwd, refreshAutoSync, toast]);
 
   const handleAutoSyncRun = useCallback(async () => {
     if (!guardOnline("立即同步")) return;
@@ -782,7 +801,8 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
                 </Button>
               ) : (
                 <Button type="button"
-                  disabled={busy === "autosync" || !online || !masterPwd}
+                  disabled={busy === "autosync" || !online || !masterPwd
+                    || (autoSync?.secret_store_available === false)}
                   onClick={() => void handleAutoSyncToggle(true)}
                   data-testid="webdav-autosync-enable">
                   启用自动同步
@@ -795,9 +815,26 @@ export default function WebDavPanel({ dark = false }: { dark?: boolean } = {}) {
                 {busy === "autosync" ? "同步中…" : "立即同步一次"}
               </Button>
             </div>
-            <p className="field-note text-[10px] text-muted-foreground">
-              启用后主密码会加密保存在 settings（用于定时器自动解锁）；关闭时自动清除。
-            </p>
+            {/* P0-1：主密码现在存到系统密钥环；展示 backend 状态 + 不可用时警告 */}
+            {autoSync && (
+              <p
+                className="field-note text-[10px] text-muted-foreground"
+                data-testid="webdav-autosync-secret-store"
+              >
+                {autoSync.secret_store_available === false ? (
+                  <span className="text-amber-600 dark:text-amber-400">
+                    ⚠ 系统密钥环不可用（{autoSync.secret_store_backend ?? "未知"}）；
+                    主密码无法安全存储，自动同步已拒绝启用。
+                  </span>
+                ) : (
+                  <>
+                    主密码存到系统密钥环（{autoSync.secret_store_backend ?? "未知"}）；
+                    关闭自动同步时自动清除。
+                    {autoSync.has_master_password ? "（已存）" : "（未存）"}
+                  </>
+                )}
+              </p>
+            )}
           </div>
         </div>
       )}

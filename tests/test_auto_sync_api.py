@@ -24,8 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from server.config import AppConfig
 from server.services.auto_sync import (
     AutoSyncScheduler,
-    _decode_master,
-    _encode_master,
+    MASTER_ACCOUNT,
 )
 from tests.test_api_contract import _request
 
@@ -140,6 +139,65 @@ class AutoSyncApiTests(unittest.TestCase):
                     assert status == 422
         _run(scenario())
 
+    # ── P0-1：secret_store 不可用 / 旧字段擦除 ──
+
+    def test_get_includes_secret_store_status(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    status, body, _ = await _request(
+                        app, "GET", "/api/backup/webdav/auto-sync")
+                    assert status == 200
+                    # P0-1 新字段
+                    assert "secret_store_available" in body
+                    assert "secret_store_backend" in body
+                    # 当前环境（macOS CI）一定可用
+                    assert body["secret_store_available"] is True
+                    self.assertIsInstance(body["secret_store_backend"], str)
+        _run(scenario())
+
+    def test_set_enabled_when_secret_store_unavailable_503(self):
+        async def scenario():
+            with tempfile.TemporaryDirectory() as td:
+                app = _boot_app(Path(td))
+                async with app.router.lifespan_context(app):
+                    # mock secret_store 不可用
+                    with patch("core.secret_store.is_available", return_value=False), \
+                         patch("core.secret_store.backend_name",
+                               return_value="Mocked Unavailable"):
+                        status, body, _ = await _request(
+                            app, "POST", "/api/backup/webdav/auto-sync",
+                            {"enabled": True, "master_password": "secret"})
+                        assert status == 503
+                        assert body.get("error", {}).get("code") == "secret_store_unavailable"
+        _run(scenario())
+
+    def test_old_master_password_field_is_silently_dropped(self):
+        """P0-1 向前兼容：旧 settings.json 里的 base64 字段被静默擦除。"""
+        from server.services.settings import SettingsApplicationService
+        from server.repositories.settings import FileSettingsRepository
+        from server.ports.repositories import BackupPolicy
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            backup_dir = root / "backups"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            # 模拟旧 settings.json 含有 base64 字段 + 必要默认
+            (root / "settings.json").write_text(
+                '{"webdav_auto_sync_master_password_b64": "c2VjcmV0",'
+                ' "schemaVersion": 1,'
+                ' "output_dir": "/tmp/x",'
+                ' "default_canvas": "9:16",'
+                ' "default_theme": "ocean",'
+                ' "font_path": "/tmp/font.ttf",'
+                ' "backup_count": 5,'
+                ' "render_threads": 1}', encoding="utf-8")
+            settings = SettingsApplicationService(
+                settings_repository=FileSettingsRepository(
+                    root / "settings.json", BackupPolicy(backup_dir)))
+            normalized = settings.get()
+            assert "webdav_auto_sync_master_password_b64" not in normalized
+
 
 # ── AutoSyncScheduler.run_once 分支 ─────────────────────────
 
@@ -173,7 +231,13 @@ class AutoSyncSchedulerTests(unittest.TestCase):
                 app = self._make_app_with_scheduler(Path(td))
                 async with app.router.lifespan_context(app):
                     ctx = app.state.context
-                    # 模拟：有加密 config 但无 master
+                    # 模拟：有加密 config 但密钥环中无 master
+                    # P0-1：清掉密钥环中可能残留的 master（其他测试残留）
+                    from core import secret_store
+                    try:
+                        secret_store.delete_secret(MASTER_ACCOUNT)
+                    except Exception:
+                        pass
                     ctx.settings_service.update({
                         "webdav_config_encrypted": {"cipher_b64": "AAAA"},
                     })
@@ -189,10 +253,16 @@ class AutoSyncSchedulerTests(unittest.TestCase):
                 app = self._make_app_with_scheduler(Path(td))
                 async with app.router.lifespan_context(app):
                     ctx = app.state.context
-                    # mock settings 有 config + master
+                    # P0-1：把 master 写到系统密钥环
+                    from core import secret_store
+                    try:
+                        secret_store.delete_secret(MASTER_ACCOUNT)
+                    except Exception:
+                        pass
+                    secret_store.set_secret(MASTER_ACCOUNT, "pw")
+                    # mock settings 只有 config（旧 master 字段不再写）
                     ctx.settings_service.update({
                         "webdav_config_encrypted": {"cipher_b64": "AAAA"},
-                        "webdav_auto_sync_master_password_b64": _encode_master("pw"),
                     })
                     scheduler = ctx.auto_sync_scheduler
                     # mock webdav.auto_run_once 返回成功
@@ -210,6 +280,8 @@ class AutoSyncSchedulerTests(unittest.TestCase):
                     s = ctx.settings_service.get()
                     assert s["webdav_auto_sync_last_status"] == "success"
                     assert s["webdav_auto_sync_last_remote_name"] == "song-20260809.songworkbench"
+                    # 清理
+                    secret_store.delete_secret(MASTER_ACCOUNT)
         _run(scenario())
 
     def test_run_push_failure_writes_error(self):
@@ -218,9 +290,14 @@ class AutoSyncSchedulerTests(unittest.TestCase):
                 app = self._make_app_with_scheduler(Path(td))
                 async with app.router.lifespan_context(app):
                     ctx = app.state.context
+                    from core import secret_store
+                    try:
+                        secret_store.delete_secret(MASTER_ACCOUNT)
+                    except Exception:
+                        pass
+                    secret_store.set_secret(MASTER_ACCOUNT, "pw")
                     ctx.settings_service.update({
                         "webdav_config_encrypted": {"cipher_b64": "AAAA"},
-                        "webdav_auto_sync_master_password_b64": _encode_master("pw"),
                     })
                     scheduler = ctx.auto_sync_scheduler
                     with patch.object(
@@ -233,12 +310,20 @@ class AutoSyncSchedulerTests(unittest.TestCase):
                     s = ctx.settings_service.get()
                     assert s["webdav_auto_sync_last_status"] == "failed"
                     assert "auth_failed" in s["webdav_auto_sync_last_error"]
+                    secret_store.delete_secret(MASTER_ACCOUNT)
         _run(scenario())
 
     def test_master_password_roundtrip(self):
-        # 直接验证 base64 编解码
-        assert _decode_master(_encode_master("hello世界")) == "hello世界"
-        assert _encode_master("") == ""
+        # P0-1：直接验证密钥环的 roundtrip（旧 base64 helper 已删除）
+        from core import secret_store
+        try:
+            secret_store.delete_secret(MASTER_ACCOUNT)
+        except Exception:
+            pass
+        secret_store.set_secret(MASTER_ACCOUNT, "hello世界")
+        assert secret_store.get_secret(MASTER_ACCOUNT) == "hello世界"
+        secret_store.delete_secret(MASTER_ACCOUNT)
+        assert secret_store.get_secret(MASTER_ACCOUNT) is None
 
 
 if __name__ == "__main__":

@@ -7,7 +7,10 @@
 - run_now() 立即触发一次同步（不打断主循环）
 - 失败不中断下个 tick；每次结果都写到 settings.last_at/last_status/last_error/last_remote_name
 
-零新依赖（asyncio + dataclasses 即可）。
+P0-1（2026-08-30 8/18 评估 6.5）：
+- 主密码不再 base64 落到 settings；改走 core.secret_store（系统 Keychain）
+- 跨平台：macOS Keychain / Windows Credential Manager / Linux Secret Service
+- 不可用时：自动同步启动被跳过，run_now 报 503 secret_store_unavailable
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from core import secret_store
 from server.services.webdav_sync import (
     WebDavConfigInvalid,
     WebDavSyncService,
@@ -23,6 +27,20 @@ from server.services.webdav_sync import (
 
 
 logger = logging.getLogger(__name__)
+
+# P0-1：主密码在系统密钥环中的 account 标识
+# 一个项目只用一个主密码（settings 面板的那个），所以 account 固定
+MASTER_ACCOUNT = "settings-master"
+
+
+def _load_master_password() -> str | None:
+    """从系统密钥环读主密码。不可用或未存都返回 None。"""
+    try:
+        pw = secret_store.get_secret(MASTER_ACCOUNT)
+    except secret_store.SecretStoreUnavailable as exc:
+        logger.warning("AutoSyncScheduler: 系统密钥环不可用 - %s", exc)
+        return None
+    return pw
 
 
 class AutoSyncScheduler:
@@ -50,6 +68,19 @@ class AutoSyncScheduler:
             return
         if not self._has_webdav_config():
             logger.warning("AutoSyncScheduler: enabled 但无 WebDAV 配置，跳过")
+            return
+        # P0-1：系统密钥环不可用 → 自动同步启动被阻止（评估 6.5）
+        if not secret_store.is_available():
+            logger.warning(
+                "AutoSyncScheduler: 系统密钥环不可用 (%s); 自动同步已拒绝启动",
+                secret_store.backend_name())
+            self._write_status(
+                {"ok": False, "skipped": "secret_store_unavailable"},
+                error=f"系统密钥环不可用: {secret_store.backend_name()}")
+            return
+        # 主密码缺失（用户还没在 WebDavPanel 输入过）也跳过，但不算不可用
+        if _load_master_password() is None:
+            logger.warning("AutoSyncScheduler: enabled 但密钥环中无主密码，跳过")
             return
         self._task = asyncio.create_task(self._loop(), name="autosync-loop")
         logger.info("AutoSyncScheduler: 启动（间隔 %s 分钟）",
@@ -109,26 +140,24 @@ class AutoSyncScheduler:
             result = {"ok": False, "skipped": "no_webdav_config"}
             self._write_status(result, error="尚未配置 WebDAV")
             return result
-        # 自动同步需要解锁的 cfg：但主密码是用户态的，scheduler 没有
-        # 设计：M2.2 把 cfg 加密存 settings.json；scheduler 没法在没密码时解密
-        # 解决：让用户在 enabled=true 时必须把 master_password 也存下来
-        # （settings 字段 webdav_master_password_for_autosync，Cipher 同样加密）
-        settings = self._settings.get()
-        master = settings.get("webdav_auto_sync_master_password_b64")
-        if not master:
+        # P0-1：从系统密钥环读主密码；不可用 → 报告并停止（评估 6.5）
+        if not secret_store.is_available():
+            result = {
+                "ok": False,
+                "skipped": "secret_store_unavailable",
+                "hint": f"系统密钥环不可用: {secret_store.backend_name()}; 自动同步已关闭",
+            }
+            self._write_status(result,
+                               error=f"系统密钥环不可用: {secret_store.backend_name()}")
+            return result
+        master_pw = _load_master_password()
+        if not master_pw:
             result = {
                 "ok": False,
                 "skipped": "no_master_password",
                 "hint": "请在 WebDAV 面板「启用自动同步」时设置主密码",
             }
             self._write_status(result, error="缺少自动同步主密码")
-            return result
-        try:
-            master_pw = _decode_master(master)
-        except Exception as exc:
-            result = {"ok": False, "skipped": "bad_master_encoding",
-                      "error": str(exc)}
-            self._write_status(result, error=f"主密码字段解码失败: {exc}")
             return result
         try:
             result = self._webdav.auto_run_once(master_password=master_pw)
@@ -194,20 +223,3 @@ class AutoSyncScheduler:
             )
             return result
 
-
-# ── helpers ──
-
-def _encode_master(password: str) -> str:
-    """base64 编码主密码存 settings（不是加密，只是避免明文太显眼）。
-
-    注意：真正的安全来自「不允许远程 / 同步」+ 「webdav_config_encrypted 自身已是 AES」。
-    用户的明文主密码仍会进 settings.json base64 形式 — 这是已知的妥协。
-    如果用户不想存，可保持 enabled=false。
-    """
-    import base64
-    return base64.b64encode(password.encode("utf-8")).decode("ascii")
-
-
-def _decode_master(encoded: str) -> str:
-    import base64
-    return base64.b64decode(encoded.encode("ascii")).decode("utf-8")
