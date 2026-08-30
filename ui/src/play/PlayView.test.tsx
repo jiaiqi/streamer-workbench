@@ -297,6 +297,213 @@ describe("PlayView - R9.1 再唱一遍", () => {
   });
 });
 
+/* ================== P1-A2 弹唱结束待确认卡片 ==================
+ *
+ * 评估 5.3 修复：audio.ended 不再静默 markLinkedSung + onBack；
+ * 改为弹「演唱结束」卡片让用户决策：
+ *   [已完整演唱] → 调 record API + onBack
+ *   [稍后处理]   → 仅 onBack（不持久化）
+ *   [再唱一遍]   → 重置 audio + 清 confirm state
+ *
+ * 仅联动模式（linkedSessionId + linkedRequestId）启用此卡片。
+ *
+ * 注意：PlayView 仅在 hasAudio（有 audio_vocal_path 或 audio_instrumental_path）时
+ * 才挂载 <audio> 元素。本段测试用全局 SAMPLE_WITH_AUDIO 替换默认 SAMPLE_SONG 来触发 audio 路径。
+ */
+
+const SAMPLE_WITH_AUDIO = {
+  ...SAMPLE_SONG,
+  audio_vocal_path: "data/audio/test/vocal.mp3",
+  audio_instrumental_path: "",
+  audio_duration_ms: 30000,
+};
+
+describe("PlayView - P1-A2 弹唱结束待确认卡片", () => {
+  // 触发 audio.ended 事件的辅助函数。
+  // PlayView 内部 <audio> 通过 ref 拿，没有 testid。直接 querySelector 找元素。
+  function dispatchAudioEnded() {
+    const audio = document.querySelector("audio") as HTMLAudioElement | null;
+    if (!audio) throw new Error("no <audio> element in PlayView");
+    audio.dispatchEvent(new Event("ended"));
+  }
+
+  // 拦截 audio.play() 的 Promise rejection（jsdom 无真实 audio 设备）
+  // 防止 vitest 控制台 unhandled error
+  beforeEach(() => {
+    // mock HTMLMediaElement.prototype.play 让它 resolve undefined
+    Object.defineProperty(HTMLMediaElement.prototype, "play", {
+      configurable: true,
+      value: function () { return Promise.resolve(); },
+    });
+    // mock pause
+    Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+      configurable: true,
+      value: function () { /* noop */ },
+    });
+  });
+
+  it("联动模式：audio.ended 触发后弹 confirm 卡（不是静默 markSung）", async () => {
+    const onBack = vi.fn();
+    apiRequest.mockResolvedValue({ songs: [SAMPLE_WITH_AUDIO], total: 1, active: 1, draft: 0 });
+    const { getByTestId, queryByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_WITH_AUDIO.id}
+        onBack={onBack}
+        linkedSessionId="sess_p1a2_a"
+        linkedRequestId="req_p1a2_a"
+        linkedRequesterName="小A"
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValue({});
+
+    // 触发 audio.ended
+    dispatchAudioEnded();
+    await waitFor(() => {
+      expect(getByTestId("play-view-confirm")).toBeTruthy();
+    });
+
+    // 关键：触发后不应该静默调 record API
+    const recordCalls = apiRequest.mock.calls.filter(c =>
+      String(c[0]).includes("/record")
+      && (c[1] as { method?: string } | undefined)?.method === "POST");
+    expect(recordCalls).toHaveLength(0);
+    // 也不应该 onBack
+    expect(onBack).not.toHaveBeenCalled();
+
+    // 确认卡应该有 3 个按钮
+    expect(getByTestId("play-view-confirm-sung")).toBeTruthy();
+    expect(getByTestId("play-view-confirm-later")).toBeTruthy();
+    expect(getByTestId("play-view-confirm-again")).toBeTruthy();
+  });
+
+  it("「已完整演唱」按钮 → 调 record API + 触发 onBack", async () => {
+    const onBack = vi.fn();
+    apiRequest.mockResolvedValue({ songs: [SAMPLE_WITH_AUDIO], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_WITH_AUDIO.id}
+        onBack={onBack}
+        linkedSessionId="sess_p1a2_b"
+        linkedRequestId="req_p1a2_b"
+        linkedRequesterName="小B"
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValue({});
+
+    dispatchAudioEnded();
+    await waitFor(() => getByTestId("play-view-confirm"));
+
+    fireEvent.click(getByTestId("play-view-confirm-sung"));
+    await waitFor(() => {
+      const recordCall = apiRequest.mock.calls.find(c =>
+        String(c[0]) === "/api/live-sessions/sess_p1a2_b/record"
+        && (c[1] as { method?: string } | undefined)?.method === "POST");
+      expect(recordCall).toBeTruthy();
+    });
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it("「稍后处理」按钮 → 不调 record API，只触发 onBack", async () => {
+    const onBack = vi.fn();
+    apiRequest.mockResolvedValue({ songs: [SAMPLE_WITH_AUDIO], total: 1, active: 1, draft: 0 });
+    const { getByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_WITH_AUDIO.id}
+        onBack={onBack}
+        linkedSessionId="sess_p1a2_c"
+        linkedRequestId="req_p1a2_c"
+        linkedRequesterName="小C"
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValue({});
+
+    dispatchAudioEnded();
+    await waitFor(() => getByTestId("play-view-confirm"));
+
+    fireEvent.click(getByTestId("play-view-confirm-later"));
+    // 关键：不应该调 record API
+    const recordCalls = apiRequest.mock.calls.filter(c =>
+      String(c[0]).includes("/record")
+      && (c[1] as { method?: string } | undefined)?.method === "POST");
+    expect(recordCalls).toHaveLength(0);
+    // 但 onBack 触发（让用户能回到 LiveView 手动改）
+    expect(onBack).toHaveBeenCalled();
+  });
+
+  it("「再唱一遍」按钮 → 不调 record API，不 onBack，只清 confirm state", async () => {
+    const onBack = vi.fn();
+    apiRequest.mockResolvedValue({ songs: [SAMPLE_WITH_AUDIO], total: 1, active: 1, draft: 0 });
+    const { getByTestId, queryByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_WITH_AUDIO.id}
+        onBack={onBack}
+        linkedSessionId="sess_p1a2_d"
+        linkedRequestId="req_p1a2_d"
+        linkedRequesterName="小D"
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    apiRequest.mockClear();
+    apiRequest.mockResolvedValue({});
+
+    dispatchAudioEnded();
+    await waitFor(() => getByTestId("play-view-confirm"));
+
+    fireEvent.click(getByTestId("play-view-confirm-again"));
+    // 不调 record API
+    const recordCalls = apiRequest.mock.calls.filter(c =>
+      String(c[0]).includes("/record")
+      && (c[1] as { method?: string } | undefined)?.method === "POST");
+    expect(recordCalls).toHaveLength(0);
+    // 不调 onBack（用户想再唱一遍，不回 LiveView）
+    expect(onBack).not.toHaveBeenCalled();
+    // confirm 卡消失
+    await waitFor(() => {
+      expect(queryByTestId("play-view-confirm")).toBeNull();
+    });
+  });
+
+  it("非联动模式：audio.ended 后不弹 confirm 卡（无 audio 元素 + 无 linkedSessionId）", async () => {
+    const onBack = vi.fn();
+    // 注意：非联动模式 + 无 audio 路径 → 不会有 <audio> 元素挂载
+    // PlayView 的 onEnded handler 绑定在 audio ref 上；无 audio 元素就不可能触发
+    // 所以 confirm state 永远不会被 set
+    const { getByTestId, queryByTestId } = render(
+      <PlayView
+        dark={false}
+        songId={SAMPLE_SONG.id}
+        onBack={onBack}
+        // 不传 linkedSessionId → 非联动模式
+      />
+    );
+    await waitFor(() => {
+      expect(getByTestId("play-view").getAttribute("data-state")).toBe("ready");
+    });
+    // 验证非联动模式根本没挂 audio 元素
+    expect(document.querySelector("audio")).toBeNull();
+    // 即便强行 dispatch 也不会触发（无 listener target）
+    expect(queryByTestId("play-view-confirm")).toBeNull();
+  });
+});
+
 /* ================== R9.2 远观模式 ================== */
 
 describe("PlayView - R9.2 远观模式", () => {

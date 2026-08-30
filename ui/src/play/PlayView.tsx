@@ -138,6 +138,10 @@ export default function PlayView({
   // R8.2.x 录屏：顶栏红点（只读 state；Dialog 内部开完整 hook）
   const [recordingOpen, setRecordingOpen] = useState(false);
   const recordingIndicator = useRecordingIndicator();
+  // P1-A2: 弹唱结束 → 待确认卡片（仅联动模式启用）
+  // 修复前：audio.ended 静默 markLinkedSung + onBack，违反评估 5.3
+  // 修复后：弹卡片让用户确认「已完整演唱 / 稍后处理 / 再唱一遍」
+  const [pendingConfirm, setPendingConfirm] = useState(false);
 
   // 歌曲变更时重置 Capo（从 song.capo_default 取；fallback 到 song.capo）
   useEffect(() => {
@@ -278,10 +282,10 @@ export default function PlayView({
       setIsPlaying(false);
       playerCtx.setPlaying(false);
       reportEvent("playback_completed", el.duration * 1000, el.duration * 1000);
-      // R8.2: 联动模式 — 弹唱结束自动标记「已唱」+ 回到 LiveView
+      // P1-A2: 联动模式 — 弹唱结束不再静默 markSung；弹「待确认」卡片让用户决策
+      // 评估 5.3: 网络失败时必须显示"待同步"，不能让用户误以为事件已持久化
       if (linkedSessionId && linkedRequestId) {
-        markLinkedSung();
-        onBack();
+        setPendingConfirm(true);
       }
     };
     el.addEventListener("timeupdate", onTimeUpdate);
@@ -647,6 +651,98 @@ export default function PlayView({
           data-role={audioRole}
           className="hidden"
         />
+      )}
+
+      {/* P1-A2: 弹唱结束 → 待确认卡片（仅联动模式 + audio.ended 触发） */}
+      {pendingConfirm && linkedSessionId && linkedRequestId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="play-view-confirm-title"
+          data-testid="play-view-confirm"
+          className={`absolute inset-0 z-50 flex items-center justify-center p-4 ${
+            dark ? "bg-black/60" : "bg-black/40"
+          }`}
+        >
+          <div
+            className={`w-full max-w-md rounded-xl p-5 shadow-2xl ${
+              dark ? "bg-zinc-900 border border-zinc-700" : "bg-background border border-border"
+            }`}
+          >
+            <h2
+              id="play-view-confirm-title"
+              className={`text-base font-semibold ${dark ? "text-zinc-100" : "text-foreground"}`}
+            >
+              演唱结束
+            </h2>
+            <p
+              className={`mt-1 text-sm ${dark ? "text-zinc-400" : "text-muted-foreground"}`}
+              data-testid="play-view-confirm-hint"
+            >
+              请确认本首是否完整演唱。事件不会自动上报，避免误标记。
+            </p>
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                data-testid="play-view-confirm-sung"
+                onClick={() => {
+                  // 1) 标已唱 2) 回 LiveView
+                  markLinkedSung();
+                  setPendingConfirm(false);
+                  onBack();
+                }}
+                className={`w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  dark
+                    ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                    : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                }`}
+              >
+                ✓ 已完整演唱
+              </button>
+              <button
+                type="button"
+                data-testid="play-view-confirm-later"
+                onClick={() => {
+                  // 不持久化事件；明确回 LiveView；用户可手动改
+                  setPendingConfirm(false);
+                  onBack();
+                }}
+                className={`w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  dark
+                    ? "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                    : "border border-border text-foreground hover:bg-muted"
+                }`}
+              >
+                ⏸ 稍后处理（未持久化）
+              </button>
+              <button
+                type="button"
+                data-testid="play-view-confirm-again"
+                onClick={() => {
+                  // audio.currentTime = 0 + 重新 play + 清 confirm
+                  const el = audioRef.current;
+                  if (el) {
+                    el.currentTime = 0;
+                    void el.play().catch(() => { /* autoplay 限制：用户再点 play */ });
+                  }
+                  setPendingConfirm(false);
+                }}
+                className={`w-full rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  dark
+                    ? "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                    : "border border-border text-foreground hover:bg-muted"
+                }`}
+              >
+                ↻ 再唱一遍
+              </button>
+            </div>
+            <p
+              className={`mt-3 text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}
+            >
+              如果网络异常导致「已唱」未持久化，稍后到 LiveView 队列可手动改。
+            </p>
+          </div>
+        </div>
       )}
 
       {/* 底部播放器 */}

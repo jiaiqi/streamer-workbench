@@ -106,6 +106,30 @@ class InsightsResult:
     note: str = ""
 
 
+# P1-A3: 下一步建议 DTO
+# 评估 5.6 / 8.18 第 5.3 节：行动型统计洞察
+#   - 学歌复习：learned_at > 30 天前且本周没练习
+#   - 难唱推荐：difficulty=hard + 最近 5 次表演不会/延期
+#   - 表演间隔：上次表演 > 7 天前的 top 点歌曲目
+
+@dataclass(frozen=True)
+class NextStepItem:
+    """单个下一步建议。"""
+    kind: str  # 'review' | 'difficult' | 'restage' | 'practice'
+    song_id: str
+    title: str
+    artist: str = ""
+    reason: str = ""  # 人读理由（如「31 天前学会，本周未练」）
+    days_since: int = 0  # 距今天数
+    metric: int = 0  # 附加计数（不会次数 / 点歌次数 / 练习次数）
+
+
+@dataclass(frozen=True)
+class NextStepsResult:
+    items: List[NextStepItem] = field(default_factory=list)
+    note: str = ""
+
+
 @dataclass(frozen=True)
 class DistributionBucket:
     label: str
@@ -386,6 +410,185 @@ class StatsApplicationService:
             recently_sung=recent_sung,
             note=note,
         )
+
+    # ---- P1-A3: 行动型统计洞察（下一步建议） ----
+    def next_steps(
+        self,
+        *,
+        review_window_days: int = 30,    # 距今超过 N 天的 learned_at → 复习
+        restage_window_days: int = 7,    # 距今超过 N 天的 last_sung → 表演间隔
+        difficult_recent_n: int = 5,     # 最近 N 次表演里不会/延期次数
+        practice_window_days: int = 7,   # 本周（距今 < N 天）内练习过算"近期已练"
+        max_per_kind: int = 5,
+    ) -> NextStepsResult:
+        """返回 3 类建议：
+
+        - **review** (学歌复习)：`learned_at` 距今 > review_window_days 且本周
+          （距今 < practice_window_days）没有 practice_logged 事件的 active 歌
+        - **difficult** (难唱推荐)：`difficulty=hard` 且最近 difficult_recent_n 次
+          表演结果里"不会"(`performance_unknown` / `performance_skipped`)次数 ≥ 2
+        - **restage** (表演间隔)：top 点歌（queue_added 累加 ≥ 3 次）但上次表演
+          `performance_sung` 距今 > restage_window_days
+
+        数据不足时返回空 items + note 引导用户录入数据。
+        """
+        from datetime import datetime, timezone
+
+        songs_by_id, total, active, draft = self._songs_snapshot()
+        if total == 0:
+            return NextStepsResult(
+                note="曲库为空；先导入示例数据或添加几首歌")
+        # today (UTC) — 用 ISO date 比较
+        today = datetime.now(timezone.utc).date()
+
+        def _days_since(iso: str) -> int:
+            if not iso:
+                return -1
+            try:
+                d = datetime.fromisoformat(iso.replace("Z", "+00:00")).date()
+            except Exception:
+                return -1
+            return (today - d).days
+
+        # 聚合事件
+        last_practice: Dict[str, str] = {}
+        last_sung: Dict[str, str] = {}
+        sung_count: Counter = Counter()
+        unknown_recent: Counter = Counter()  # song_id → 最近 N 次里不会次数
+        # 维护每个 song_id 的"最近 N 次表演结果"（按时间倒序遍历）
+        recent_results_per_song: Dict[str, List[str]] = {}
+
+        # 单遍 events.jsonl 收集
+        for ev in self._all_events():
+            t = ev.get("type", "")
+            sid = ev.get("song_id", "")
+            if not sid:
+                continue
+            ts = ev.get("occurred_at") or ""
+            if t == "practice_logged":
+                if ts and (sid not in last_practice or ts > last_practice[sid]):
+                    last_practice[sid] = ts
+            elif t == "performance_sung":
+                if ts and (sid not in last_sung or ts > last_sung[sid]):
+                    last_sung[sid] = ts
+                sung_count[sid] += 1
+            elif t in ("performance_unknown", "performance_skipped",
+                       "performance_postponed", "performance_cancelled"):
+                # 累加"不会"信号；difficult 计算时取最近 N 次
+                results = recent_results_per_song.setdefault(sid, [])
+                results.append(t)
+
+        # 限制每个 song_id 的 recent_results 长度（不切片，但 total events 可能很大；
+        # 折中：只对前 2000 个事件做累加 — 对单机工具已足够）
+        # 这里再 trim
+        for sid, results in recent_results_per_song.items():
+            if len(results) > difficult_recent_n:
+                recent_results_per_song[sid] = results[-difficult_recent_n:]
+
+        items: List[NextStepItem] = []
+
+        # 1) review：learned_at 距今 > 30 天 + 本周没练习
+        review_count = 0
+        for sid, song in songs_by_id.items():
+            if song.status != "active":
+                continue
+            learned = getattr(song, "learned_at", "") or ""
+            d = _days_since(learned)
+            if d < review_window_days:
+                continue
+            # 本周（距今 < practice_window_days）有练习 → 跳过
+            last_p = last_practice.get(sid, "")
+            if last_p and _days_since(last_p) < practice_window_days:
+                continue
+            artist = "、".join(song.artists) if song.artists else ""
+            items.append(NextStepItem(
+                kind="review",
+                song_id=sid, title=song.title or "", artist=artist,
+                reason=f"{d} 天前学会，本周未练" if d > 0 else "已学但未练",
+                days_since=d, metric=d,
+            ))
+            review_count += 1
+            if review_count >= max_per_kind:
+                break
+        # 按 days_since 倒序
+        review_items = sorted(
+            [i for i in items if i.kind == "review"],
+            key=lambda i: i.days_since, reverse=True)[:max_per_kind]
+        items = [i for i in items if i.kind != "review"] + review_items
+
+        # 2) difficult：difficulty=hard 且最近 N 次里"不会"≥ 2
+        difficult_count = 0
+        for sid, song in songs_by_id.items():
+            if song.status != "active":
+                continue
+            if (song.difficulty or "").lower() != "hard":
+                continue
+            results = recent_results_per_song.get(sid, [])
+            if len(results) < 2:
+                continue
+            unknown_n = sum(1 for r in results
+                            if r in ("performance_unknown", "performance_skipped"))
+            if unknown_n < 2:
+                continue
+            last_s = last_sung.get(sid, "")
+            d = _days_since(last_s) if last_s else 0
+            artist = "、".join(song.artists) if song.artists else ""
+            items.append(NextStepItem(
+                kind="difficult",
+                song_id=sid, title=song.title or "", artist=artist,
+                reason=f"最近 {len(results)} 次表演 {unknown_n} 次不会/延期",
+                days_since=d, metric=unknown_n,
+            ))
+            difficult_count += 1
+            if difficult_count >= max_per_kind:
+                break
+        # 按 metric 倒序
+        diff_items = sorted(
+            [i for i in items if i.kind == "difficult"],
+            key=lambda i: i.metric, reverse=True)[:max_per_kind]
+        items = [i for i in items if i.kind != "difficult"] + diff_items
+
+        # 3) restage：top 点歌 ≥ 3 次 + last_sung > 7 天
+        # 先算点歌计数
+        req_counter: Counter = Counter()
+        for ev in self._all_events():
+            if ev.get("type") != "queue_added":
+                continue
+            sid = ev.get("song_id", "")
+            if sid:
+                req_counter[sid] += 1
+        restage_count = 0
+        for sid, song in songs_by_id.items():
+            if song.status != "active":
+                continue
+            if req_counter.get(sid, 0) < 3:
+                continue
+            last_s = last_sung.get(sid, "")
+            if last_s and _days_since(last_s) <= restage_window_days:
+                continue
+            d = _days_since(last_s) if last_s else -1
+            artist = "、".join(song.artists) if song.artists else ""
+            items.append(NextStepItem(
+                kind="restage",
+                song_id=sid, title=song.title or "", artist=artist,
+                reason=(f"点歌 {req_counter[sid]} 次但"
+                        f"{d if d >= 0 else '从未'}前唱过" if d >= 0
+                        else f"点歌 {req_counter[sid]} 次但从未唱过"),
+                days_since=d, metric=req_counter[sid],
+            ))
+            restage_count += 1
+            if restage_count >= max_per_kind:
+                break
+        restage_items = sorted(
+            [i for i in items if i.kind == "restage"],
+            key=lambda i: i.metric, reverse=True)[:max_per_kind]
+        items = [i for i in items if i.kind != "restage"] + restage_items
+
+        note = ""
+        if not items:
+            note = ("没有可行动的下一步建议；继续学歌、点歌、演唱让数据沉淀"
+                    "（当前 %d 首 active，%d 首 draft）" % (active, draft))
+        return NextStepsResult(items=items, note=note)
 
     # ---- distribution ----
     def distribution(self, *, metric: str = "difficulty") -> DistributionResult:

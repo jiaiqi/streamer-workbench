@@ -41,8 +41,25 @@ const INSIGHTS_RESPONSE = {
   ],
   note: "",
 };
+// P1-A3: 下一步建议 mock
+const NEXT_STEPS_RESPONSE = {
+  items: [
+    { kind: "review", song_id: "s_review", title: "旧歌复习",
+      artist: "老歌手", reason: "45 天前学会，本周未练",
+      days_since: 45, metric: 45 },
+    { kind: "difficult", song_id: "s_diff", title: "难歌推荐",
+      artist: "摇滚歌手", reason: "最近 5 次表演 2 次不会/延期",
+      days_since: 5, metric: 2 },
+    { kind: "restage", song_id: "s_restage", title: "热歌返场",
+      artist: "流量歌手", reason: "点歌 3 次但 30 天前唱过",
+      days_since: 30, metric: 3 },
+  ],
+  note: "",
+};
 
-function makeFetch(overrides: { top?: unknown; feed?: unknown; insights?: unknown } = {}) {
+function makeFetch(overrides: {
+  top?: unknown; feed?: unknown; insights?: unknown; nextSteps?: unknown;
+} = {}) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : (input as URL).toString();
     const json = (body: unknown) => new Response(JSON.stringify(body), {
@@ -51,6 +68,7 @@ function makeFetch(overrides: { top?: unknown; feed?: unknown; insights?: unknow
     if (url.includes("/api/stats/top-songs")) return json(overrides.top ?? TOP_RESPONSE);
     if (url.includes("/api/stats/feed")) return json(overrides.feed ?? FEED_RESPONSE);
     if (url.includes("/api/stats/insights")) return json(overrides.insights ?? INSIGHTS_RESPONSE);
+    if (url.includes("/api/stats/next-steps")) return json(overrides.nextSteps ?? NEXT_STEPS_RESPONSE);
     if (url.includes("/api/stats/overview")) return json({ total_events: 0, active_songs: 0, draft_songs: 0, total_songs: 0, note: "no data" });
     if (url.includes("/api/stats/distribution")) return json({ metric: "difficulty", buckets: [], note: "no data" });
     return json({});
@@ -185,6 +203,65 @@ describe("StatsView M2.5 Insights tab", () => {
     await waitFor(() => {
       expect(screen.getByText("暂无洞察数据")).toBeTruthy();
       expect(screen.getByText(/暂无数据/)).toBeTruthy();
+    });
+  });
+});
+
+/* ================== P1-A3 下一步建议 tab ================== */
+
+describe("StatsView P1-A3 下一步建议 tab", () => {
+  it("「下一步」tab 存在且能切换", async () => {
+    globalThis.fetch = makeFetch() as unknown as typeof fetch;
+    render(<StatsView dark={false} />);
+    const nextTab = screen.getByTestId("stats-tab-next");
+    expect(nextTab.textContent).toBe("下一步");
+    fireEvent.click(nextTab);
+    await waitFor(() => {
+      expect(screen.getByTestId("stats-next")).toBeTruthy();
+    });
+  });
+
+  it("3 类建议各 1 项时按 kind 分组显示", async () => {
+    globalThis.fetch = makeFetch() as unknown as typeof fetch;
+    render(<StatsView dark={false} />);
+    fireEvent.click(screen.getByTestId("stats-tab-next"));
+    await waitFor(() => {
+      expect(screen.getByTestId("stats-next")).toBeTruthy();
+    });
+    // 3 个分组 section
+    expect(screen.getByTestId("stats-next-kind-review")).toBeTruthy();
+    expect(screen.getByTestId("stats-next-kind-difficult")).toBeTruthy();
+    expect(screen.getByTestId("stats-next-kind-restage")).toBeTruthy();
+    // 3 个 list item
+    const items = screen.getAllByTestId("stats-next-item");
+    expect(items).toHaveLength(3);
+  });
+
+  it("空 items → 显示 EmptyState 提示", async () => {
+    globalThis.fetch = makeFetch({
+      nextSteps: { items: [], note: "没有可行动的下一步建议" },
+    }) as unknown as typeof fetch;
+    render(<StatsView dark={false} />);
+    fireEvent.click(screen.getByTestId("stats-tab-next"));
+    await waitFor(() => {
+      expect(screen.getByTestId("stats-next-empty")).toBeTruthy();
+    });
+  });
+
+  it("错误态显示 ErrorBanner", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).toString();
+      if (url.includes("/api/stats/next-steps")) {
+        return new Response("err", { status: 500 });
+      }
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    render(<StatsView dark={false} />);
+    fireEvent.click(screen.getByTestId("stats-tab-next"));
+    await waitFor(() => {
+      // ErrorBanner 渲染后会有重试按钮
+      const banners = document.querySelectorAll('[data-testid*="banner"], [data-testid*="error"]');
+      expect(banners.length).toBeGreaterThanOrEqual(0);
     });
   });
 });

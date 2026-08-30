@@ -14,6 +14,8 @@ from server.api.secondary_models import (
     RequestedSongItemResponse,
     RecentlySungItemResponse,
     InsightsResponse,
+    NextStepItemResponse,
+    NextStepsResponse,
 )
 from server.dependencies import get_app_context
 
@@ -112,4 +114,42 @@ def api_insights(req: Request, request_limit: int = 10, sung_limit: int = 10):
             last_sung=x.last_sung, times_sung=x.times_sung,
         ) for x in i.recently_sung],
         note=i.note,
+    )
+
+
+# ---- P1-A3: 下一步建议（行动型统计洞察） ----
+@router.get("/api/stats/next-steps", response_model=NextStepsResponse)
+def api_next_steps(
+    req: Request,
+    review_window_days: int = 30,
+    restage_window_days: int = 7,
+    difficult_recent_n: int = 5,
+    practice_window_days: int = 7,
+    max_per_kind: int = 5,
+):
+    """P1-A3: 行动型统计洞察 — 3 类建议：
+    - review: learned_at 距今 > review_window_days 且本周未练
+    - difficult: difficulty=hard 且最近 N 次表演里不会/延期 ≥ 2 次
+    - restage: top 点歌 (≥ 3 次) 但上次演唱 > restage_window_days
+    """
+    review_window_days = max(1, min(365, int(review_window_days)))
+    restage_window_days = max(1, min(180, int(restage_window_days)))
+    difficult_recent_n = max(1, min(50, int(difficult_recent_n)))
+    practice_window_days = max(1, min(60, int(practice_window_days)))
+    max_per_kind = max(1, min(20, int(max_per_kind)))
+    ctx = get_app_context(req)
+    svc = ctx.stats_service
+    n = svc.next_steps(
+        review_window_days=review_window_days,
+        restage_window_days=restage_window_days,
+        difficult_recent_n=difficult_recent_n,
+        practice_window_days=practice_window_days,
+        max_per_kind=max_per_kind,
+    )
+    return NextStepsResponse(
+        items=[NextStepItemResponse(
+            kind=i.kind, song_id=i.song_id, title=i.title, artist=i.artist,
+            reason=i.reason, days_since=i.days_since, metric=i.metric,
+        ) for i in n.items],
+        note=n.note,
     )

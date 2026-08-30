@@ -11,14 +11,16 @@
 - 禁止：在线补全数据变成"必填"、静默上传本地数据、离线时弹"网络不可用"遮罩
 - 详细规则见 `AGENTS.md`「产品核心约束（不可妥协）」章节
 
-> **进度快照（2026-08-30）**：R0–R8 + R9 + M0–M3 + L1–L2 全部收口。**新增 8/18 评估 P0 收口 4 项**：
+> **进度快照（2026-08-30）**：R0–R8 + R9 + M0–M3 + L1–L2 全部收口。**新增 8/18 评估 P0 收口 4 项 + P1 主线纵切 2 项**：
 > 1. **P0-1** WebDAV 自动同步主密码 → 系统 Keychain（macOS Keychain / Windows Credential Manager / Linux Secret Service）；评估 6.5「自动同步凭证和远端备份安全」。1 新依赖 `keyring==25.7.0`；14 项单测 + 3 项集成测；不可用时自动同步启动被拒绝 + API 返 503。
 > 2. **P0-2** 本地 outbox 事务（评估 6.2）— `core/outbox.py` 基于 JSONL 的轻量 outbox（fsync 写穿 + drain 原子化 + 崩溃恢复 + 线程安全 + quota）；14 项单测。
 > 3. **P0-3** Manifest 视为派生索引（评估 6.3）— `FileLiveRepository.recover()` 启动时扫实体目录对齐 manifest；8 项新测。
 > 4. **P0-4** Electron packaged 模式 smoke test（评估 4.2）— spawn 真 uvicorn 后端 + 7 项端到端（health/list/create/patch/themes/render PNG/clean shutdown）；pytest marker `smoke` 默认不跑。
+> 5. **P1-A2** PlayView 弹唱结束 → 待确认卡片（评估 5.3）— 修复 audio.ended 静默 markSung 反模式：联动模式下弹「演唱结束」卡片让用户决策「已完整演唱 / 稍后处理（不持久化）/ 再唱一遍」3 动作；非联动模式保持原行为；5 项 vitest 端到端覆盖。
+> 6. **P1-A3** StatsView 「下一步建议」tab（评估 5.6）— 后端 `StatsApplicationService.next_steps()` 算 3 类建议：学歌复习（learned_at > 30 天 + 本周未练）/ 难唱推荐（difficulty=hard + 最近 5 次不会 ≥ 2）/ 表演间隔（点歌 ≥ 3 + 上次演唱 > 7 天）；`GET /api/stats/next-steps` 端点 + `NextStepsResponse` 模型；前端 6 → 7 tab；12 项 Python 测 + 4 项 vitest 测。
 > 同时清理 3 个旧 worktree（`feat-m4-spike` / `feat-auto-20260816-65073c85` / `feat-auto-20260731-46798052`） + 修 vitest 误扫 1172 项失败（worktree 里的 .tsx 被一起匹配）。`vitest.config.ts` 加 `**/.worktrees/**` 防御。
 >
-> **进度快照（2026-08-16）**：R0–R8 + R4 Runtime v1 + R4 Runtime v2 全部收口（V2.1 + V2.2 + V2.3 + V2.4 + V2.5 + **V3 草稿/手动分页 UI** — **R4 退出条件 11/11 = 100%**） + R9 吉他手特化首批 + M9.6b 5 秒撤销 toast + M0 蓝图 v0.1 首批 + M1 本地最小可用首批 + M2.1 加密备份 AES-256 真加密 + M2.2 WebDAV 同步 + M2.3 自动快照 + M2.4 WebDAV 自动同步 + M2.5 综合洞察 + M2.6 错误全局 toast 化 + M2.7 在线元数据层骨架 + M2.8 NeteaseProvider + M2.9 LibraryView 在线补全 + M2.10 QQProvider 多源回退 + M2.11 网易云/QQ 公开歌单导入 + M2.12 榜单浏览 + M2.13 macOS 桌面平台特性首批 + M2.14 R3 回归 hotfix + M2.16 海报分享 + M2.17 点歌条件 + R8.2.x 弹唱录屏首批 + M3 海报 UI/UX 全部收口 + L1 体验打磨全 7 子项 + L2.1/L2.2/L2.3 工具箱完整性。**R4 退出条件全部收口**：(1) 3 个独立数据通道端到端走通 + 13 pytest 守住；(2) 草稿/手动分页 UI 4 端点 + PagesPanel + engine.render_pages manual_pages 真实接线（9 pytest + 7 vitest）；(3) 专用海报区日活端点 + 实时徽章（9 pytest + 3 vitest）。**1408 pytest + 812 vitest 全过 + tsc 0 错 + 16/16 金标准 0 像素差异 + 1 新依赖 (keyring)**。待推：M3 SQLite FTS5（2000+ 首数据规模后再做）+ M4 Tauri 2 + PWA 评估 + R7 桌面正式发布门 + R5 工作台系统化收尾。
+> **进度快照（2026-08-16）**：R0–R8 + R4 Runtime v1 + R4 Runtime v2 全部收口（V2.1 + V2.2 + V2.3 + V2.4 + V2.5 + **V3 草稿/手动分页 UI** — **R4 退出条件 11/11 = 100%**） + R9 吉他手特化首批 + M9.6b 5 秒撤销 toast + M0 蓝图 v0.1 首批 + M1 本地最小可用首批 + M2.1 加密备份 AES-256 真加密 + M2.2 WebDAV 同步 + M2.3 自动快照 + M2.4 WebDAV 自动同步 + M2.5 综合洞察 + M2.6 错误全局 toast 化 + M2.7 在线元数据层骨架 + M2.8 NeteaseProvider + M2.9 LibraryView 在线补全 + M2.10 QQProvider 多源回退 + M2.11 网易云/QQ 公开歌单导入 + M2.12 榜单浏览 + M2.13 macOS 桌面平台特性首批 + M2.14 R3 回归 hotfix + M2.16 海报分享 + M2.17 点歌条件 + R8.2.x 弹唱录屏首批 + M3 海报 UI/UX 全部收口 + L1 体验打磨全 7 子项 + L2.1/L2.2/L2.3 工具箱完整性。**R4 退出条件全部收口**：(1) 3 个独立数据通道端到端走通 + 13 pytest 守住；(2) 草稿/手动分页 UI 4 端点 + PagesPanel + engine.render_pages manual_pages 真实接线（9 pytest + 7 vitest）；(3) 专用海报区日活端点 + 实时徽章（9 pytest + 3 vitest）。**1429 pytest + 821 vitest 全过 + tsc 0 错 + 16/16 金标准 0 像素差异 + 1 新依赖 (keyring)**。P0 收口 4 项 + P1 主线纵切 2 项（PlayView 待确认卡片 + StatsView 下一步建议）。待推：M3 SQLite FTS5（2000+ 首数据规模后再做）+ M4 Tauri 2 + PWA 评估 + R7 桌面正式发布门 + R5 工作台系统化收尾。
 >
 > **测试基线**：Python 784 passed / 1 skipped（57 个测试文件）+ vitest 607/607（54 个测试文件）+ node:test 16/16 + 5 套金标准 35/35（grid-wrap 16 + magazine-flow 5 + live-set 5 + learning-report 5 + fullscreen-flow 4）；TSC 干净。
 >

@@ -707,6 +707,22 @@ class InsightsResponse(BaseModel):
     note: str = ""
 
 
+# P1-A3: 下一步建议响应
+class NextStepItemResponse(BaseModel):
+    kind: str
+    song_id: str
+    title: str
+    artist: str = ""
+    reason: str = ""
+    days_since: int = 0
+    metric: int = 0
+
+
+class NextStepsResponse(BaseModel):
+    items: list[NextStepItemResponse] = Field(default_factory=list)
+    note: str = ""
+
+
 class DistributionBucketResponse(BaseModel):
     label: str
     count: int

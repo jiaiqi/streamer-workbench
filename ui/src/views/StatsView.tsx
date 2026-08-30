@@ -21,7 +21,7 @@ import EmptyState from "../components/EmptyState";
 import ExportLogPanel from "../posters/ExportLogPanel";
 import { asRecord, asString } from "../lib/narrow";
 
-type Tab = "overview" | "feed" | "top" | "insights" | "difficulty" | "key";
+type Tab = "overview" | "feed" | "top" | "insights" | "difficulty" | "key" | "next";
 type TopMetric = "request" | "perform" | "practice";
 
 interface StatsViewProps {
@@ -127,6 +127,7 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
             ["insights", "洞察"],
             ["difficulty", "难度分布"],
             ["key", "Key 分布"],
+            ["next", "下一步"],
           ] as [Tab, string][]).map(([k, label]) => (
             <button
               key={k}
@@ -166,6 +167,7 @@ export default function StatsView({ dark, onCreatePosterFromTop, onCreatePresetF
         {tab === "insights" && <InsightsPanel dark={dark} />}
         {tab === "difficulty" && <DistributionPanel dark={dark} metric="difficulty" />}
         {tab === "key" && <DistributionPanel dark={dark} metric="key" />}
+        {tab === "next" && <NextStepsPanel dark={dark} />}
       </div>
     </main>
   );
@@ -772,4 +774,123 @@ function formatAgo(iso: string): string {
   if (day < 30) return `${day}d 前`;
   const mon = Math.floor(day / 30);
   return `${mon}mo 前`;
+}
+
+// P1-A3: 下一步建议面板（行动型统计洞察）
+// 3 类：review (学歌复习) / difficult (难唱推荐) / restage (表演间隔)
+interface NextStepItem {
+  kind: "review" | "difficult" | "restage" | string;
+  song_id: string;
+  title: string;
+  artist: string;
+  reason: string;
+  days_since: number;
+  metric: number;
+}
+interface NextStepsResponse {
+  items: NextStepItem[];
+  note: string;
+}
+
+const NEXT_KIND_META: Record<string, { label: string; icon: string; tone: string }> = {
+  review:   { label: "学歌复习", icon: "📚", tone: "amber" },
+  difficult: { label: "难唱推荐", icon: "🔥", tone: "rose" },
+  restage:  { label: "表演间隔", icon: "🎤", tone: "emerald" },
+};
+
+function NextStepsPanel({ dark }: { dark: boolean }) {
+  const { runWithToast } = useApiError();
+  const [data, setData] = useState<NextStepsResponse | null>(null);
+  const [error, setError] = useState<RequestFailure | null>(null);
+
+  const retry = useCallback(() => {
+    setError(null);
+    void runWithToast(
+      () => apiRequest<NextStepsResponse>("/api/stats/next-steps"),
+      "下一步建议加载失败",
+    )
+      .then(d => { if (d) setData(d); })
+      .catch(failure => setError(failure as RequestFailure));
+  }, [runWithToast]);
+
+  useEffect(() => { retry(); }, [retry]);
+
+  if (error) return <ErrorBanner title="下一步建议加载失败" message={error.message} dark={dark} onRetry={retry} />;
+  if (!data) return (
+    <div className={`h-40 rounded-2xl flex items-center justify-center ${dark ? "bg-zinc-800/60" : "bg-muted/70"}`}>
+      <Spinner size="lg" tone="primary" label="加载建议" />
+    </div>
+  );
+  if (!data.items || data.items.length === 0) return <EmptyState
+    icon={Icon.target}
+    title="暂无下一步建议"
+    description={data.note || "继续学歌、点歌、演唱让数据沉淀"}
+    secondaryLabel="重试"
+    onSecondary={retry}
+    dark={dark}
+    data-testid="stats-next-empty"
+  />;
+
+  // 按 kind 分组
+  const grouped: Record<string, NextStepItem[]> = {};
+  for (const it of data.items) {
+    (grouped[it.kind] ||= []).push(it);
+  }
+
+  return (
+    <div className="space-y-5" data-testid="stats-next">
+      {Object.entries(grouped).map(([kind, items]) => {
+        const meta = NEXT_KIND_META[kind] || { label: kind, icon: "•", tone: "zinc" };
+        return (
+          <section key={kind} data-testid={`stats-next-kind-${kind}`}>
+            <h3 className={`text-sm font-semibold mb-2 flex items-center gap-1.5 ${dark ? "text-zinc-200" : "text-foreground"}`}>
+              <span aria-hidden="true">{meta.icon}</span>
+              {meta.label}
+              <span className={`text-xs font-normal ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                ({items.length})
+              </span>
+            </h3>
+            <ul className="space-y-1.5">
+              {items.map(item => (
+                <li
+                  key={`${kind}-${item.song_id}`}
+                  data-testid="stats-next-item"
+                  data-song-id={item.song_id}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+                    dark ? "bg-zinc-800/40 hover:bg-zinc-800/70" : "bg-muted/40 hover:bg-muted/70"
+                  } transition-colors`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm truncate ${dark ? "text-zinc-100" : "text-foreground"}`}>
+                      {item.title || item.song_id}
+                      {item.artist && (
+                        <span className={`ml-1.5 text-xs ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                          · {item.artist}
+                        </span>
+                      )}
+                    </p>
+                    <p className={`text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+                      {item.reason}
+                    </p>
+                  </div>
+                  {item.days_since > 0 && (
+                    <span className={`shrink-0 text-[11px] tabular-nums ${
+                      dark ? "text-zinc-500" : "text-muted-foreground"
+                    }`}>
+                      {item.days_since}天前
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+      {data.note && (
+        <p className={`text-[11px] ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
+          {data.note}
+        </p>
+      )}
+    </div>
+  );
 }
