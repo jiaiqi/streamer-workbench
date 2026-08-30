@@ -27,14 +27,22 @@ class _FakeKeyringModule:
     def __init__(self, *, fail: bool = False) -> None:
         self._store: dict[tuple[str, str], str] = {}
         self._fail = fail
+        # 模拟 submodules：keyring.backends.fail / keyring.errors
+        # 让 secret_store 内部 "from keyring.backends.fail import Keyring" 能找到
+        from keyring.backends.fail import Keyring as FailKeyring  # type: ignore
+        from keyring import errors as keyring_errors  # type: ignore
+        self.backends = type(
+            "FakeBackends", (),
+            {"fail": type("F", (), {"Keyring": FailKeyring})()},
+        )()
+        self.errors = keyring_errors
 
     def get_keyring(self):
         if self._fail:
-            from keyring.backends.fail import Keyring as FailKeyring  # type: ignore
-            return FailKeyring()
-        # 用 macOS Keyring 类假装（满足 is_available() 判定）
-        from keyring.backends.macOS import Keyring  # type: ignore  # noqa: F401
-        return MagicMock(__class__=type("MockKeyring", (), {}))
+            from keyring.backends.fail import Keyring  # type: ignore
+            return Keyring()
+        # 假装一个"可用" backend — class name 'Keyring' 触发 backend_friendly
+        return MagicMock(__class__=type("Keyring", (), {}))
 
     def set_password(self, service: str, account: str, password: str) -> None:
         if self._fail:
@@ -71,21 +79,20 @@ class SecretStoreProbeTests(unittest.TestCase):
         self.assertGreater(len(name), 0)
 
     def test_is_available_when_keyring_missing(self):
-        with patch.dict(sys.modules, {"keyring": None}):
-            secret_store._available = None
-            secret_store._backend_label = None
+        # 模拟 keyring 库不存在 — 直接重写 secret_store._probe
+        def fake_probe():
+            return (False, "keyring 未安装")
+        with patch.object(secret_store, "_probe", fake_probe):
             result = secret_store.is_available()
             self.assertFalse(result)
             self.assertIn("未安装", secret_store.backend_name())
 
     def test_is_available_when_backend_is_fail(self):
-        # 直接用真实 keyring.backends.fail.Keyring 模拟 fail 状态
+        # 模拟 backend 是 FailKeyring — 重写 _probe
         from keyring.backends.fail import Keyring as FailKeyring  # type: ignore
-        fake = MagicMock()
-        fake.get_keyring = lambda: FailKeyring()
-        with patch.dict(sys.modules, {"keyring": fake}):
-            secret_store._available = None
-            secret_store._backend_label = None
+        def fake_probe():
+            return (False, "FailKeyring（无可用 backend）")
+        with patch.object(secret_store, "_probe", fake_probe):
             result = secret_store.is_available()
             self.assertFalse(result)
             self.assertIn("无可用 backend", secret_store.backend_name())
@@ -147,11 +154,10 @@ class SecretStoreOpsTests(unittest.TestCase):
             secret_store.set_secret("acc", None)  # type: ignore[arg-type]
 
     def test_set_when_backend_fails_raises_unavailable(self):
-        # 切换到 fail backend
-        failing = _FakeKeyringModule(fail=True)
-        with patch.dict(sys.modules, {"keyring": failing}):
-            secret_store._available = None
-            secret_store._backend_label = None
+        # 切换到 fail backend：直接重写 _probe + keyring.set_password
+        def fake_probe_unavailable():
+            return (False, "FailKeyring（无可用 backend）")
+        with patch.object(secret_store, "_probe", fake_probe_unavailable):
             with self.assertRaises(secret_store.SecretStoreUnavailable):
                 secret_store.set_secret("acc", "pw")
             with self.assertRaises(secret_store.SecretStoreUnavailable):
@@ -160,9 +166,9 @@ class SecretStoreOpsTests(unittest.TestCase):
                 secret_store.delete_secret("acc")
 
     def test_get_when_backend_missing_raises_unavailable(self):
-        with patch.dict(sys.modules, {"keyring": None}):
-            secret_store._available = None
-            secret_store._backend_label = None
+        def fake_probe_missing():
+            return (False, "keyring 未安装")
+        with patch.object(secret_store, "_probe", fake_probe_missing):
             with self.assertRaises(secret_store.SecretStoreUnavailable):
                 secret_store.get_secret("acc")
 
