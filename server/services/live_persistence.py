@@ -89,16 +89,29 @@ class LiveSessionPersistenceService:
         policy_factory,       # callable(rule_version) -> RequestPolicyService
         entitlement_service: Optional[EntitlementService] = None,
         event_store: Any | None = None,
+        outbox: Any | None = None,  # P0-2c: LocalOutbox；事件先入 outbox，state 落盘后 drain
     ):
         self._repo = live_repository
         self._policy_factory = policy_factory
         self._events = event_store  # FileEventStore via DI
+        self._outbox = outbox
         # 内存中: live_id -> LiveService
         self._live_services: dict[str, LiveService] = {}
         # entitlements 是 shared (跨 sessions)
         self._entitlements = entitlement_service or EntitlementService()
         # 重建 ledger (consume / refund 幂等记录持久化在内存)
         self._ledger = self._entitlements._ledger
+
+    def _event_sink(self) -> Any:
+        """P0-2c：注入 LiveService 的事件通道。
+
+        有 outbox → 事件先进 outbox（fsync 持久），_save_state 落盘后 drain 到
+        events.jsonl；无 outbox（旧测试路径）→ 直写 event_store，行为不变。
+        """
+        if self._outbox is not None:
+            from server.services.live_outbox import OutboxEventSink
+            return OutboxEventSink(self._outbox)
+        return self._events
 
     # ── 启动恢复 ──
 
@@ -125,7 +138,7 @@ class LiveSessionPersistenceService:
             session=session,
             policy_service=policy,
             entitlement_service=self._entitlements,
-            event_store=self._events,
+            event_store=self._event_sink(),
         )
 
         # 恢复 requests / queue / performances / entitlements
@@ -177,7 +190,7 @@ class LiveSessionPersistenceService:
             session=session,
             policy_service=policy,
             entitlement_service=self._entitlements,
-            event_store=self._events,
+            event_store=self._event_sink(),
         )
         self._live_services[session.id] = live
         # 立即保存占位 state
@@ -282,6 +295,11 @@ class LiveSessionPersistenceService:
             live.session.id, state, expected_revision=expected_revision,
         )
         self._current_revision[live.session.id] = snap.revision
+        # P0-2c：state 已是业务事实 → 把 outbox 里这次操作的事件 drain 到
+        # events.jsonl（按 event_id 幂等）。drain 失败时 outbox 保留，
+        # 下次启动 lifespan 兜底补发（core/outbox.drain 内部已记日志，不抛）。
+        if self._outbox is not None and self._events is not None:
+            self._outbox.drain(self._events.append)
 
     def close_repo(self) -> None:
         self._repo.close()

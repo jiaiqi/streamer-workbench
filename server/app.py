@@ -109,6 +109,7 @@ def _lifespan(config: AppConfig, paths):
                 policy_factory=lambda rv: RequestPolicyService(
                     policy=RequestPolicy(rule_version=rv)),
                 event_store=event_store,
+                outbox=outbox,  # P0-2c: 事件先入 outbox，state 落盘后 drain
             )
             for sid in live_persistence_service.list_sessions():
                 try:
