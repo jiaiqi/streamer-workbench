@@ -8,6 +8,7 @@ import TrashView from "../components/TrashView";
 import PlaylistImportDialog from "../components/PlaylistImportDialog";
 import ChartsBrowseDialog from "../components/ChartsBrowseDialog";
 import SongActionBar from "../components/SongActionBar";
+import ReadinessBadge from "../components/ReadinessBadge";
 import { useToast } from "../components/Toast";
 import { apiRequest } from "../api/client";
 import { exportBySongIds, exportLibrary, importLibrary, listSnapshots, restoreSnapshot } from "../api/posters";
@@ -866,8 +867,8 @@ export default function LibraryView({
                         <p className={`mt-0.5 text-[12px] truncate ${dark ? "text-zinc-500" : "text-muted-foreground"}`}>
                           {s.artists.join("、") || "—"}
                         </p>
-                        {/* 元数据行：状态点 · 难度 · 选调 */}
-                        <div className="mt-2.5 flex items-center gap-2.5 text-[12px]">
+                        {/* 元数据行：状态点 · 难度 · 标签 · 就绪度 · 选调 */}
+                        <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[12px]">
                           <button
                             onClick={e => { e.stopPropagation(); toggleStatus(s); }}
                             disabled={actionSong === s.id}
@@ -884,6 +885,8 @@ export default function LibraryView({
                               {s.tags.join(" · ")}
                             </span>
                           )}
+                          {/* P1-A1.2: 就绪度 4 徽章 — 一瞥即知"今晚能不能弹唱" */}
+                          <ReadinessBadge song={s} size="xs" dark={dark} />
                           <span className={`ml-auto shrink-0 font-mono ${dark ? "text-zinc-300" : "text-foreground"}`}>
                             <KeyCapo song={s} />
                           </span>

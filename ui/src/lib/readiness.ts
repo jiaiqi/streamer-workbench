@@ -32,12 +32,10 @@ export const READINESS_FIELDS_LOOKUP: Record<ReadinessField, string> = {
 };
 
 /**
- * 9 字段最小窄类型 — 任何视图（TonightWorkbench / LibraryView / 学歌 / 弹唱）
- * 只要能提供这 9 字段就能计算就绪度。避免强制 import 整个 Song 模型。
+ * 5 字段最小窄类型 — `evaluateReadiness` / `isFullyReady` / `buildReadinessChips` 只需这 5 字段。
+ * 避免任何视图接入时被强制 import 完整 Song 模型。
  */
-export interface SongForReadiness {
-  id: string;
-  title: string;
+export interface ReadinessFields {
   /** song tabs field — chart / chordpro 文本 */
   tabs: string;
   /** 纯文本歌词（无时间戳） */
@@ -50,11 +48,20 @@ export interface SongForReadiness {
   key: string;
 }
 
+/**
+ * 7 字段聚合窄类型 — `aggregateReadiness` 需要 id + title 用于 missing 报告。
+ * 任何视图只要能提供这 7 字段即可生成 D 区"就绪 N/M"报告。
+ */
+export interface SongForReadiness extends ReadinessFields {
+  id: string;
+  title: string;
+}
+
 /** 缺失字段名列表（按 READINESS_FIELDS 顺序；空数组 = 4 项全齐） */
 export type ReadinessMissing = ReadinessField[];
 
 /** 纯函数：评估一首歌的就绪度，返回缺失字段列表。 */
-export function evaluateReadiness(song: SongForReadiness): ReadinessMissing {
+export function evaluateReadiness(song: ReadinessFields): ReadinessMissing {
   const missing: ReadinessMissing = [];
   if (!song.tabs || song.tabs.trim() === "") missing.push("tabs");
   if (
@@ -69,7 +76,7 @@ export function evaluateReadiness(song: SongForReadiness): ReadinessMissing {
 }
 
 /** 便捷：4 项是否全齐 */
-export function isFullyReady(song: SongForReadiness): boolean {
+export function isFullyReady(song: ReadinessFields): boolean {
   return evaluateReadiness(song).length === 0;
 }
 
@@ -82,7 +89,7 @@ export interface ReadinessChipSpec {
 }
 
 /** 把一首歌的就绪度摊平为 4 枚徽章的展示数组（顺序固定：tabs → lyrics → audio → key） */
-export function buildReadinessChips(song: SongForReadiness): ReadinessChipSpec[] {
+export function buildReadinessChips(song: ReadinessFields): ReadinessChipSpec[] {
   const missing = evaluateReadiness(song);
   const missingSet = new Set(missing);
   return READINESS_FIELDS.map((field) => ({
