@@ -33,6 +33,7 @@ import type { AppearanceSettings, Settings } from "./types";
 import WorkspacePosterBridge from "./posters/WorkspacePosterBridge";
 import SpecialPostersPanel from "./posters/SpecialPostersPanel";
 import TonightWorkbench from "./components/TonightWorkbench";
+import TonightView from "./views/TonightView";
 import Spinner from "./components/Spinner";
 import LiveShell from "./components/LiveShell";
 import type { LiveShellSummary } from "./views/LiveView";
@@ -50,8 +51,11 @@ import { useLocalBackend } from "./hooks/useLocalBackend";
 import StatusBar, { type StatusView } from "./components/StatusBar";
 import HelpCenter from "./components/HelpCenter";
 
+// P1-A1.1: 今晚动线升格为首屏 — navItems 第一项改为 tonight，原 workspace 改名"海报"
+// 并往下挪一位。快捷键顺序同步：1=今晚, 2=海报, 3=曲库, 4=学歌, 5=直播, 6=统计
 const navItems = [
-  { id: "workspace", label: "海报工作台", icon: Icon.layout },
+  { id: "tonight", label: "今晚", icon: Icon.tonight },
+  { id: "workspace", label: "海报", icon: Icon.layout },
   { id: "library", label: "歌曲库", icon: Icon.list },
   { id: "learning", label: "学歌管理", icon: Icon.book },
   { id: "live", label: "直播", icon: Icon.live },
@@ -120,7 +124,9 @@ function AppInner() {
   );
 
   /* ---- 跨视图状态：路由 + 对话框 ---- */
-  const [view, setView] = useState<string>("workspace");
+  // P1-A1.1: 默认 view 从 "workspace" 改为 "tonight" — 首屏从海报台切到今晚动线
+  // 真实身份漂移判断见 design/prototypes/2026-09-06-功能与UIUX优化分析.md §1
+  const [view, setView] = useState<string>("tonight");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [songStats, setSongStats] = useState<{ active: number; draft: number } | null>(null);
   const [libDialogOpen, setLibDialogOpen] = useState(false);
@@ -168,6 +174,8 @@ function AppInner() {
     if (view === "live") return "live";
     if (view === "stats") return "stats";
     if (view === "preview") return "preview";
+    // P1-A1.1: 今晚视图复用 workspace 状态位（都属于"非特定活动"）
+    if (view === "tonight") return "workspace";
     return "workspace";
   })();
   const statusOp = appearanceSaving || settingsSaving
@@ -373,12 +381,16 @@ function AppInner() {
     else setView("library");
   }, [player, playLink]);
 
+  // P1-A1.1: ⌘1-7 当前是切主题的快捷键（行 455 全局监听），与「切视图」会冲突。
+  //   命令面板的「shortcut」字段仅为展示信息、不绑定全局键盘；真正的切视图入口是命令面板 ⌘K。
+  //   标注已从 "1" / "2" 等改为"⌘K → 输入名字"提示文案，避免误导。
   const commands: Command[] = useMemo(() => [
-    { id: "view-workspace", title: "切换到海报工作台", group: "视图", shortcut: "1", keywords: ["poster", "海报"], action: () => setView("workspace") },
-    { id: "view-library", title: "切换到歌曲库", group: "视图", shortcut: "2", keywords: ["song", "歌曲"], action: () => setView("library") },
-    { id: "view-learning", title: "切换到学歌管理", group: "视图", shortcut: "3", keywords: ["learn", "学歌"], action: () => setView("learning") },
-    { id: "view-live", title: "切换到直播", group: "视图", shortcut: "4", keywords: ["live", "直播"], action: () => setView("live") },
-    { id: "view-stats", title: "切换到数据统计", group: "视图", shortcut: "5", keywords: ["stats", "统计"], action: () => setView("stats") },
+    { id: "view-tonight", title: "切换到今晚", group: "视图", keywords: ["tonight", "今晚", "home", "首屏"], action: () => setView("tonight") },
+    { id: "view-workspace", title: "切换到海报工作台", group: "视图", keywords: ["poster", "海报", "workspace"], action: () => setView("workspace") },
+    { id: "view-library", title: "切换到歌曲库", group: "视图", keywords: ["song", "歌曲", "library"], action: () => setView("library") },
+    { id: "view-learning", title: "切换到学歌管理", group: "视图", keywords: ["learn", "学歌", "learning"], action: () => setView("learning") },
+    { id: "view-live", title: "切换到直播", group: "视图", keywords: ["live", "直播"], action: () => setView("live") },
+    { id: "view-stats", title: "切换到数据统计", group: "视图", keywords: ["stats", "统计"], action: () => setView("stats") },
     { id: "view-settings", title: "打开设置", group: "视图", shortcut: "⌘,", keywords: ["setting", "设置"], action: () => setView("settings") },
     { id: "act-export", title: "导出当前海报", group: "操作", shortcut: "⌘E", keywords: ["export", "下载"], action: () => setExportDialogOpen(true), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
     { id: "act-refresh", title: "刷新预览", group: "操作", shortcut: "⌘R", keywords: ["refresh", "reload"], action: () => ws.refresh(), disabledReason: view !== "workspace" ? "切到工作台后可用" : undefined },
@@ -808,6 +820,24 @@ function AppInner() {
               </a>
             </div>
           </div>
+          )}
+
+          {/* ===== 今晚视图（P1-A1.1: 默认首屏） ===== */}
+          {view === "tonight" && (
+            <TonightView
+              dark={dark}
+              themes={ws.themes}
+              onSelectTheme={ws.selectTheme}
+              onSelectCanvas={ws.setCanvas}
+              onGoToWorkspace={() => setView("workspace")}
+              onPlaySong={handlePlaySong}
+              onOpenLiveView={() => setView("live")}
+              onCreatePosterFromTop={songIds => handleCreatePosterFromTop(songIds, "request")}
+              onSwitchToStats={() => setView("stats")}
+              onGenerateRecap={handleGenerateRecap}
+              onGenerateLearningReport={handleGenerateLearningReport}
+              onOpenQuickView={handleOpenQuickView}
+            />
           )}
 
           {/* ===== 歌曲库视图 ===== */}

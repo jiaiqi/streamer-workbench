@@ -69,10 +69,19 @@ describe("App workspace 视图", () => {
   });
 
   // ---- M1.7 渐进式海报：相邻页预加载 ----
+  // P1-A1.1: 默认视图改为 tonight，next-preload 只在 workspace 视图挂载。
+  // 测试需先点侧栏 "海报" 切到 workspace，再断言 next-preload。
   it("workspace 渲染时挂载 next-preload img（grid-wrap 默认 page=1 → 只有 next）", async () => {
     const App = (await import("./App")).default;
     await act(async () => {
       render(<App />);
+      await vi.runOnlyPendingTimersAsync();
+    });
+    // 切到 workspace：点侧栏「海报」按钮（aria-label="海报"）
+    // 侧栏 nav 唯一，且今晚视图里文案叫"海报"是 h2 不是按钮，所以按 role 过滤即可
+    const wsBtn = screen.getAllByRole("button", { name: "海报" })[0];
+    await act(async () => {
+      wsBtn.click();
       await vi.runOnlyPendingTimersAsync();
     });
     const next = screen.queryByTestId("poster-next-preload") as HTMLImageElement | null;
