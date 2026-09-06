@@ -280,5 +280,181 @@ class FilePosterRepositoryFaultInjectTests(unittest.TestCase):
             self.assertIsNone(repo.get("p1"))
 
 
+# ── P0-3b: Manifest 视为派生索引（posters） ──
+
+
+class FilePosterRepositoryManifestRebuildTests(unittest.TestCase):
+    """P0-3b：FilePosterRepository 启动时把 manifest 与磁盘实体对齐。
+
+    - 磁盘有 poster.json 但 manifest 没有 → 加入 manifest
+    - manifest 有但磁盘没有 → 从 manifest 移除
+    - 两边都有 → 保留
+    """
+
+    def test_pickup_orphaned_poster_on_disk(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            # 写一个孤儿 poster 目录（不经过 repo.save）
+            poster_dir = root / "posters" / "poster_orphan_123"
+            poster_dir.mkdir(parents=True)
+            doc = make_poster("poster_orphan_123", "孤儿")
+            (poster_dir / "poster.json").write_text(
+                json.dumps(doc.to_dict(), ensure_ascii=False), encoding="utf-8")
+            # 启动 repo
+            repo = FilePosterRepository(root / "posters", backup_policy(root))
+            report = repo._report
+            # 验证：manifest 现在含孤儿
+            list_result = repo.list()
+            self.assertEqual(len(list_result.value), 1)
+            self.assertEqual(list_result.value[0].id, "poster_orphan_123")
+            self.assertEqual(list_result.value[0].name, "孤儿")
+            detected = " ".join(report.detected)
+            self.assertIn("orphaned_poster_picked_up:poster_orphan_123", detected)
+
+    def test_remove_ghost_manifest_entry(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            # 写一个 manifest 含幽灵 ID（无磁盘实体）
+            (root / "posters").mkdir()
+            (root / "posters" / "manifest.json").write_text(
+                json.dumps({
+                    "poster_ghost_456": {
+                        "name": "幽灵", "layout_id": "grid-wrap",
+                        "theme_id": "海洋柔光", "canvas_id": "9:20",
+                        "created_at": "2026-07-30T10:00:00",
+                        "updated_at": "2026-07-30T10:00:00",
+                        "song_count": 0, "revision": "fake",
+                    },
+                }, ensure_ascii=False), encoding="utf-8")
+            repo = FilePosterRepository(root / "posters", backup_policy(root))
+            list_result = repo.list()
+            self.assertEqual(len(list_result.value), 0)
+            detected = " ".join(repo._report.detected)
+            self.assertIn("missing_poster_cleaned:poster_ghost_456", detected)
+
+    def test_keep_consistent_entries(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            # 写一个完整 poster 目录 + manifest
+            (root / "posters").mkdir()
+            poster_dir = root / "posters" / "poster_consistent_789"
+            poster_dir.mkdir(parents=True)
+            doc = make_poster("poster_consistent_789", "一致")
+            (poster_dir / "poster.json").write_text(
+                json.dumps(doc.to_dict(), ensure_ascii=False), encoding="utf-8")
+            (root / "posters" / "manifest.json").write_text(
+                json.dumps({
+                    "poster_consistent_789": {
+                        "name": "一致", "layout_id": "grid-wrap",
+                        "theme_id": "海洋柔光", "canvas_id": "9:20",
+                        "created_at": "2026-07-30T10:00:00",
+                        "updated_at": "2026-07-30T10:00:00",
+                        "song_count": 1, "revision": "orig_rev",
+                    },
+                }, ensure_ascii=False), encoding="utf-8")
+            repo = FilePosterRepository(root / "posters", backup_policy(root))
+            list_result = repo.list()
+            self.assertEqual(len(list_result.value), 1)
+            # 保留：原有 revision 不被覆盖
+            manifest = json.loads(
+                (root / "posters" / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                manifest["poster_consistent_789"]["revision"], "orig_rev")
+            # 没多余 detected
+            detected = " ".join(repo._report.detected)
+            self.assertNotIn("orphaned", detected)
+            self.assertNotIn("missing", detected)
+
+    def test_mixed_recovery(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "posters").mkdir()
+            # 磁盘: poster_A, poster_C；manifest: poster_A, poster_B
+            for pid in ("poster_A", "poster_C"):
+                d = root / "posters" / pid
+                d.mkdir()
+                doc = make_poster(pid, pid)
+                (d / "poster.json").write_text(
+                    json.dumps(doc.to_dict(), ensure_ascii=False), encoding="utf-8")
+            (root / "posters" / "manifest.json").write_text(
+                json.dumps({
+                    "poster_A": {"name": "A", "layout_id": "grid-wrap",
+                                 "theme_id": "海洋柔光", "canvas_id": "9:20",
+                                 "created_at": "", "updated_at": "",
+                                 "song_count": 0, "revision": ""},
+                    "poster_B": {"name": "B", "layout_id": "grid-wrap",
+                                 "theme_id": "海洋柔光", "canvas_id": "9:20",
+                                 "created_at": "", "updated_at": "",
+                                 "song_count": 0, "revision": ""},
+                }, ensure_ascii=False), encoding="utf-8")
+            repo = FilePosterRepository(root / "posters", backup_policy(root))
+            list_result = repo.list()
+            ids = {s.id for s in list_result.value}
+            self.assertIn("poster_A", ids)
+            self.assertIn("poster_C", ids)
+            self.assertNotIn("poster_B", ids)
+            detected = " ".join(repo._report.detected)
+            self.assertIn("orphaned_poster_picked_up:poster_C", detected)
+            self.assertIn("missing_poster_cleaned:poster_B", detected)
+
+    def test_ignores_hidden_dirs(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "posters").mkdir()
+            # .trash/old_poster/poster.json
+            (root / "posters" / ".trash").mkdir()
+            trash_dir = root / "posters" / ".trash" / "old_poster"
+            trash_dir.mkdir()
+            doc = make_poster("old_poster", "回收")
+            (trash_dir / "poster.json").write_text(
+                json.dumps(doc.to_dict(), ensure_ascii=False), encoding="utf-8")
+            # 正常 poster
+            d = root / "posters" / "poster_real"
+            d.mkdir()
+            real_doc = make_poster("poster_real", "正常")
+            (d / "poster.json").write_text(
+                json.dumps(real_doc.to_dict(), ensure_ascii=False), encoding="utf-8")
+            repo = FilePosterRepository(root / "posters", backup_policy(root))
+            ids = {s.id for s in repo.list().value}
+            self.assertIn("poster_real", ids)
+            self.assertNotIn("old_poster", ids)
+
+    def test_empty_noop(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            repo = FilePosterRepository(root / "posters", backup_policy(root))
+            self.assertEqual(len(repo.list().value), 0)
+            # 空时不应有 detected
+            self.assertNotIn("orphaned", " ".join(repo._report.detected))
+
+    def test_corrupt_orphan_not_claimed_as_picked_up(self):
+        """损坏的孤儿 poster.json 不收编进 manifest，报告只记 detected。"""
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            # 损坏孤儿 + 正常孤儿
+            bad_dir = root / "posters" / "poster_bad"
+            bad_dir.mkdir(parents=True)
+            (bad_dir / "poster.json").write_text("{not json", encoding="utf-8")
+            good_dir = root / "posters" / "poster_good"
+            good_dir.mkdir(parents=True)
+            doc = make_poster("poster_good", "正常")
+            (good_dir / "poster.json").write_text(
+                json.dumps(doc.to_dict(), ensure_ascii=False), encoding="utf-8")
+            repo = FilePosterRepository(root / "posters", backup_policy(root))
+            ids = {s.id for s in repo.list().value}
+            self.assertIn("poster_good", ids)
+            self.assertNotIn("poster_bad", ids)
+            detected = " ".join(repo._report.detected)
+            self.assertIn("orphaned_poster_picked_up:poster_good", detected)
+            self.assertIn("corrupt_poster_skipped:poster_bad", detected)
+            recovered = " ".join(repo._report.recovered)
+            # 损坏项不得出现在 recovered（没有被真实收编）
+            self.assertNotIn("poster_bad", recovered)
+            # manifest 落盘后仍不含损坏项
+            manifest = json.loads(
+                (root / "posters" / "manifest.json").read_text(encoding="utf-8"))
+            self.assertNotIn("poster_bad", manifest)
+
+
 if __name__ == "__main__":
     unittest.main()

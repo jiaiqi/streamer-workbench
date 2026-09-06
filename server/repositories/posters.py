@@ -277,13 +277,78 @@ class FilePosterRepository(PosterRepository):
                     quarantined.append(str(entry))
             # 确保 manifest 存在
             self._ensure_root()
+            # P0-3b：扫描实体目录，把 manifest 与磁盘实体对齐
+            rebuild_report = self._rebuild_manifest_from_disk()
+            detected.extend(rebuild_report.detected)
+            recovered.extend(rebuild_report.recovered)
+            quarantined.extend(rebuild_report.quarantined)
             self._report = RecoveryReport(
                 detected=tuple(detected),
                 recovered=tuple(recovered),
                 quarantined=tuple(quarantined),
+                unresolved=rebuild_report.unresolved,
             )
             self._needs_recovery = False
             return self._report
+
+    def _rebuild_manifest_from_disk(self) -> RecoveryReport:
+        """P0-3b：把 manifest 视为「磁盘实体的索引」，启动时扫描同步。
+
+        - 磁盘有 poster.json 但 manifest 没有 → 加入 manifest（orphaned_picked_up）
+        - manifest 有但磁盘没有 poster.json → 从 manifest 移除（missing_cleaned）
+        - 两边都有 → 保留
+
+        不改写任何 poster.json；只动 manifest.json。
+        """
+        with self._lock:
+            manifest = self._load_manifest()
+            indexed = set(manifest.keys())
+            on_disk: set[str] = set()
+            for child in self._root.iterdir():
+                if not child.is_dir():
+                    continue
+                pid = child.name
+                # 跳过 .trash / .recovery 等隐藏目录
+                if pid.startswith("."):
+                    continue
+                # 验证 poster_id 合法性
+                try:
+                    self._poster_dir(pid)  # 复用 is_valid_poster_id 校验
+                except ValueError:
+                    continue
+                if (child / "poster.json").exists():
+                    on_disk.add(pid)
+            added = on_disk - indexed
+            removed = indexed - on_disk
+            if not added and not removed:
+                return RecoveryReport()
+            actually_added: list[str] = []
+            skipped_corrupt: list[str] = []
+            for pid in sorted(added):
+                # 从 poster.json 重建 summary；孤儿条目无 revision，
+                # CAS 按 MISSING_REVISION 起步（get 同样回落该值，两端一致）
+                try:
+                    doc = self._read_poster_file(pid)
+                except (RepositoryCorrupt, RepositoryUnavailable, OSError):
+                    # 损坏的 poster.json：不强写入 manifest，只记录待人工处理
+                    skipped_corrupt.append(pid)
+                    continue
+                manifest[pid] = self._refresh_summary_in_manifest(pid, doc)[pid]
+                actually_added.append(pid)
+            for pid in sorted(removed):
+                manifest.pop(pid, None)
+            self._save_manifest(manifest)
+            return RecoveryReport(
+                detected=(
+                    *(f"orphaned_poster_picked_up:{pid}" for pid in actually_added),
+                    *(f"corrupt_poster_skipped:{pid}" for pid in skipped_corrupt),
+                    *(f"missing_poster_cleaned:{pid}" for pid in sorted(removed)),
+                ),
+                recovered=(
+                    *(f"added:{pid}" for pid in actually_added),
+                    *(f"removed:{pid}" for pid in sorted(removed)),
+                ),
+            )
 
     def close(self) -> None:
         with self._lock:
