@@ -11,6 +11,13 @@
 - 禁止：在线补全数据变成"必填"、静默上传本地数据、离线时弹"网络不可用"遮罩
 - 详细规则见 `AGENTS.md`「产品核心约束（不可妥协）」章节
 
+> **进度快照（2026-09-06）**：R0–R8 + R9 + M0–M3 + L1–L2 全部收口。**新增 8/18 评估 P0 续作 2 项（P0-2b / P0-3b）+ P1 主线纵切批次补录（阶段二 a1/a2/a3.1/a4 四项，此前未入档）**：
+> 1. **P0-2b** Outbox 接入应用生命周期（commit `577acef`）— `AppPaths.outbox_jsonl`（`data/outbox.jsonl`）；lifespan 启动 drain 把上次崩溃/失败遗留的 outbox 事件补写到 `events.jsonl`（`FileEventStore.append` 按 event_id 幂等）；drain 失败保留 outbox 下次启动重试；8 项集成测试。顺带清理：移除与 P0-4b `health.router` 并存的手工旧版 `/api/health` 死路由（消除 OpenAPI "Duplicate Operation ID" UserWarning，回归 2 项）。
+> 2. **P0-3b** Posters manifest 派生索引推广（commit `702be9e`）— `FilePosterRepository._rebuild_manifest_from_disk()`：磁盘孤儿 poster 收编进 manifest / manifest 幽灵条目清理 / 一致条目保留（revision / order_index 不覆盖）；损坏孤儿记 `corrupt_poster_skipped` 不虚报收编；7 项测试。
+> 3. **P1 主线纵切补录** — 阶段二工作项 1-4 此前 4 个提交（`29479b2` TonightWorkbench 主任务中心 5 区 / `f29638f` SongActionBar 5 动作 / `2534d4e` LiveShell 总闸 / `dfc7fe5` song_id 全链路 + legacy title 路由 Sunset 弃用头）已补入路线图 P1 段（详见路线图「P1 主线纵切 · 阶段二主任务流」）。
+>
+> **1433 pytest + 821 vitest 全过 + tsc 0 错 + 16/16 金标准 0 像素差异**（2026-09-06 实测复核）。
+>
 > **进度快照（2026-08-30）**：R0–R8 + R9 + M0–M3 + L1–L2 全部收口。**新增 8/18 评估 P0 收口 4 项 + P1 主线纵切 2 项**：
 > 1. **P0-1** WebDAV 自动同步主密码 → 系统 Keychain（macOS Keychain / Windows Credential Manager / Linux Secret Service）；评估 6.5「自动同步凭证和远端备份安全」。1 新依赖 `keyring==25.7.0`；14 项单测 + 3 项集成测；不可用时自动同步启动被拒绝 + API 返 503。
 > 2. **P0-2** 本地 outbox 事务（评估 6.2）— `core/outbox.py` 基于 JSONL 的轻量 outbox（fsync 写穿 + drain 原子化 + 崩溃恢复 + 线程安全 + quota）；14 项单测。

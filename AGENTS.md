@@ -1,6 +1,7 @@
 # Agent 项目规则
 
 > 此文件供 AI 编码助手（Agent）读取并遵守。每次接手时首先读取本文。
+> 最后更新：2026-09-06（P0 续作 2 项：P0-2b outbox 接入 lifespan 启动 drain + 移除重复 /api/health 死路由 / P0-3b posters manifest 派生索引推广；P1 阶段二 a1-a4 四项补录路线图）
 > 最后更新：2026-08-30（P0 收口 4 项：WebDAV 主密码 → 系统 Keychain / 本地 outbox / Manifest 派生索引 / Electron smoke + P1 主线纵切 2 项：PlayView 待确认卡片 / StatsView 下一步建议）
 > 最后更新：2026-08-16（R4 退出条件 #2 草稿/手动分页 UI V3 收口 → R4 11/11 = 100%）
 
