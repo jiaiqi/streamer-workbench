@@ -91,6 +91,7 @@ def _lifespan(config: AppConfig, paths):
                 export_job_manager=app.state.export_jobs,
                 themes=app.state.themes,
                 font_path=paths.fonts_dir / "MaokenAssortedSans.ttf",
+                outbox=outbox,  # P0-2c: poster_exported 事件经 outbox 落盘
             )
             song_service = SongApplicationService(
                 song_repository=song_repository,

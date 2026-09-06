@@ -134,6 +134,9 @@ class ExportJobInput:
     event_store: Any
     job_state: dict
     cancel_event: threading.Event | None = None
+    # P0-2c：可选 LocalOutbox——poster_exported 事件先入 outbox（fsync 持久）
+    # 再 drain 到 event_store；后台线程内调用（LocalOutbox 线程安全）。
+    outbox: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -217,10 +220,12 @@ class ExportApplicationService:
     """冻结 Repository 输入、创建快照并提交导出任务的唯一编排者。"""
 
     def __init__(self, *, song_repository, settings_repository, event_store,
-                 export_job_manager: ExportJobManager, themes, font_path: Path):
+                 export_job_manager: ExportJobManager, themes, font_path: Path,
+                 outbox=None):
         self._songs = song_repository
         self._settings = settings_repository
         self._events = event_store
+        self._outbox = outbox  # P0-2c：传给导出任务（事件经 outbox 落盘）
         self._jobs = export_job_manager
         self._themes = themes
         self._font_path = str(font_path)
@@ -242,7 +247,8 @@ class ExportApplicationService:
             job_id=job_id, documents=(document,),
             targets=(ExportTarget(target, spec.theme, spec.page),))
         state = _new_job_state(target.parent, 1)
-        run_export_job(ExportJobInput(snapshot, self._events, state))
+        run_export_job(ExportJobInput(snapshot, self._events, state,
+                                      outbox=self._outbox))
         if state["status"] != "done":
             raise ExportExecutionFailed(state.get("error") or "导出失败")
         return ExportCompleted(target, filename, state["total_ms"],
@@ -276,7 +282,8 @@ class ExportApplicationService:
             job_id=job_id, documents=tuple(documents), targets=tuple(targets))
         state = _new_job_state(output_dir, len(targets))
         self._jobs[job_id] = state
-        self._jobs.start(ExportJobInput(snapshot, self._events, state))
+        self._jobs.start(ExportJobInput(snapshot, self._events, state,
+                                        outbox=self._outbox))
         return ExportQueued(job_id, len(targets), snapshot.snapshot_id)
 
     def job(self, job_id: str) -> dict | None:
@@ -391,7 +398,7 @@ def run_export_job(job_input: ExportJobInput) -> None:
         files = len(job["files"])
         themes = sorted({target.theme_name for target in snapshot.targets})
         subject = "，".join(themes) if files == 1 and themes else f"{len(themes)} 个主题 × {files // max(len(themes), 1) if themes else files} 页"
-        job_input.event_store.append({
+        event = {
             "schema_version": 2, "event_id": f"evt_{uuid.uuid4().hex}",
             "occurred_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "recorded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -403,7 +410,14 @@ def run_export_job(job_input: ExportJobInput) -> None:
                      "files": files, "total_ms": job["total_ms"],
                      "subject": subject, "themes": themes,
                      "output_dir": str(snapshot.targets[0].path.parent) if snapshot.targets else ""},
-        })
+        }
+        # P0-2c：事件先入 outbox（fsync 持久）→ 立即 drain 幂等补报；
+        # drain 失败由下次启动 lifespan 兜底补发（旧实现直写失败即丢）。
+        if job_input.outbox is not None:
+            job_input.outbox.append(event)
+            job_input.outbox.drain(job_input.event_store.append)
+        else:
+            job_input.event_store.append(event)
     except Exception as error:
         job["status"] = "error"
         job["error"] = str(error)
