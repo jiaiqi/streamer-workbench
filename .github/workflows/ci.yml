@@ -91,9 +91,9 @@ jobs:
         working-directory: ui
         run: npm ci
 
-      - name: TS 编译检查
+      - name: TS 编译检查（tsc -b；--noEmit 因根 tsconfig files:[] 恒绿已废弃）
         working-directory: ui
-        run: npx tsc --noEmit
+        run: npx tsc -b
 
       - name: 前端纯函数测试
         working-directory: ui

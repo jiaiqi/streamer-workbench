@@ -148,10 +148,10 @@ Windows PowerShell：
 
 ```powershell
 & '.venv\Scripts\python.exe' tools\run_tests.py   # 统一入口，已内化 UTF-8
-cd ui; npx tsc --noEmit
+cd ui; npx tsc -b
 ```
 
-当前 CI 质量基线为 Python 测试 202 项（13 个测试文件）、前端测试 22 项（含 6 项 React 交互测试）、金标准 16/16 diff=0，并检查 OpenAPI TypeScript 类型漂移、`tsc --noEmit` 与前端 build。前端已接入画廊白/暗色舞台、跟随系统及 8 种应用主色；这些应用令牌不影响海报 Palette。
+当前 CI 质量基线见顶部「进度快照」与 AGENTS.md「技术栈 · 测试」行（Python 1433 / vitest 821 / 5 套金标准 36/36 diff=0），并检查 OpenAPI TypeScript 类型漂移、`tsc -b` 与前端 build（⚠️ 旧命令 `tsc --noEmit` 因根 tsconfig `files:[]` 恒绿不检查任何文件，已废弃）。前端已接入画廊白/暗色舞台、跟随系统及 8 种应用主色；这些应用令牌不影响海报 Palette。
 
 ## 后端 API
 

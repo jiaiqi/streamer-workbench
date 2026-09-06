@@ -822,7 +822,7 @@ function NextStepsPanel({ dark }: { dark: boolean }) {
     </div>
   );
   if (!data.items || data.items.length === 0) return <EmptyState
-    icon={Icon.target}
+    icon={Icon.lightbulb}
     title="暂无下一步建议"
     description={data.note || "继续学歌、点歌、演唱让数据沉淀"}
     secondaryLabel="重试"

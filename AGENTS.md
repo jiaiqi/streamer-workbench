@@ -239,7 +239,7 @@ Python 后端是核心用户数据的唯一写入权威（ADR-003）。Electron 
 - 原子提交，中文摘要，Conventional Commits 风格：`feat/fix/docs/refactor(scope): 中文描述`
 - 触及引擎输出时必须先跑 `PYTHONPATH=. python tests/test_golden.py`
 - Python 改动运行 `PYTHONPATH=. python tests/test_unit.py`
-- React 改动运行 `cd ui && npx tsc --noEmit`
+- React 改动运行 `cd ui && npx tsc -b`（⚠️ 旧命令 `tsc --noEmit` 因根 tsconfig `files:[]` 恒绿不检查任何文件，已废弃）
 - 允许纯本地提交，不强制推远程。
 - 推远程走 SSH：`git push git@github.com:jiaiqi/streamer-workbench.git HEAD:master`
 - **不 force push，不改写已发布历史**。
@@ -280,7 +280,7 @@ Python 后端是核心用户数据的唯一写入权威（ADR-003）。Electron 
 # 测试
 PYTHONPATH=. python tests/test_golden.py     # 金标准 16/16
 PYTHONPATH=. python tests/test_unit.py        # 核心兼容单元测试 87 项；CI 另跑 55 项边界/可靠性测试
-cd ui && npx tsc --noEmit                    # TS 编译检查
+cd ui && npx tsc -b                           # TS 编译检查（真正检查；--noEmit 恒绿已废弃）
 
 # 运行
 python -m server --reload --port 8000         # 后端（受控 loopback 入口）
@@ -300,5 +300,5 @@ $env:PYTHONPATH='.'
 $env:PYTHONUTF8='1'
 & '.venv\Scripts\python.exe' tests/test_golden.py
 & '.venv\Scripts\python.exe' tests/test_unit.py
-cd ui; npx tsc --noEmit
+cd ui; npx tsc -b
 ```
