@@ -1,8 +1,10 @@
 # 主播工作台 · 执行交接（HANDOFF）
 
 > **读者**：接手开发的 AI 或人类工程师。
-> **日期**：2026-07-30 ｜ **基线**：master @ R0 全部完成，Motion/shadcn 已合并。
+> **日期**：2026-09-06 ｜ **基线**：master @ R0-R9/M0-M3/L1-L2 全部收口（详见 §9 与 AGENTS.md）。
 > **使用方法**：从「4. 当前状态」确认起点，按「6. 执行计划」自上而下逐项实施；每项完成后按「5. 工作协议」提交合并。
+>
+> ⚠️ **本文件 §4 / §6 严重过期**（保留作为历史快照）。当前真相以 **AGENTS.md 顶端最后更新行** + `design/产品优化方案终版-0727/路线图.md` R0-R8 阶段表 + 本文件 **§9 会后增量** 为准。
 
 ---
 
@@ -48,6 +50,8 @@ cd ui && npm run dev                   # 前端（5173，代理 /api 到 8000）
 
 ## 4. 当前状态（已验证事实）
 
+> ⚠️ **本节已严重过期**（最后更新 2026-07-30）。当前 R0-R9/M0-M3/L1-L2/P1 阶段二部分已收口，**最新基线见 §9 + AGENTS.md 顶端最后更新行 + 路线图**。下方保留为历史快照。
+
 - **R0 全部 ✅**：渲染正确性、Song v5/Event v2 身份、AppContext、Repository/Application Service、API 契约、数据目录契约（R0.9）、安全地基（R0.10）、工具链（R0.12）。
 - **测试基线**：Python 13 个测试文件全绿（含 13 项数据目录测试）；金标准 16/16 diff=0；前端 22 项；tsc/build 干净。
 - **前端栈已定**：React 19 + Vite 6 + Tailwind 4 + **shadcn/ui 优先**（`ui/src/components/ui/`，new-york 风格）+ **Motion**（`motion/react`，已完成预览 crossfade POC：`ui/src/components/PreviewCrossfade.tsx`）。
@@ -69,6 +73,8 @@ cd ui && npm run dev                   # 前端（5173，代理 /api 到 8000）
 7. **禁止**：`.archive/` 只读；`core/` 不得 import FastAPI/React/Electron；不新增 `Song.pinned`；grid-wrap 保持固定 2 页；不为假想能力预建通用抽象。
 
 ## 6. 执行计划（P1 → P6）
+
+> ⚠️ **本节已过期**（P1-P6 顺序在 2026-07-30 是未来规划；至 2026-09-06 实际已完成 R0-R9/M0-M3/L1-L2）。**当前执行计划见 `design/产品优化方案终版-0727/路线图.md` R0-R8 阶段表**。下方保留为历史快照。
 
 > 每项都按「后端领域/仓储 → 服务 → API+类型 → 测试 → 前端 UI → 质量门 → 合并」的纵切顺序做，不要横切（先全后端再全前端）。
 
@@ -216,6 +222,8 @@ lifespan 启动期自动 `list_sessions()` + `load_session()` → 新 LiveServic
 
 ### 8.4 测试运行入口
 
+> ⚠️ **本节命令已过期**（2026-07-30 写）。`npx tsc --noEmit` 因根 tsconfig `files:[]` 恒绿，**已废弃改用 `npx tsc -b`**（真门，纳入测试文件类型检查）。详见 §9.4 今晚更新后的命令。
+
 ```bash
 # 全栈（推荐）
 .venv/bin/python tools/run_tests.py                     # 31 个测试文件全部
@@ -229,3 +237,147 @@ cd ui && npx tsc --noEmit && npm run build               # 前端质量门
 ```
 
 实际边界仍然由 `tools/run_tests.py` 守门（自动 glob `tests/test_*.py`）。
+
+---
+
+## 9. 会后增量（2026-09-06 P1 阶段二 4 刀收口）
+
+> 承接 §8 R0-R6 增量。本节是 2026-09-06 一次会话的 5 个 commit（4 feature + 1 docs）入档，
+> 全部已推 origin/master。基线：R0-R9/M0-M3/L1-L2 已收口；本节新增 P1 阶段二 2.5/6 项。
+>
+> 设计动机来自 `design/prototypes/2026-09-06-功能与UIUX优化分析.md`（项目自审报告，229 行）。
+
+### 9.1 R5c WCAG AA 颜色审计修复 + stagger reduce-motion 兜底
+
+**Commit**：`4b85e71 feat(r5c-a11y)` ｜ 5 文件 / 134 增 9 改
+
+R5c 三件套之「WCAG AA」与「动效规范」首批收口：
+
+- **颜色 token 化**：新增 `--color-danger-text`（亮 #b23c3c on faf8f5 = 5.50 / 暗 #e08585 on 141c18 = 6.50）+ `--color-accent-text`（亮 #1f6756 = 5.74 / 暗 #49b89c = 7.93）
+- **亮主题**：`muted-fg` 4.17→**5.19** / `warning` 文字 2.32→**5.31** / `danger` 文字 4.11→**5.50**（11-13px 全过 AA 4.5）
+- **暗主题**：`destructive` 底色白字 4.11→**4.69** / `danger` 文字 7.23 on bg / 6.50 on card
+- **硬编码颜色接入 dark 感知**：`App.tsx` / `StatusBar.tsx` / `ParamInspector.tsx` / `TabsPanel.tsx` 4 处 `text-red-500` / `text-amber-500` 改 dark 状态
+- **动效**：`prefers-reduced-motion` 下 `.stagger-list > *` 直接 `opacity:1` + `animation:none`（解决 stagger 列表在 reduce 模式下依赖动画基态、可见性被延迟的 WCAG 2.3.3 违规）
+- **配套契约测试**：`ui/src/design-tokens.a11y.test.tsx` 8 项
+  - 纯数学无 DOM，解析 `:root` → `.app-shell` → `[data-mode]` 三层 token 块
+  - 断言 8 类关键「文字/背景」对比度全部 ≥ 4.5（AA normal text）
+  - 含 reduce-motion stagger 兜底契约断言
+  - **修改任何 `--color-*` 令牌前必须先跑本测试**（写在文件头注释里）
+
+### 9.2 P1-A1.1 今晚动线升格首屏
+
+**Commit**：`9d604e6 feat(p1-a1.1)` ｜ 5 文件 / 302 增 7 改
+
+设计动机：原 IA 把海报工作台放在首屏，TonightWorkbench 是 256px 侧栏里的"塞进海报台的 guest"。
+真实动线是「白天备演 → 夜间直播 → 下播复盘」（ADR-008 / v3 §6.6），海报是产出物而非入口。
+
+最小切片 v0.1（一次只动 IA，不动核心交互、不接新端点）：
+
+- **新增 `views/TonightView.tsx`**：屏幕标题「开播前 · 准备」+ 复用 TonightWorkbench 全部 5 区 + 右侧 w-72 WorkspacePosterBridge + 「需要专门做一张海报？」CTA 跳到工作台
+- **`App.tsx` 装配层**：
+  - 默认 view `'workspace'` → `'tonight'`（首屏 = 今晚动线）
+  - `navItems` 第一项改为 `tonight`（新 `Icon.tonight` = 月相 + 星），原 `workspace` 改名"海报"挪到第二位
+  - 新增 `view === 'tonight'` 渲染分支
+  - 命令面板新增 `view-tonight` 命令；快捷键标注的 `'1'` / `'2'` 全部移除（与 `⌘1-7` 切主题冲突，统一走 `⌘K`）
+  - `statusView` 加 tonight → workspace 状态位复用
+- **`icons.tsx`**：新增 `Icon.tonight`（月相 + 一颗小星，避与 live/music 重复）
+- **`App.react.test.tsx`**：原"next-preload img 挂载"测试改为先点侧栏"海报"切到 workspace 再断言（默认首屏变了）
+- **`views/TonightView.test.tsx`**（3 spec）：渲染 / 透传 7 回调 / CTA 触发
+
+**显式不在本次范围**（避免 scope creep，留作 P1 阶段二后续切片）：
+- ❌ keep-alive / URL 路由
+- ❌ 接 entitlements / lyric 端点
+- ❌ 不动 TonightWorkbench 内部 925 行
+- ❌ 不动 R5c 还债线（648 处硬编码调色板、3 处 hex）
+
+### 9.3 P1-A1.2 就绪度 4 徽章全局化
+
+**Commit A** `7715edb feat(p1-a1.2 步骤 1)`：lib 抽离 ｜ **Commit B** `5130bb7 feat(p1-a1.2 步骤 2)`：组件 + 接入 ｜ 6 文件 / 478 增 10 改
+
+设计动机：178 首歌里 0 首有音频、0 首有 LRC、2 首有曲谱 — 没有全局徽章，弹唱完整度 15% 只孤立地显示在歌曲库页头。本提交让主播打开 LibraryView 时每首歌行内即见就绪度，一瞥即知"今晚能不能弹唱"。
+
+**步骤 1（独立可提交）**：
+
+- `ui/src/lib/readiness.ts` — 共享纯函数 + 类型
+  - `READINESS_FIELDS = ['tabs', 'lyrics', 'audio', 'key']` 常量
+  - `READINESS_FIELDS_LOOKUP` 4 字段中文标签
+  - `ReadinessField` 字面量联合类型
+  - `ReadinessFields` 5 字段最小窄类型（`evaluateReadiness` / `isFullyReady` / `buildReadinessChips` 入参；避免强制 import 完整 Song 模型）
+  - `SongForReadiness extends ReadinessFields` 7 字段（`aggregateReadiness` 用，含 id + title 报告）
+  - `evaluateReadiness` / `isFullyReady` / `buildReadinessChips` 纯函数（行为与原 TonightWorkbench 925 行内部 `evaluateReadiness` 完全一致：`lyrics_plain` 与 `lyrics_lrc` 二选一即可）
+- `ui/src/lib/readiness.test.tsx`（12 spec）：全齐 / 全空 / 半空 / lyrics 二选一 / 字段顺序 / 聚合报告 / 常量覆盖 等
+
+**步骤 2（独立可提交）**：
+
+- `ui/src/components/ReadinessBadge.tsx` — 4 枚徽章渲染组件
+  - 接受 5 字段（与 `generated.ts` SongResponse 自然兼容，内部 `undefined` → `""` / `null` 防御）
+  - `size: 'xs' | 'sm'`（xs = 9px 行内紧凑 / sm = 10px 报告用）
+  - 已就绪 → 绿勾 ✓，缺失 → 灰叉 ✗（line-through）
+  - 暗/亮两套色（与 R5c 视觉测试一致：`emerald-500/15`/`emerald-50` vs `zinc-800/60`/`muted-60`）
+  - `data-testid` + `data-ready` + `role="group"` + `aria-label`（无障碍）
+  - 容器 `data-ready-count` / `data-total-count` 便于聚合断言
+- `ui/src/lib/readiness.ts` 拆分：`ReadinessFields` 5 字段 vs `SongForReadiness` 7 字段（让 ReadinessBadge 不强制要求 id/title）
+- `ui/src/views/LibraryView.tsx` 接入：元数据行（行 870-890）插入 `<ReadinessBadge song={s} size='xs' dark={dark} />` 在 tags 之后、KeyCapo 之前；容器加 `flex-wrap` 窄屏适配
+- `ui/src/components/ReadinessBadge.test.tsx`（8 spec）：4 枚徽章 data-testid 各自命中 / 全齐 / 全空 / 半空 / undefined 防御 / size='sm' / role+aria-label / 暗色 line-through
+
+**显式不在本次范围**（避免 scope creep）：
+- ❌ 替换原 TonightWorkbench 925 行内部 ReadinessCheck 为共享 lib（保留行为不变）
+- ❌ 学歌 / 弹唱 / 速查等其他视图接入
+- ❌ 徽章点击触发"补什么"动作（v0.2 计划：右击弹动作菜单）
+- ❌ LibraryView 列表行以外的视图（grid 行、详情面板、筛选条等）接入
+
+### 9.4 测试入口与质量门（2026-09-06 21:00 实测）
+
+> 替换 §8.4 旧命令。
+
+```bash
+# 全栈（推荐）
+.venv/bin/python tools/run_tests.py                     # 自动 glob tests/test_*.py
+PYTHONPATH=. python3 tests/test_unit.py                 # 95 passed（test_unit.py 主文件）
+PYTHONPATH=. python3 tests/test_golden.py               # 16/16 金标准 0 像素差异
+cd ui && npx vitest run                                 # 70 文件 849 passed
+cd ui && npx tsc -b                                     # 0 错（注意：旧 npx tsc --noEmit 已废弃，恒绿假门）
+cd ui && npx tsc -b && npm run build                    # 完整前端质量门
+
+# 关键测试点（精细诊断）
+cd ui && npx vitest run src/lib/readiness.test.tsx           # 12 spec：就绪度 lib
+cd ui && npx vitest run src/components/ReadinessBadge.test.tsx  # 8 spec：徽章组件
+cd ui && npx vitest run src/views/TonightView.test.tsx       # 3 spec：今晚视图容器
+cd ui && npx vitest run src/App.react.test.tsx               # 8 spec：App 装配回归
+cd ui && npx vitest run src/design-tokens.a11y.test.tsx      # 5 spec：WCAG AA 契约
+cd ui && npx vitest run src/components/TonightWorkbench.test.tsx  # 5+1 spec：5 区组件（保持未动）
+```
+
+**质量门**（2026-09-06 21:00 实测，今晚 P1 阶段二 4 刀收口后）：
+- `tsc -b`：0 错
+- `vitest`：70 文件 **849 passed**（+12 readiness + 8 ReadinessBadge + 3 TonightView + 5 a11y）
+- `pytest test_unit.py`：**95 passed**（已 R0-R8 全部收口）
+- 金标准：5 套布局 **36/36** 0 像素差异（grid 16 + magazine 6 + live-set 5 + learning-report 5 + fullscreen 4）
+- 新依赖：0
+
+### 9.5 当前未追踪的本地资产（不入库，按你之前选过）
+
+- `.zcode/plans/plan-sess_64dc7272-48ff-4bd4-a033-8e416fa28a68.md` — 本地 zcode 计划
+- `design/prototypes/2026-09-06-功能与UIUX优化分析.md` — 项目自审报告（229 行）
+- `design/prototypes/tonight-flow-v1.html` — 1252 行单文件原型（4 屏 + 标注模式）
+
+3 个文件保持 untracked；是本会话参考资料与设计文档，不进版本库。
+
+### 9.6 P1 阶段二剩余路线（建议后续切片）
+
+按自审报告 §5 顺序，本会话完成 2.5/6：
+
+1. ✅ **TonightHome 重组**（首屏切今晚动线）— §9.2
+2. ✅ **就绪度 4 徽章全局化** — §9.3
+3. ⏳ **就绪度补全泵 · 音频批量导入**（端到端 / scope 较大 / 让 R8/R9 真正可弹唱）
+4. ⏳ **演出模式权益审计**（LiveView 接 entitlements 端点；演中已被 QuickView 独立路由取代事实作业面，价值打折）
+5. ⏳ **收口清单 + 复盘海报推荐**
+6. ⏳ **还债批**：URL 路由/keep-alive → token 收敛（648 处）→ 弹窗治理 → 动效/无障碍
+
+### 9.7 推荐分支与提交流程
+
+- master 仍为唯一集成分支；按既有节奏延续（不在 master 上开 feature 分支）
+- 提交粒度按"原子 + 一项一 commit"，如 `feat(p1-a1.2 步骤 1)` + `feat(p1-a1.2 步骤 2)`
+- Conventional Commits 中文摘要
+- 推远程走 `git push git@github.com:jiaiqi/streamer-workbench.git HEAD:master`（HTTPS 443 不通，用 SSH）
+- **不 force push，不改写已发布历史**
