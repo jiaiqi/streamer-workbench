@@ -535,7 +535,7 @@ function AppInner() {
           {localBackend.state === "down" && (
             <span
               data-testid="local-backend-down"
-              className="text-amber-500 whitespace-nowrap"
+              className={`whitespace-nowrap ${dark ? "text-amber-400" : "text-amber-700"}`}
               title="本机后端未启动或未响应；本地功能仍可用，但请确认数据写入是否成功"
             >
               本地后端未响应

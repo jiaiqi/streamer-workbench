@@ -122,7 +122,7 @@ function ParamControl({ spec, value, onChange, dark }: {
     default: {
       // 兜底：把未知 kind 显式抛错（防止 silent fail）
       const _exhaustive: never = spec.kind;
-      return <span className="text-[10px] text-red-500">未知 kind: {spec.kind}</span>;
+      return <span className={`text-[10px] ${dark ? "text-red-400" : "text-red-600"}`}>未知 kind: {spec.kind}</span>;
     }
   }
 }

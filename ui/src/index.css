@@ -44,6 +44,12 @@
   --color-success: #3d9d63;
   --color-warning: #d9a03f;
   --color-danger: #d05555;
+  /* 危险「文字」专用（WCAG AA 4.5）；danger 本体保留作按钮底/边框（非文字 3:1）。
+     亮 #b23c3c（on faf8f5 5.50）／暗 #d05555（on 0a0f0d 4.70） */
+  --color-danger-text: #b23c3c;
+  /* 小号强调文字（eyebrow/inspector-label）专用：primary 本体在灰卡 4.25、
+     暗底 3.89 均不足 AA；亮 #1f6756（5.74）／暗 #49b89c（7.93） */
+  --color-accent-text: #1f6756;
 
   /* ── 圆角 ── */
   --radius-sm: 8px;
@@ -87,7 +93,10 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
   --color-background: #faf8f5; --color-foreground: #1a2622;
   --color-card: #fff; --color-card-foreground: #1a2622;
   --color-popover: #fff; --color-muted: #f0ede8;
-  --color-muted-foreground: #6e7b74; --color-border: #e4e1d8; --color-input: #e4e1d8;
+  /* WCAG AA（2026-09-06 审计）：muted-fg 4.17→5.19（三底全过）、
+     warning 文字 2.32→5.31、danger 文字 4.11→5.50 */
+  --color-muted-foreground: #5f6c65; --color-border: #e4e1d8; --color-input: #e4e1d8;
+  --color-warning: #8a5f1a; --color-danger: #b23c3c;
   --shadow-sm: 0 1px 2px rgba(26,38,34,.03), 0 2px 8px rgba(26,38,34,.04);
   --shadow-md: 0 2px 6px rgba(26,38,34,.04), 0 10px 28px rgba(26,38,34,.06);
   --shadow-lg: 0 4px 12px rgba(26,38,34,.05), 0 24px 56px rgba(26,38,34,.1);
@@ -98,6 +107,13 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
   --color-card: #141c18; --color-card-foreground: #f5f0eb;
   --color-popover: #1a2320; --color-muted: #1c2622;
   --color-muted-foreground: #98a29c; --color-border: #26302a; --color-input: #26302a;
+  /* WCAG AA（2026-09-06 审计）：primary #287d69 在暗底作文字仅 3.89 →
+     小号强调文字走 --color-accent-text（#49b89c，7.93）；按钮白字 on primary
+     4.97 / on strong hover 6.70 原本即达标；destructive 底色白字 4.11→4.69；
+     危险「文字」走 --color-danger-text（on 0a0f0d 7.23 / on 141c18 6.50） */
+  --color-accent-text: #49b89c;
+  --color-danger: #c84848;
+  --color-danger-text: #e08585;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.28);
   --shadow-md: 0 2px 6px rgba(0,0,0,.32), 0 10px 28px rgba(0,0,0,.4);
   --shadow-lg: 0 4px 12px rgba(0,0,0,.36), 0 24px 56px rgba(0,0,0,.55);
@@ -128,13 +144,14 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 .primary-action:active:not(:disabled) { transform: scale(.98); }
 .primary-action:disabled { opacity: .5; cursor: not-allowed; }
 
-.eyebrow, .inspector-label { color: var(--color-primary); font-size: 10px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+/* 小号强调文字走 --color-accent-text（primary 本体在灰卡 4.25 / 暗底 3.89 不足 AA） */
+.eyebrow, .inspector-label { color: var(--color-accent-text); font-size: 10px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
 .panel-title { margin-top: 4px; font-family: var(--font-serif); font-size: 16px; font-weight: 650; color: var(--color-foreground); }
 .panel-copy, .field-note { margin-top: 5px; color: var(--color-muted-foreground); font-size: 11px; line-height: 1.55; }
 .panel-empty, .state-panel { display:flex; align-items:center; justify-content:center; gap:10px; min-height:120px; color:var(--color-muted-foreground); font-size:13px; }
 .spinner { width:18px; height:18px; border:2px solid var(--color-border); border-top-color:var(--color-primary); border-radius:999px; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
-.resource-alert { margin-left:auto; min-height:30px; padding:4px 10px; border:1px solid color-mix(in srgb, var(--color-danger) 35%, transparent); border-radius:999px; background:transparent; color:var(--color-danger); font-size:11px; }
+.resource-alert { margin-left:auto; min-height:30px; padding:4px 10px; border:1px solid color-mix(in srgb, var(--color-danger) 35%, transparent); border-radius:999px; background:transparent; color:var(--color-danger-text); font-size:11px; }
 
 .workspace-gallery { background: #0c110f; isolation:isolate; }
 .workspace-gallery::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.4; background:radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 42%), linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px); background-size:auto, 72px 100%; }
@@ -180,7 +197,7 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 .field-checkbox input { width:14px; height:14px; accent-color:var(--color-primary); }
 .settings-actions { position:fixed; z-index:20; right:24px; bottom:20px; display:flex; align-items:center; gap:14px; padding:8px; border:1px solid var(--color-border); border-radius:16px; background:color-mix(in srgb,var(--color-card) 92%,transparent); box-shadow:var(--shadow-lg); backdrop-filter:blur(18px); }
 .save-status { max-width:360px; color:var(--color-muted-foreground); font-size:11px; }
-.state-error { flex-direction:column; color:var(--color-danger); }
+.state-error { flex-direction:column; color:var(--color-danger-text); }
 .secondary-action { min-height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0 16px; border:1px solid var(--color-border); border-radius:12px; background:var(--color-card); color:var(--color-foreground); font-size:12px; font-weight:600; text-decoration:none; }
 .secondary-action:hover { border-color:var(--color-primary); color:var(--color-primary); }
 .mobile-workspace { background:var(--color-background); }
@@ -190,7 +207,7 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 .mobile-preview-frame { position:relative; width:min(64vw,280px); overflow:hidden; border:1px solid var(--color-border); border-radius:16px; background:#0c110f; box-shadow:var(--shadow-lg); }
 .mobile-preview-frame img { display:block; width:100%; }
 .mobile-preview-loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:8px; background:color-mix(in srgb,var(--color-background) 72%,transparent); color:var(--color-muted-foreground); font-size:11px; }
-.mobile-preview-error { min-height:320px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--color-danger); font-size:12px; }
+.mobile-preview-error { min-height:320px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--color-danger-text); font-size:12px; }
 .mobile-page-picker, .mobile-actions { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
 .mobile-page-picker button { width:44px; border:1px solid var(--color-border); border-radius:11px; background:var(--color-card); color:var(--color-muted-foreground); }
 .mobile-page-picker button[aria-pressed="true"] { border-color:var(--color-primary); background:var(--color-primary); color:var(--color-primary-foreground); }
@@ -206,6 +223,9 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+  /* stagger 专项：全局规则只压 duration 不压 delay（最长 0.36s），且子项基态
+     opacity:0 依赖动画必跑——reduce 下直接可见，不闪不延迟（WCAG 2.3.3） */
+  .stagger-list > * { opacity:1 !important; animation:none !important; }
 }
 
 /* ── 组件类（对应 shared.css 的 .gp-card / .gp-btn 等，Tailwind 化）── */

@@ -146,7 +146,7 @@ export default function StatusBar({
             type="button"
             data-testid="status-bar-error"
             onClick={onRetry}
-            className="flex items-center gap-1 rounded px-1.5 h-5 bg-red-500/15 text-red-500 hover:bg-red-500/25 transition-colors cursor-pointer"
+            className={`flex items-center gap-1 rounded px-1.5 h-5 bg-red-500/15 hover:bg-red-500/25 transition-colors cursor-pointer ${dark ? "text-red-400" : "text-red-600"}`}
             title={errorMessage}
           >
             <span className="font-medium">⚠ 错误 · 重试</span>

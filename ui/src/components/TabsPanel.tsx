@@ -95,7 +95,7 @@ export default function TabsPanel({ title, tabFiles, dark, onChanged }: {
         <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.pdf" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
       </div>
-      {error && <p className="mt-1.5 text-[11px] text-red-500">{error}</p>}
+      {error && <p className={`mt-1.5 text-[11px] ${dark ? "text-red-400" : "text-red-600"}`}>{error}</p>}
       {tabFiles.length === 0 && !error && (
         <p className={`mt-1.5 text-[11px] ${muted}`}>还没有曲谱附件，可传图片或 PDF</p>
       )}
