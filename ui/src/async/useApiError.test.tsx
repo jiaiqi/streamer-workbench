@@ -16,9 +16,9 @@ import type { ReactNode } from "react";
 function ToastSpyProvider({ children, errors }: { children: ReactNode; errors: Array<{ message: string }> }) {
   const spy: Partial<ToastApi> = {
     show: vi.fn(),
-    error: (message: string) => { errors.push({ message }); return 1; },
-    success: (message: string) => { errors.push({ message }); return 1; },
-    warning: (message: string) => { errors.push({ message }); return 1; },
+    error: (message: string) => { errors.push({ message }); return "toast-spy"; },
+    success: (message: string) => { errors.push({ message }); return "toast-spy"; },
+    warning: (message: string) => { errors.push({ message }); return "toast-spy"; },
     dismiss: vi.fn(),
     clear: vi.fn(),
   };

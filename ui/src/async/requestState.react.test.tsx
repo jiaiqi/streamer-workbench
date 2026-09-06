@@ -95,7 +95,7 @@ describe("SongEditDialog write feedback", () => {
     const response = deferred<Response>();
     vi.stubGlobal("fetch", vi.fn(() => response.promise));
     const user = userEvent.setup();
-    render(<SongEditDialog dark={false} target="new" onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<SongEditDialog target="new" onClose={vi.fn()} onSaved={vi.fn(async () => {})} />);
     await user.type(screen.getByLabelText(/歌名/), "晴天");
     await user.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect((screen.getByRole("button", { name: "保存中…" }) as HTMLButtonElement).disabled).toBe(true));

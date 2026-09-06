@@ -688,7 +688,9 @@ act(() => { fireEvent.dragStart(sourceDiv, { dataTransfer: dt }); });
     act(() => { fireEvent.dragOver(targetLi, { clientY: 130, dataTransfer: dt }); });
     act(() => { fireEvent.drop(targetLi, { dataTransfer: dt }); });
     await waitFor(() => {
-      const calls = store.batch.mock.calls.filter(c => c[0] === "reorder");
+      // store.batch 静态类型是真实方法；测试里是 vi.fn，收窄到 mock 形状
+      const batchMock = store.batch as unknown as { mock: { calls: Array<[string, string[]]> } };
+      const calls = batchMock.mock.calls.filter(c => c[0] === "reorder");
       expect(calls.length).toBe(1);
       const ids = calls[0][1];
       expect(ids.length).toBe(3);

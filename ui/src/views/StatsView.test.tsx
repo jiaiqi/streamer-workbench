@@ -93,7 +93,7 @@ describe("StatsView Top tab 数据反哺", () => {
 
   it("点击按钮触发 onCreatePosterFromTop + 传 songIds", async () => {
     globalThis.fetch = makeFetch() as unknown as typeof fetch;
-    const onCreate = vi.fn(async () => undefined);
+    const onCreate = vi.fn<(songIds: string[], metric: string) => Promise<undefined>>(async () => undefined);
     render(<StatsView dark={false} onCreatePosterFromTop={onCreate} />);
     fireEvent.click(screen.getByTestId("stats-tab-top"));
     await waitFor(() => screen.getByTestId("top-create-poster"));
@@ -107,8 +107,9 @@ describe("StatsView Top tab 数据反哺", () => {
   });
 
   it("创建中显示 spinner + disable", async () => {
-    let resolveCreate: (() => void) | null = null;
-    const onCreate = vi.fn(() => new Promise<void>(r => { resolveCreate = r; }));
+    // holder 避免 TS 对闭包赋值的 null 窄化误报（resolveCreate?.() 不可调用）
+    const holder: { resolve?: () => void } = {};
+    const onCreate = vi.fn(() => new Promise<void>(r => { holder.resolve = r; }));
     globalThis.fetch = makeFetch() as unknown as typeof fetch;
     render(<StatsView dark={false} onCreatePosterFromTop={onCreate} />);
     fireEvent.click(screen.getByTestId("stats-tab-top"));
@@ -119,7 +120,7 @@ describe("StatsView Top tab 数据反哺", () => {
       expect(btn.disabled).toBe(true);
       expect(btn.textContent).toContain("创建中");
     });
-    resolveCreate?.();
+    holder.resolve?.();
   });
 
   it("onCreatePoster 抛出错误 → ErrorBanner", async () => {
@@ -158,7 +159,7 @@ describe("StatsView Feed tab 数据反哺", () => {
 
   it("点击 Preset 按钮触发回调 + 去重 song_ids", async () => {
     globalThis.fetch = makeFetch() as unknown as typeof fetch;
-    const onCreate = vi.fn(async () => undefined);
+    const onCreate = vi.fn<(songIds: string[], name: string) => Promise<undefined>>(async () => undefined);
     render(<StatsView dark={false} onCreatePresetFromFeed={onCreate} />);
     fireEvent.click(screen.getByTestId("stats-tab-feed"));
     await waitFor(() => screen.getByTestId("feed-create-preset"));

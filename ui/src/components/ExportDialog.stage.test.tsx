@@ -97,7 +97,6 @@ beforeEach(() => {
     ok: true,
     arrayBuffer: () => Promise.resolve(SAMPLE_PNG),
   });
-  // @ts-expect-error
   global.fetch = fetchMock;
   (window as unknown as { streamer: unknown }).streamer = {
     copyImageToClipboard,

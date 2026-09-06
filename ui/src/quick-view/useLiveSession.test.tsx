@@ -86,7 +86,7 @@ describe("useLiveSession", () => {
     vi.mocked(apiRequest).mockRejectedValueOnce(new Error("网络炸了"));
     const { result } = renderHook(() => useLiveSession("live_test"));
     await waitFor(() => expect(result.current.session).not.toBeNull());
-    let res = { ok: true, message: "" };
+    let res: { ok: boolean; duplicate?: boolean; message?: string } = { ok: true };
     await act(async () => {
       res = await result.current.queueRequest("song_y", "张三");
     });
@@ -105,7 +105,7 @@ describe("useLiveSession", () => {
     } as never);
     const { result } = renderHook(() => useLiveSession("live_test"));
     await waitFor(() => expect(result.current.session).not.toBeNull());
-    let res = { ok: true, refunded: false };
+    let res: { ok: boolean; refunded?: boolean; message?: string } = { ok: true };
     await act(async () => {
       res = await result.current.recordResult("req_a", "sung");
     });

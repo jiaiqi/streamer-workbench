@@ -10,8 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import SpecialPostersPanel from "./SpecialPostersPanel";
 
-const openLivePoster = vi.fn(async () => undefined);
-const openLearningReportPoster = vi.fn(async () => undefined);
+const openLivePoster = vi.fn<(sessionId: string) => Promise<undefined>>(async () => undefined);
+const openLearningReportPoster = vi.fn<
+  (options?: { days?: number; period_label?: string; top_n_artists?: number }) => Promise<undefined>
+>(async () => undefined);
 
 vi.mock("../electron-bridge", () => ({
   openLivePoster: (...args: unknown[]) => openLivePoster(...(args as [string])),

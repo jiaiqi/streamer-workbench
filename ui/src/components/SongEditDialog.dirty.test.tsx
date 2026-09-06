@@ -2,30 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import SongEditDialog from "./SongEditDialog";
+import { makeSong } from "../test-fixtures";
 
 const apiRequest = vi.fn();
 vi.mock("../api/client", () => ({
   apiRequest: (...args: unknown[]) => apiRequest(...args),
 }));
 
-const SAMPLE = {
-  id: "song_test_aaaaaaaaaaaaa",
-  title: "江南",
-  artists: ["林俊杰"],
-  status: "active" as const,
-  key: "C",
-  capo: 0,
-  difficulty: "中等",
-  tags: ["流行"],
-  pinyin: "jiang nan",
-  tab_files: [],
-  notes: "",
-  lyrics_lrc: "",
-  lyrics_plain: "",
-  audio_vocal_path: null,
-  audio_instrumental_path: null,
-  audio_duration_ms: 0,
-};
+const SAMPLE = makeSong();
 
 /** shadcn Dialog 用 portal 渲染到 body 末尾，querySelector 必须用 document 不能用 container */
 function getTitleInput() {

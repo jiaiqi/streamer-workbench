@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { buildEventsHeat, heatBonus, searchSongs } from "./globalSongSearch";
 import type { Song } from "../types";
+import { makeSong } from "../test-fixtures";
 
 const SAMPLE_SONGS: Song[] = [
   {
@@ -212,31 +213,8 @@ describe("searchSongs - M2.5 eventsHeat 加成", () => {
   });
 });
 
-// ---- M2.5 测试辅助：mkSong ----
-function mkSong(over: Partial<{ id: string; title: string; status: "active" | "draft"; artists: string[]; key: string; pinyin: string; tags: string[]; lyrics_lrc: string }> = {}) {
-  return {
-    id: over.id ?? "song_x",
-    title: over.title ?? "测试歌",
-    artists: over.artists ?? [],
-    status: over.status ?? "active",
-    key: over.key ?? "",
-    capo: 0,
-    difficulty: "",
-    tags: over.tags ?? [],
-    pinyin: over.pinyin ?? "",
-    lyrics_lrc: over.lyrics_lrc ?? "",
-    lyrics_plain: "",
-    added_at: "",
-    learned_at: "",
-    notes: "",
-    tab_files: [],
-    section: 1,
-    audio_vocal_path: null,
-    audio_instrumental_path: null,
-    audio_duration_ms: 0,
-    ...over,
-  };
-}
+// ---- M2.5 测试辅助：mkSong（复用共享工厂保证 Song 契约字段完整）----
+const mkSong = makeSong;
 
 describe("buildEventsHeat + heatBonus (M2.5 反哺 App)", () => {
   it("heatBonus: log2 压缩加成", () => {

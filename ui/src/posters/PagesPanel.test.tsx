@@ -167,11 +167,13 @@ describe("PagesPanel 支持手动分页的 layout（magazine-flow）", () => {
     // fetchSpy 收到 PATCH /api/posters/{id}/pages with new_order=[1,0,2]
     await waitFor(() => {
       const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
-      const patchCall = calls.find(([url, init]: [string, RequestInit]) => {
+      const patchCall = calls.find((call: unknown[]) => {
+        const [url, init] = call as [string, RequestInit];
         return url.endsWith("/pages") && init?.method === "PATCH";
       });
       expect(patchCall).toBeTruthy();
-      const body = JSON.parse(patchCall![1].body as string);
+      const [, patchInit] = patchCall as unknown[];
+      const body = JSON.parse((patchInit as RequestInit).body as string);
       expect(body.new_order).toEqual([1, 0, 2]);
     });
   });

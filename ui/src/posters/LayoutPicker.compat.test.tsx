@@ -74,7 +74,7 @@ describe("LayoutPicker 兼容性警告", () => {
 
   it("兼容时（grid-wrap + 海洋柔光）不显示警告", async () => {
     (global.fetch as any).mockResolvedValueOnce({
-      ok: true, status: 200, headers: { get: (k: string) => k === "content-type" ? "application/json" : "" }, json: async () => COMPAT_MATRIX, headers: { get: (k: string) => k === "content-type" ? "application/json" : "" },
+      ok: true, status: 200, json: async () => COMPAT_MATRIX, headers: { get: (k: string) => k === "content-type" ? "application/json" : "" },
     });
     const store = makeStore();
     render(<LayoutPicker store={store} currentThemeId="海洋柔光" />);

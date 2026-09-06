@@ -172,8 +172,7 @@ function setupActionsHook(opts: Parameters<typeof useSongActions>[0] = { activeS
 describe("useSongActions - 单动作行为", () => {
   it("addToLearningPlan：单选 → POST /api/practice/log 被调 1 次 + toast.success", async () => {
     fetchMock.mockResolvedValue(okJson({ ok: true, event_id: "evt_x" }));
-    const onAddToLearningPlan = vi.fn();
-    const { result } = setupActionsHook({ activeSessionId: null, onAddToLearningPlan });
+    const { result } = setupActionsHook({ activeSessionId: null });
     await act(async () => {
       await result.current.addToLearningPlan({ titles: ["江南"], songsData: SAMPLE });
     });

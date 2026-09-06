@@ -91,8 +91,7 @@ beforeEach(() => {
     ok: true,
     arrayBuffer: () => Promise.resolve(SAMPLE_PNG),
   });
-  // 安装到 window.fetch
-  // @ts-expect-error
+  // 安装到 window.fetch（vitest Mock 兼容 fetch 签名，无需 ts-expect-error）
   global.fetch = fetchMock;
 
   // 装 streamer
@@ -288,8 +287,7 @@ describe("ExportDialog - 分享按钮（M2.16）", () => {
 
 // 内部用 getByRole helper（避免 import testing-library 顶部过大）
 function getByRole(_role: string, _opts: { name: RegExp }): HTMLElement {
-  // 直接用 querySelector 走 fallback
-  return _opts.name.test(/开始导出/)
-    ? (Array.from(document.querySelectorAll("button")).find((b) => /开始导出/.test(b.textContent || "")) as HTMLElement)
-    : (Array.from(document.querySelectorAll("button")).find((b) => _opts.name.test(b.textContent || "")) as HTMLElement);
+  // 直接用 querySelector 走 fallback（RegExp.source 含「开始导出」时与旧断言等价）
+  const pattern = String(_opts.name).includes("开始导出") ? /开始导出/ : _opts.name;
+  return (Array.from(document.querySelectorAll("button")).find((b) => pattern.test(b.textContent || "")) as HTMLElement);
 }
