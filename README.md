@@ -29,7 +29,7 @@
 >
 > **进度快照（2026-08-16）**：R0–R8 + R4 Runtime v1 + R4 Runtime v2 全部收口（V2.1 + V2.2 + V2.3 + V2.4 + V2.5 + **V3 草稿/手动分页 UI** — **R4 退出条件 11/11 = 100%**） + R9 吉他手特化首批 + M9.6b 5 秒撤销 toast + M0 蓝图 v0.1 首批 + M1 本地最小可用首批 + M2.1 加密备份 AES-256 真加密 + M2.2 WebDAV 同步 + M2.3 自动快照 + M2.4 WebDAV 自动同步 + M2.5 综合洞察 + M2.6 错误全局 toast 化 + M2.7 在线元数据层骨架 + M2.8 NeteaseProvider + M2.9 LibraryView 在线补全 + M2.10 QQProvider 多源回退 + M2.11 网易云/QQ 公开歌单导入 + M2.12 榜单浏览 + M2.13 macOS 桌面平台特性首批 + M2.14 R3 回归 hotfix + M2.16 海报分享 + M2.17 点歌条件 + R8.2.x 弹唱录屏首批 + M3 海报 UI/UX 全部收口 + L1 体验打磨全 7 子项 + L2.1/L2.2/L2.3 工具箱完整性。**R4 退出条件全部收口**：(1) 3 个独立数据通道端到端走通 + 13 pytest 守住；(2) 草稿/手动分页 UI 4 端点 + PagesPanel + engine.render_pages manual_pages 真实接线（9 pytest + 7 vitest）；(3) 专用海报区日活端点 + 实时徽章（9 pytest + 3 vitest）。**1429 pytest + 821 vitest 全过 + tsc 0 错 + 16/16 金标准 0 像素差异 + 1 新依赖 (keyring)**。P0 收口 4 项 + P1 主线纵切 2 项（PlayView 待确认卡片 + StatsView 下一步建议）。待推：M3 SQLite FTS5（2000+ 首数据规模后再做）+ M4 Tauri 2 + PWA 评估 + R7 桌面正式发布门 + R5 工作台系统化收尾。
 >
-> **测试基线**：Python 784 passed / 1 skipped（57 个测试文件）+ vitest 607/607（54 个测试文件）+ node:test 16/16 + 5 套金标准 35/35（grid-wrap 16 + magazine-flow 5 + live-set 5 + learning-report 5 + fullscreen-flow 4）；TSC 干净。
+> **测试基线**：Python 1433 passed / 1 skipped（87 个测试文件）+ vitest 821/821（66 个测试文件）+ 5 套金标准 36/36（grid-wrap 16 + magazine-flow 6 + live-set 5 + learning-report 5 + fullscreen-flow 4，2026-09-06 实测）；TSC 干净。
 >
 > **已上线能力**：
 > - **R1a 海报闭环** — PosterDocument 领域 + 仓储 + 服务 + HTTP `/api/posters*` + 样例曲库 + 能力声明 + RenderDocument；`usePosterStore` 状态机 + 自动保存 + 撤销重做（Cmd+Z）+ Bridge；最近海报 3 动作内可导出。

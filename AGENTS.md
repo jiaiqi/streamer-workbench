@@ -174,7 +174,7 @@ UI        ~99%       工作台/歌曲库（含垃圾桶 tab）/学歌/速查/海
 | 数据 | JSON + JSONL 本地文件 | songs.json v4 落盘（178 首，加载时确定性迁移至 v5）、events.jsonl v1/v2 兼容、settings.json、live-sessions/<id>/state.json（P3 增量）、data/tabs/{song_id}/（曲谱附件）、data/audio/{song_id}/（R8 音频，v8.1+） |
 | 桌面壳 | Electron（spike） | Python 作 child_process；正式壳未完成 |
 | 字体 | MaokenAssortedSans.ttf（猫啃糖圆体） | `fonts/` |
-| 测试 | 56 项 Python 测试文件（759 passed / 1 skipped） + 31 项 vitest（340/340） + 16 项 node:test + 16/16 grid 金标准 + 5/5 magazine PNG + 5/5 live-set PNG + 5/5 learning-report PNG + 4/4 fullscreen PNG（35/35 0 像素差异）+ OpenAPI 类型漂移/tsc/build | 当前 CI 质量门；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
+| 测试 | 87 个 Python 测试文件（1433 passed / 1 skipped） + 66 个 vitest 文件（821 passed） + 5 套金标准 36/36（grid 16 + magazine 6 + live-set 5 + learning-report 5 + fullscreen 4，全部 0 像素差异）+ OpenAPI 类型漂移/tsc/build | 当前 CI 质量门（2026-09-06 实测）；Windows 控制台 UTF-8 与依赖锁定已逐步收口 |
 
 ---
 
