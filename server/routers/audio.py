@@ -125,7 +125,7 @@ def api_audio_list(req: Request, identity: str):
 def api_audio_delete(
     req: Request,
     identity: str,
-    role: Annotated[str, Query(description="vocal | instrumental")] = ...,
+    role: Annotated[str, Query(description="vocal | instrumental")],
 ):
     """删除指定 role 的音频（保留另一个 role）。"""
     if role not in _AUDIO_ROLES:

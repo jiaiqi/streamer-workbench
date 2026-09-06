@@ -53,6 +53,17 @@ export interface AudioUploadResponse {
   [key: string]: unknown;
 }
 
+export interface AutoSyncRunRequest {
+  "master_password": string;
+}
+
+export interface AutoSyncSettingsRequest {
+  "direction"?: "push" | "pull" | "both" | null;
+  "enabled"?: boolean | null;
+  "interval_minutes"?: number | null;
+  "master_password"?: string | null;
+}
+
 export interface Body_api_audio_upload_api_songs__identity__audio_post {
   "file": string;
   [key: string]: unknown;
@@ -65,6 +76,21 @@ export interface Body_api_tab_upload_api_songs__identity__tabs_post {
 
 export interface ChartsRequest {
   "preferred_provider"?: string | null;
+}
+
+export interface CompatibilityCheckResponse {
+  "compatible": boolean;
+  "reason"?: string;
+}
+
+export interface CompatibilityListResponse {
+  "items": Array<string>;
+}
+
+export interface CompatibilityMatrixResponse {
+  "layouts": Array<string>;
+  "matrix": Record<string, unknown>;
+  "themes": Array<string>;
 }
 
 export interface DataDirInspectRequest {
@@ -486,6 +512,28 @@ export interface MetadataSongDetailResponse {
   "title": string;
 }
 
+export interface NamePatchRequest {
+  "name": string;
+  "revision"?: string | null;
+}
+
+export interface NextStepItemResponse {
+  "artist"?: string;
+  "days_since"?: number;
+  "kind": string;
+  "metric"?: number;
+  "reason"?: string;
+  "song_id": string;
+  "title": string;
+  [key: string]: unknown;
+}
+
+export interface NextStepsResponse {
+  "items"?: Array<NextStepItemResponse>;
+  "note"?: string;
+  [key: string]: unknown;
+}
+
 export interface OkResponse {
   "ok"?: boolean;
   [key: string]: unknown;
@@ -544,6 +592,12 @@ export interface PlaylistRequest {
   "preferred_provider"?: string | null;
 }
 
+export interface PosterBatchRequest {
+  "action": "delete" | "duplicate" | "set_theme" | "reorder";
+  "ids": Array<string>;
+  "theme"?: string | null;
+}
+
 export interface PosterExportSettings {
   "dpi"?: number;
   "format"?: string;
@@ -557,6 +611,17 @@ export interface PosterPagePolicy {
   "max_pages"?: number | null;
   "min_pages"?: number | null;
   "mode"?: string;
+  [key: string]: unknown;
+}
+
+export interface PosterPagesListResponse {
+  "items": Array<Record<string, unknown>>;
+  "mode": string;
+  [key: string]: unknown;
+}
+
+export interface PosterPagesReorderRequest {
+  "new_order": Array<number>;
   [key: string]: unknown;
 }
 
@@ -600,6 +665,7 @@ export interface PosterResponse {
   "layout_id"?: string;
   "name": string;
   "optional_session_ref"?: string | null;
+  "order_index"?: number | null;
   "page_policy"?: PosterPagePolicy;
   "parameters"?: Record<string, unknown>;
   "revision"?: string;
@@ -634,8 +700,6 @@ export interface PosterSummaryResponse {
   "song_count": number;
   "theme_id": string;
   "updated_at": string;
-  /** M3 P2: 拖拽排序用的 order_index；未排序时为 undefined */
-  "order_index"?: number | null;
   [key: string]: unknown;
 }
 
@@ -1071,6 +1135,33 @@ export interface SongsListResponse {
 export interface SongsSummaryResponse {
   "by_len": Record<string, number>;
   "total": number;
+  [key: string]: unknown;
+}
+
+export interface SpecialPosterDayBucket {
+  "learning_report"?: number;
+  "live_poster"?: number;
+  [key: string]: unknown;
+}
+
+export interface SpecialPosterRecentEntry {
+  "days"?: number;
+  "event_id": string;
+  "filename"?: string;
+  "kind": string;
+  "occurred_at": string;
+  "period_label"?: string;
+  "session_id"?: string;
+  "title"?: string;
+  [key: string]: unknown;
+}
+
+export interface SpecialPosterStatsResponse {
+  "by_day": Record<string, SpecialPosterDayBucket>;
+  "days": number;
+  "recent": Array<SpecialPosterRecentEntry>;
+  "since": string;
+  "totals": Record<string, number>;
   [key: string]: unknown;
 }
 
