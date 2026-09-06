@@ -169,6 +169,7 @@ class AppPaths:
     data_root: Path
     songs_json: Path
     events_jsonl: Path
+    outbox_jsonl: Path  # P0-2: 本地 outbox（用于事务保护）
     settings_json: Path
     tabs_dir: Path
     presets_dir: Path
@@ -245,6 +246,7 @@ def build_app_paths(config: AppConfig, *,
         data_root=data_root,
         songs_json=data_root / "songs.json",
         events_jsonl=data_root / "events.jsonl",
+        outbox_jsonl=data_root / "outbox.jsonl",
         settings_json=data_root / "settings.json",
         tabs_dir=data_root / "tabs",
         presets_dir=data_root / "presets",

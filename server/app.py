@@ -4,12 +4,13 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.engine import render_page
 from core.data.live import RequestPolicy
+from core.outbox import LocalOutbox
 from server.api.handlers import (
     REQUEST_ID_HEADER,
     SESSION_TOKEN_HEADER,
@@ -17,7 +18,6 @@ from server.api.handlers import (
 )
 from server.config import AppConfig, build_app_paths
 from server.context import AppContext
-from server.dependencies import get_app_context
 from server.ports.repositories import BackupPolicy, RepositoryRecoveryRequired
 from server.repositories.events import FileEventStore
 from server.repositories.live import FileLiveRepository
@@ -56,6 +56,15 @@ def _lifespan(config: AppConfig, paths):
             resources.append(settings_repository)
             event_store = FileEventStore(paths.events_jsonl)
             resources.append(event_store)
+            # P0-2b: outbox（与 events.jsonl 配套；启动时 drain 把未发事件补到 events）
+            outbox = LocalOutbox(paths.outbox_jsonl)
+            resources.append(outbox)
+            # 启动 drain — 把上次崩溃或失败留下的 outbox 事件 push 到 events
+            drain_report = outbox.drain(event_store.append)
+            if drain_report["drained"] > 0:
+                logger.info(
+                    "outbox drain 启动补发 %d 条事件到 events.jsonl",
+                    drain_report["drained"])
             preset_repository = FilePresetRepository(
                 paths.presets_dir, BackupPolicy(paths.backups_dir / "presets"))
             resources.append(preset_repository)
@@ -271,12 +280,5 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(auto_sync_router.router)
     from server.routers import health  # P0-4b: 本地后端健康检查
     app.include_router(health.router)
-
-    @app.get("/api/health")
-    def health(request: Request):
-        context = get_app_context(request)
-        library = context.song_repository.load().value
-        return {"ok": True, "themes": len(context.themes),
-                "songs": len(library.mastered())}
 
     return app
