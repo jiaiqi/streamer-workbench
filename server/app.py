@@ -95,6 +95,7 @@ def _lifespan(config: AppConfig, paths):
             song_service = SongApplicationService(
                 song_repository=song_repository,
                 event_store=event_store,
+                outbox=outbox,  # P0-2c: CRUD 事件先入 outbox，state 落盘后 drain
             )
             preset_service = PresetApplicationService(
                 preset_repository=preset_repository,

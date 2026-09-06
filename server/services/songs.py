@@ -47,9 +47,12 @@ class SongDeletion:
 class SongApplicationService:
     """歌曲写入的唯一业务编排者；Router 不再直接保存或追加事件。"""
 
-    def __init__(self, *, song_repository, event_store):
+    def __init__(self, *, song_repository, event_store, outbox=None):
         self._songs = song_repository
         self._events = event_store
+        # P0-2c：LocalOutbox（可选）。有 → 事件先入 outbox（fsync 持久），
+        # state 原子落盘后 drain 到 events.jsonl；无 → 旧行为直写 event_store。
+        self._outbox = outbox
 
     def create(self, payload: Mapping[str, Any]) -> SongMutation:
         fields = clean_song_fields(payload)
@@ -134,9 +137,15 @@ class SongApplicationService:
                 added=(),
             )
         # 一次提交：批量导入 → song_added 事件（带 source_kind="sample_seed" 标记）
-        self._songs.save(library, expected_revision=snapshot.revision)
-        for song in added:
-            self._append_seed_event(song)
+        if self._outbox is not None:
+            for song in added:
+                self._outbox.append(self._seed_event(song))
+            self._songs.save(library, expected_revision=snapshot.revision)
+            self._outbox.drain(self._events.append)
+        else:
+            self._songs.save(library, expected_revision=snapshot.revision)
+            for song in added:
+                self._append_seed_event(song)
         return SongMutation(
             song=added[-1],
             active=library.count_active(),
@@ -144,10 +153,10 @@ class SongApplicationService:
             added=tuple(added),
         )
 
-    def _append_seed_event(self, song) -> None:
+    def _seed_event(self, song) -> dict:
         import uuid
         from core.data.events import _normalize_timestamp
-        event = {
+        return {
             "schema_version": 2,
             "event_id": f"evt_{uuid.uuid4().hex}",
             "occurred_at": _normalize_timestamp(None),
@@ -158,7 +167,9 @@ class SongApplicationService:
             "title_snapshot": song.title,
             "meta": {"status": song.status, "source_kind": "sample_seed"},
         }
-        self._events.append(event)
+
+    def _append_seed_event(self, song) -> None:
+        self._events.append(self._seed_event(song))
 
     def _update(
         self, identity_kind: str, identity: str, payload: Mapping[str, Any]
@@ -379,8 +390,6 @@ class SongApplicationService:
         self, snapshot, event_type: str, song: Song,
         *, meta: dict[str, Any] | None = None,
     ) -> None:
-        self._songs.save(
-            snapshot.value, expected_revision=snapshot.revision)
         event = {
             "schema_version": 2,
             "event_id": f"evt_{uuid.uuid4().hex}",
@@ -394,7 +403,18 @@ class SongApplicationService:
         }
         if meta is not None:
             event["meta"] = meta
-        self._events.append(event)
+        # P0-2c：canonical 顺序（core/outbox.py 设计）——事件先入 outbox
+        # （fsync 持久）→ state 原子落盘（业务事实）→ drain 幂等补报到
+        # events.jsonl。drain 失败由下次启动 lifespan 兜底。
+        if self._outbox is not None:
+            self._outbox.append(event)
+            self._songs.save(
+                snapshot.value, expected_revision=snapshot.revision)
+            self._outbox.drain(self._events.append)
+        else:
+            self._songs.save(
+                snapshot.value, expected_revision=snapshot.revision)
+            self._events.append(event)
 
     @staticmethod
     def _mutation(song: Song, library: SongLibrary) -> SongMutation:
